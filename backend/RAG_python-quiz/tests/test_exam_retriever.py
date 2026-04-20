@@ -48,6 +48,27 @@ def base_state(**overrides):
 
 
 class ExamRetrieverTests(unittest.IsolatedAsyncioTestCase):
+    async def test_retriever_helpers_cover_duplicate_warning_and_search_query_variants(self):
+        warnings = [retriever.DEGRADED_RETRIEVAL_WARNING]
+        self.assertIs(retriever._append_warning(warnings, retriever.DEGRADED_RETRIEVAL_WARNING), warnings)
+
+        with self.assertRaises(ValueError):
+            await retriever.retriever_node(base_state(file_ids=[]))
+
+        with patch(
+            "app.agents.nodes.retriever.retrieve_vector_context",
+            AsyncMock(return_value=([make_chunk("topic chunk")], "primary")),
+        ) as retrieve_vector_context:
+            await retriever.retriever_node(base_state(topic="CAP theorem"))
+        self.assertIn("CAP theorem difficult level exam questions", retrieve_vector_context.await_args.args[0])
+
+        with patch(
+            "app.agents.nodes.retriever.retrieve_vector_context",
+            AsyncMock(return_value=([make_chunk("research chunk")], "primary")),
+        ) as retrieve_vector_context:
+            await retriever.retriever_node(base_state(research_goal="transaction blocking"))
+        self.assertIn("transaction blocking difficult level details", retrieve_vector_context.await_args.args[0])
+
     async def test_primary_retrieval_builds_chunk_context(self):
         chunk = make_chunk("primary chunk")
 
@@ -141,3 +162,22 @@ class ExamRetrieverTests(unittest.IsolatedAsyncioTestCase):
         ):
             with self.assertRaises(ValueError):
                 await retriever.retriever_node(base_state())
+
+    async def test_empty_and_low_scoring_results_cover_remaining_paths(self):
+        with patch(
+            "app.agents.nodes.retriever.retrieve_vector_context",
+            AsyncMock(return_value=([], "primary")),
+        ), patch(
+            "app.agents.nodes.retriever.pg_service.get_files_text_content",
+            return_value="FULL TEXT",
+        ):
+            result = await retriever.retriever_node(base_state())
+        self.assertEqual(result["context"], "FULL TEXT")
+
+        low_score_chunk = make_chunk("fallback chunk", score=0.95)
+        with patch(
+            "app.agents.nodes.retriever.retrieve_vector_context",
+            AsyncMock(return_value=([low_score_chunk], "primary")),
+        ):
+            result = await retriever.retriever_node(base_state())
+        self.assertEqual(result["context_chunks"], [low_score_chunk])

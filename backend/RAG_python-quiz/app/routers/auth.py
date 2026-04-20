@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 import asyncio
@@ -66,7 +66,7 @@ async def register(request: RegisterRequest = Body(...)):
 
 
 @router.get("/verify")
-async def verify_token_endpoint(credentials: HTTPAuthorizationCredentials = security):
+async def verify_token_endpoint(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """
     驗證 token 是否有效
     

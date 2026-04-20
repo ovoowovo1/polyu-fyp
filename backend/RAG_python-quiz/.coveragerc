@@ -1,0 +1,11 @@
+[run]
+source =
+    app
+    main
+branch = False
+
+[report]
+show_missing = True
+skip_covered = False
+exclude_also =
+    pragma: no cover

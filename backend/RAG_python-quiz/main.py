@@ -1,27 +1,38 @@
+import os
+
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import uvicorn
-import os
 
 from app.config import get_settings
-from app.services import pg_service
-from app.routers.upload import router as upload_router
-from app.routers.files_pg import router as files_router
-from app.routers.query_stream import router as query_router
-from app.routers.sse import router as sse_router
-from app.routers.quiz import router as quiz_router
-from app.routers.tts import router as tts_router
 from app.routers.auth import router as auth_router
 from app.routers.classes import router as classes_router
 from app.routers.exam import router as exam_router
+from app.routers.files_pg import router as files_router
+from app.routers.query_stream import router as query_router
+from app.routers.quiz import router as quiz_router
+from app.routers.sse import router as sse_router
+from app.routers.tts import router as tts_router
+from app.routers.upload import router as upload_router
+from app.services import pg_service
 
-def create_app() -> FastAPI:
-    settings = get_settings()
+
+def _default_static_dir() -> str:
+    return os.path.join(os.path.dirname(__file__), "static")
+
+
+def _create_startup_handler():
+    def on_startup():
+        pg_service.setup_vector_index()
+
+    return on_startup
+
+
+def create_app(*, settings=None, static_dir: str | None = None) -> FastAPI:
+    settings = settings or get_settings()
 
     app = FastAPI(title="RAG FastAPI", version="0.1.0")
-
-    # CORS
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -30,28 +41,22 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Routers (/neo4j/* to be compatible with old Express base path)
     app.include_router(upload_router)
-    app.include_router(files_router , prefix="/neo4j")
+    app.include_router(files_router, prefix="/neo4j")
     app.include_router(query_router, prefix="/api")
     app.include_router(sse_router)
-    app.include_router(quiz_router , prefix="/quiz")
+    app.include_router(quiz_router, prefix="/quiz")
     app.include_router(tts_router)
     app.include_router(auth_router)
     app.include_router(classes_router)
-    app.include_router(exam_router)  # Multi-Agent 考試生成
-    # Optional root (keep existing behavior for direct calls)
+    app.include_router(exam_router)
     app.include_router(query_router)
 
-    # 靜態文件服務 - PDF 和圖片
-    static_dir = os.path.join(os.path.dirname(__file__), "static")
-    os.makedirs(os.path.join(static_dir, "pdfs"), exist_ok=True)
-    os.makedirs(os.path.join(static_dir, "images"), exist_ok=True)
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
-    @app.on_event("startup")
-    def on_startup():
-        pg_service.setup_vector_index()
+    resolved_static_dir = static_dir or _default_static_dir()
+    os.makedirs(os.path.join(resolved_static_dir, "pdfs"), exist_ok=True)
+    os.makedirs(os.path.join(resolved_static_dir, "images"), exist_ok=True)
+    app.mount("/static", StaticFiles(directory=resolved_static_dir), name="static")
+    app.add_event_handler("startup", _create_startup_handler())
     return app
 
 

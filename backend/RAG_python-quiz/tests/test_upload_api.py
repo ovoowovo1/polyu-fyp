@@ -4,6 +4,7 @@ import unittest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.routers import upload
 from app.routers.upload import router
 from app.utils.ingest_errors import DocumentIngestError, EmbeddingProviderError
 
@@ -121,3 +122,28 @@ class UploadApiTests(unittest.TestCase):
         self.assertEqual(payload["results"][1]["error"]["code"], "EMPTY_DOCUMENT")
         finished_event = mock_progress.await_args_list[-1].args[1]
         self.assertEqual(finished_event["status"], "failed")
+
+    def test_upload_helper_functions_cover_unexpected_errors(self):
+        result = upload._build_failure_result("broken.pdf", RuntimeError("boom"))
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["error"]["code"], "INGEST_FAILED")
+
+    def test_upload_multiple_rejects_missing_files(self):
+        response = self.client.post("/upload-multiple")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"]["error"], "Please provide at least one file.")
+
+    def test_upload_link_success_and_error_paths(self):
+        with patch("app.routers.upload.ingest_website", AsyncMock(return_value={"fileId": "site-1"})):
+            response = self.client.post("/upload-link", json={"url": " https://example.com "})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["result"]["fileId"], "site-1")
+
+        missing = self.client.post("/upload-link", json={"url": "   "})
+        self.assertEqual(missing.status_code, 400)
+        self.assertEqual(missing.json()["detail"]["error"], "url is required")
+
+        with patch("app.routers.upload.ingest_website", AsyncMock(side_effect=RuntimeError("crawl failed"))):
+            failed = self.client.post("/upload-link", json={"url": "https://example.com"})
+        self.assertEqual(failed.status_code, 500)
+        self.assertEqual(failed.json()["detail"]["error"], "Failed to upload link.")

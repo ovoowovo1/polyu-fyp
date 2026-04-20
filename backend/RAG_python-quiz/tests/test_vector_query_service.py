@@ -69,6 +69,16 @@ class ValueErrorQueryModel:
 
 
 class VectorQueryServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_retrieve_vector_context_requires_primary_embedding_model(self):
+        with patch("app.services.vector_query_service.get_settings", return_value=make_settings()), patch(
+            "app.services.vector_query_service.get_embedding_model",
+            return_value=None,
+        ):
+            with self.assertRaises(RuntimeError) as ctx:
+                await vector_query_service.retrieve_vector_context("hello", ["file-1"])
+
+        self.assertIn("Embedding API Key not configured", str(ctx.exception))
+
     async def test_retrieve_vector_context_uses_primary_model_by_default(self):
         primary_model = SuccessfulQueryModel("google/gemini-embedding-001", [0.1, 0.2])
 
@@ -117,6 +127,17 @@ class VectorQueryServiceTests(unittest.IsolatedAsyncioTestCase):
             embedding_column="embedding_v2",
         )
         get_fallback_model.assert_called_once()
+
+    async def test_retrieve_vector_context_re_raises_when_fallback_model_missing(self):
+        with patch("app.services.vector_query_service.get_settings", return_value=make_settings()), patch(
+            "app.services.vector_query_service.get_embedding_model",
+            return_value=RetryableFailingQueryModel(),
+        ), patch(
+            "app.services.vector_query_service.get_fallback_embedding_model",
+            return_value=None,
+        ):
+            with self.assertRaises(EmbeddingProviderError):
+                await vector_query_service.retrieve_vector_context("hello", ["file-1"])
 
     async def test_retrieve_vector_context_falls_back_on_no_endpoints_found_error(self):
         fallback_model = SuccessfulQueryModel("google/gemini-embedding-2-preview", [0.5, 0.6])
@@ -179,3 +200,24 @@ class VectorQueryServiceTests(unittest.IsolatedAsyncioTestCase):
                 await vector_query_service.retrieve_vector_context("hello", ["file-1"])
 
         get_fallback_model.assert_not_called()
+
+    async def test_retrieve_vector_context_re_raises_fallback_error(self):
+        fallback_error = make_retryable_error()
+
+        class RetryableFallbackModel:
+            model_name = "google/gemini-embedding-2-preview"
+
+            async def aembed_query(self, text):
+                raise fallback_error
+
+        with patch("app.services.vector_query_service.get_settings", return_value=make_settings()), patch(
+            "app.services.vector_query_service.get_embedding_model",
+            return_value=RetryableFailingQueryModel(),
+        ), patch(
+            "app.services.vector_query_service.get_fallback_embedding_model",
+            return_value=RetryableFallbackModel(),
+        ):
+            with self.assertRaises(EmbeddingProviderError) as ctx:
+                await vector_query_service.retrieve_vector_context("hello", ["file-1"])
+
+        self.assertIs(ctx.exception, fallback_error)

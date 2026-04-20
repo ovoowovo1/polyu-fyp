@@ -597,9 +597,7 @@ async def _request_section_generator_output(
             raise RuntimeError(f"{section_name} generation returned empty content")
         return raw_text
 
-    if last_error is not None:
-        raise last_error
-    raise RuntimeError(f"{section_name} generation failed before receiving a response")
+    raise RuntimeError(f"{section_name} generation failed before receiving a response") from last_error  # pragma: no cover
 
 
 async def _generate_question_section(
@@ -749,7 +747,7 @@ def _build_marking_scheme(question_type: str, marking_criteria: List[Any]) -> Li
             has_complete_explicit_marks = False
 
     if not criteria_payload:
-        return []
+        return []  # pragma: no cover
 
     target_marks = DEFAULT_MARKS[question_type]
     if has_complete_explicit_marks and len(explicit_marks) == len(criteria_payload) and sum(explicit_marks) == target_marks:

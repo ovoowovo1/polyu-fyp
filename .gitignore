@@ -1,0 +1,3 @@
+.coverage
+.coverage.*
+backend/RAG_python-quiz/coverage-data/
