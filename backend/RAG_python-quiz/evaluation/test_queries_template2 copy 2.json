@@ -1,0 +1,32 @@
+{
+  "_description": "Advanced Test Set: Contains scenario-based and inference questions designed to test the semantic understanding capabilities of Hybrid Search.",
+  "_how_to_get_file_ids": "Run python evaluation/list_documents.py to view all available documents and their IDs",
+  "_suggested_test_count": "5 high-quality scenario questions",
+  "test_cases": [
+    {
+      "question": "A financial bank is designing its core transaction system. The system requires that account balances on all nodes must remain consistent at all times. Even if a network partition occurs causing some nodes to disconnect, it would rather suspend service than allow reading old data. According to the CAP theorem, which two attributes did this system choose? And which one did it sacrifice?",
+      "ground_truth": "The system chose **Consistency** and **Partition Tolerance**, sacrificing **Availability**. This aligns with the characteristics of a CP system (such as the behavior of traditional RDBMS in distributed settings).",
+      "file_ids": []
+    },
+    {
+      "question": "A developer used the `mysql_escape_string` function on a registration page to filter input, successfully storing a username containing malicious commands into the database. However, when an administrator later viewed this user's data in the backend and performed an update operation, malicious SQL was executed. What type of SQL Injection attack is this? What is its mechanism?",
+      "ground_truth": "This is **Second-order SQL Injection (or Stored SQL Injection)**. Its mechanism is that the attacker first 'safely' stores malicious input into the database (First order). However, when the application retrieves that data in a subsequent step (Second order) and uses it to construct a new SQL query, the malicious code is executed because the application trusts the database content and does not re-parameterize or filter it.",
+      "file_ids": []
+    },
+    {
+      "question": "A company plans to migrate a sensitive customer database to the cloud, but management is concerned that the cloud service provider's Database Administrators (DBAs) have excessive privileges and can directly query sensitive personal data in plain text. Can using Oracle's TDE (Transparent Data Encryption) solve this problem? If not, what technology does Microsoft SQL Server provide to ensure that even DBAs cannot decrypt the data?",
+      "ground_truth": "TDE **cannot** solve this problem because TDE encrypts at the storage layer; once data is loaded into memory, it is plain text to the DBA. You should use Microsoft SQL Server's **Always Encrypted** technology, which allows the client to hold the encryption keys. The database engine only processes ciphertext, ensuring that DBAs cannot access the plain text data.",
+      "file_ids": []
+    },
+    {
+      "question": "A hospital released a patient dataset processed with K-Anonymity (K=3). Although an attacker cannot determine which of the three records belongs to the target, Bob, they notice that the 'Disease' field for all three records is 'AIDS'. The attacker thus infers that Bob has AIDS. What is this attack called? What flaw in K-Anonymity does it exploit?",
+      "ground_truth": "This is called a **Homogeneity Attack**. It exploits a flaw in K-Anonymity: within an Equivalence Class, even if the quasi-identifiers are the same, if the **Sensitive Attribute** lacks diversity, an attacker can still infer specific information.",
+      "file_ids": []
+    },
+    {
+      "question": "A department manager needs to query salary statistics for their department's employees but should not have permission to directly access the underlying `Employees` table containing all details. The database administrator created a virtual table containing only that department's data and granted the manager `SELECT` permission. What is this 'virtual table' called in SQL? How does this practice embody the 'Principle of Least Privilege'?",
+      "ground_truth": "This virtual table is called a **View**. This practice embodies the Principle of Least Privilege because the user does not need permissions for the underlying complete table; they can only access the specific, filtered data within the scope defined by the view, limiting unnecessary data exposure.",
+      "file_ids": []
+    }
+  ]
+}

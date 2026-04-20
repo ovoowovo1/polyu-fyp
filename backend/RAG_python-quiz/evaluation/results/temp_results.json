@@ -1,0 +1,13 @@
+{
+  "k": 10,
+  "methods": [
+    "vector_only",
+    "hybrid",
+    "fulltext_only"
+  ],
+  "results": {
+    "vector_only": [],
+    "hybrid": [],
+    "fulltext_only": []
+  }
+}

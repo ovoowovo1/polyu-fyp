@@ -1,0 +1,115 @@
+{
+  "_說明": "請在 test_cases 中填入您的測試問題。每個測試案例需要：question（問題）、ground_truth（預期的標準答案）、file_ids（相關文檔的 UUID 列表）",
+  "_如何獲取 file_ids": "執行 python evaluation/list_documents.py 查看所有可用文檔及其 ID",
+  "_建議測試數量": "建議準備 15-20 個問題以獲得統計意義",
+  "test_cases": [
+    {
+      "question": "在分散式資料庫系統中，CAP 定理代表哪三個屬性？且根據定理限制最多能同時滿足幾個？",
+      "ground_truth": "CAP 代表一致性 (Consistency)、可用性 (Availability) 和分區容錯性 (Partition Tolerance)。根據定理，一個分散式系統最多只能同時滿足這三項中的兩項。",
+      "file_ids": [
+        "c358c665-660b-4af6-bc8c-380e44b75cc8"
+      ]
+    },
+    {
+      "question": "什麼是 SQL Injection 中的 Second-order (Stored) SQL Injection？",
+      "ground_truth": "Second-order SQL Injection (Stored SQL Injection) 是指應用程式將惡意輸入存入資料庫時（例如註冊時的用戶名含有特殊字符），資料庫雖然安全地存儲了它，但稍後應用程式在處理另一個請求並檢索該數據時，不安全地將其拼接到新的 SQL 查詢中，導致惡意代碼被執行。",
+      "file_ids": [
+        "e7c981e1-a267-4c6a-84cc-7a6632225fba"
+      ]
+    },
+    {
+      "question": "在 Windows 檔案系統安全中，BitLocker 和 EFS (Encrypting File System) 的主要區別是什麼？",
+      "ground_truth": "BitLocker 是對整個磁碟區 (Volume) 進行加密，通常在系統啟動時解鎖；而 EFS 是針對個別檔案或資料夾進行加密。BitLocker 的加密對使用者是透明的，但 EFS 需要使用者擁有私鑰才能解密特定檔案。",
+      "file_ids": [
+        "352f4c9d-550a-43b7-94f6-ea2b6b727181"
+      ]
+    },
+    {
+      "question": "在資料庫加密層級中，TDE (Transparent Data Encryption) 的主要優點和缺點是什麼？",
+      "ground_truth": "優點：對應用程式透明，不需要修改程式碼或資料庫架構，且能防止作業系統層級的使用者直接讀取資料庫檔案（如防止硬碟失竊）。缺點：資料在資料庫伺服器的記憶體中是解密的（Data-in-use），且擁有資料庫管理權限的特權使用者（如 DBA）通常可以看到解密後的數據。",
+      "file_ids": [
+        "c5614e21-9ccf-46f1-b2c7-e80fae788120",
+        "91fa82ed-f0c4-4c83-862d-0816ad8c81ff"
+      ]
+    },
+    {
+      "question": "什麼是 K-Anonymity (K-匿名性)？它如何保護隱私？",
+      "ground_truth": "K-Anonymity 是一種隱私保護模型，要求在發布的資料表中，任何一條記錄的準識別符 (Quasi-identifiers，如生日、性別、郵遞區號) 組合，必須至少與 k-1 條其他記錄相同。這樣攻擊者就無法將特定記錄與少於 k 個人的群體區分開來。",
+      "file_ids": [
+        "1bb97942-2aab-429a-aefb-3ba8ff78c921"
+      ]
+    },
+    {
+      "question": "在密碼存儲中，加入 Salt (鹽) 的主要目的是什麼？",
+      "ground_truth": "加入 Salt 的主要目的是防止攻擊者使用彩虹表 (Rainbow Tables) 進行預先計算的字典攻擊。它確保即使兩個用戶使用相同的密碼，由於 Salt 不同，存儲的雜湊值 (Hash) 也會不同。",
+      "file_ids": [
+        "a8694298-016a-480b-90f5-88e72a892f81",
+        "af29e109-6528-46a2-bbcf-69b339650768"
+      ]
+    },
+    {
+      "question": "MongoDB 中的 Sharding (分片) 是用來解決什麼問題？有哪些常見的分片策略？",
+      "ground_truth": "Sharding 是用來解決資料量過大導致單一伺服器儲存或效能不足的問題（水平擴展）。常見的分片策略包括：Range-based Sharding (基於範圍)、Hashed Sharding (基於雜湊值) 等。",
+      "file_ids": [
+        "c358c665-660b-4af6-bc8c-380e44b75cc8"
+      ]
+    },
+    {
+      "question": "什麼是 Oracle 的 VPD (Virtual Private Database)？它如何運作？",
+      "ground_truth": "VPD 是一種細粒度的存取控制技術 (Fine Grained Access Control)。它運作的方式是在使用者對資料表或視圖執行 SQL 查詢時，動態地添加一個 WHERE 子句（過濾條件），從而限制使用者只能看到他們被授權看到的行 (Row-level security)。",
+      "file_ids": [
+        "c759f5c1-4c76-418f-9a8b-5d6ac54f11b8",
+        "91fa82ed-f0c4-4c83-862d-0816ad8c81ff"
+      ]
+    },
+    {
+      "question": "在資料庫正規化 (Normalization) 中，BCNF (Boyce-Codd Normal Form) 的主要要求是什麼？",
+      "ground_truth": "BCNF 要求對於資料表中的每一個函數依賴 (Functional Dependency) X -> Y，X 必須是該資料表的候選鍵 (Candidate Key) 或主鍵 (Primary Key)。這是為了消除資料冗餘和異常。",
+      "file_ids": [
+        "e7ba6461-0fad-4f24-b180-4c2d0b82170d"
+      ]
+    },
+    {
+      "question": "什麼是 SQL Server 的 'Always Encrypted' 功能？它與 TDE 有何不同？",
+      "ground_truth": "'Always Encrypted' 允許資料在客戶端應用程式內進行加密，加密金鑰由客戶端持有，資料庫引擎僅存儲密文。與 TDE 不同的是，TDE 在伺服器端解密，DBA 可以看到數據；而 Always Encrypted 確保即使是 DBA 或雲端資料庫操作員也無法看到明文數據。",
+      "file_ids": [
+        "c5614e21-9ccf-46f1-b2c7-e80fae788120"
+      ]
+    },
+    {
+      "question": "在 NTFS 權限設定中，DACL 和 SACL 分別代表什麼？",
+      "ground_truth": "DACL (Discretionary Access Control List) 用於指定哪些使用者或群組被允許或拒絕存取該物件（權限控制）。SACL (System Access Control List) 用於指定哪些存取嘗試需要被記錄下來（稽核/Auditing）。",
+      "file_ids": [
+        "352f4c9d-550a-43b7-94f6-ea2b6b727181"
+      ]
+    },
+    {
+      "question": "針對 SQL Injection，最有效的防禦措施是什麼？",
+      "ground_truth": "最有效的防禦措施是使用參數化查詢 (Parameterized Queries) 或預處理語句 (Prepared Statements)，這樣可以確保資料庫將使用者輸入視為數據而非可執行的代碼。其他輔助措施包括輸入驗證 (Input Validation) 和使用 WAF。",
+      "file_ids": [
+        "e7c981e1-a267-4c6a-84cc-7a6632225fba"
+      ]
+    },
+    {
+      "question": "什麼是 Homogeneity Attack (同質性攻擊)，它如何破壞 K-Anonymity 的保護？",
+      "ground_truth": "同質性攻擊發生在一個等價類 (Equivalence Class，即 K 個準識別符相同的記錄) 中，所有記錄的敏感屬性值都相同（缺乏多樣性）。如果攻擊者知道目標在該群體中，就能百分之百確定目標擁有該敏感屬性，即使無法確定具體是哪一條記錄。",
+      "file_ids": [
+        "1bb97942-2aab-429a-aefb-3ba8ff78c921"
+      ]
+    },
+    {
+      "question": "在 SQL 的 GRANT 指令中，'WITH GRANT OPTION' 代表什麼意思？",
+      "ground_truth": "'WITH GRANT OPTION' 表示被授予權限的使用者，有權將該權限進一步授予給其他使用者。",
+      "file_ids": [
+        "c759f5c1-4c76-418f-9a8b-5d6ac54f11b8"
+      ]
+    },
+    {
+      "question": "Oracle Database Security Assessment Tool (DBSAT) 的主要用途是什麼？",
+      "ground_truth": "DBSAT 是一個命令列工具，用於掃描資料庫配置、使用者帳戶和權限，以識別潛在的安全風險。它還可以幫助發現資料庫中的敏感數據（Sensitive Data Discovery）並提供改進建議。",
+      "file_ids": [
+        "91fa82ed-f0c4-4c83-862d-0816ad8c81ff"
+      ]
+    }
+  ]
+}

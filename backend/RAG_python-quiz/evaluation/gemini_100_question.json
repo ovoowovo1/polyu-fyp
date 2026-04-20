@@ -1,0 +1,504 @@
+{
+  "test_cases": [
+    {
+      "question": "Explain the role of the Buffer Manager when a requested data block is not in the buffer pool. What specific steps does it take to provide the data to the user?",
+      "ground_truth": "The Buffer Manager first checks the buffer pool. If the block is missing, it finds a free slot (possibly by evicting an existing block based on a replacement policy), reads the requested block from the disk into that slot, and then returns the memory address of the block to the requestor.",
+      "file_ids": []
+    },
+    {
+      "question": "A database system uses an index with two columns: the primary key and the disk block address. How does this structure speed up a query compared to a full table scan?",
+      "ground_truth": "The index allows the DBMS to search a smaller, sorted data structure to find the specific disk block address of a record. This avoids reading every block of the entire table from the disk, significantly reducing I/O operations.",
+      "file_ids": []
+    },
+    {
+      "question": "A developer performs a 'SELECT *' on a table with 1 million rows but only needs 2 specific columns. According to the lecture, why is this practice inefficient in terms of I/O and memory?",
+      "ground_truth": "Using 'SELECT *' fetches all attributes, increasing the size of each row in memory. This reduces the number of records that can fit in a single buffer block, leading to more disk I/O and wasted memory for data that won't be used.",
+      "file_ids": []
+    },
+    {
+      "question": "In Relational Algebra, what is the difference between the 'Selection' (σ) and 'Projection' (π) operators in terms of how they filter a table?",
+      "ground_truth": "Selection (σ) filters rows based on a given condition, reducing the horizontal subset of the table. Projection (π) filters columns, keeping only specific attributes and removing duplicates, reducing the vertical subset of the table.",
+      "file_ids": []
+    },
+    {
+      "question": "Compare 'Push Replication' and 'Pull Replication'. Which one is better suited for a system that prioritizes high availability over immediate consistency?",
+      "ground_truth": "Pull Replication is better for high availability. In Push Replication, the master sends updates immediately, which can cause delays if nodes are slow. In Pull Replication, replicas request updates when they are ready, allowing the system to remain responsive even if some nodes lag.",
+      "file_ids": []
+    },
+    {
+      "question": "A company is using MongoDB with Range-based Sharding. They notice that most new data is being written to a single shard, creating a 'hotspot'. What likely caused this, and how could Hashed Sharding solve it?",
+      "ground_truth": "This occurs because the shard key is likely a monotonically increasing value (like a timestamp). Hashed Sharding solves this by computing a hash of the key value, ensuring that even sequential values are distributed across different shards more evenly.",
+      "file_ids": []
+    },
+    {
+      "question": "According to the CAP Theorem, why is it impossible for a distributed system to achieve both perfect Consistency and perfect Availability during a network partition?",
+      "ground_truth": "During a partition, if the system allows writes to ensure Availability, different nodes will have different data (losing Consistency). If the system blocks writes to ensure all nodes stay synchronized (Consistency), it becomes unavailable to users.",
+      "file_ids": []
+    },
+    {
+      "question": "Explain the 'Election' process in a MongoDB Replica Set when the Primary node fails. What role do the 'majority' of nodes play?",
+      "ground_truth": "When the Primary is unreachable, the remaining Secondaries hold an election. A candidate must receive a majority of votes from the total number of members in the replica set to become the new Primary, ensuring that only one side of a network partition can elect a leader.",
+      "file_ids": []
+    },
+    {
+      "question": "In the context of Normalization, why is a table with partial functional dependencies not in 2NF? Provide a conceptual example.",
+      "ground_truth": "A table is not in 2NF if a non-key attribute depends on only a part of a composite primary key. For example, in (StudentID, CourseID) -> Grade, StudentName. StudentName depends only on StudentID, which creates redundancy if the student takes multiple courses.",
+      "file_ids": []
+    },
+    {
+      "question": "Describe the 'Lost Update' problem in transaction management. How can it occur when two transactions access the same data item simultaneously?",
+      "ground_truth": "It occurs when T1 reads a value, T2 reads the same value, T2 updates and commits, and then T1 updates based on its old read and commits. T1's update overwrites T2's work, effectively 'losing' T2's update.",
+      "file_ids": []
+    },
+    {
+      "question": "What is the primary difference between Authentication and Authorization in database security?",
+      "ground_truth": "Authentication is the process of verifying who the user is (e.g., login credentials). Authorization is the process of determining what the verified user is allowed to do (e.g., SELECT or DELETE permissions on specific tables).",
+      "file_ids": []
+    },
+    {
+      "question": "A hacker uses '1' OR '1'='1' in a login form. Explain why this bypasses the authentication logic in an unsanitized SQL query.",
+      "ground_truth": "The 'OR 1=1' condition is a tautology (always true). When appended to a WHERE clause, it makes the entire condition true for every row, often allowing the hacker to log in as the first user in the table (usually the admin) without a password.",
+      "file_ids": []
+    },
+    {
+      "question": "What is 'Second-order SQL Injection'? Why is it harder to detect than standard first-order injection?",
+      "ground_truth": "In second-order injection, malicious code is stored in the database first (appearing safe). The attack is triggered later when that stored data is retrieved and used in a second, unsafe SQL query. It's harder to detect because the input doesn't cause immediate harm at the point of entry.",
+      "file_ids": []
+    },
+    {
+      "question": "In TDE (Transparent Data Encryption), where does the encryption/decryption happen? Does it protect data against a DBA who has full access to the running database?",
+      "ground_truth": "Encryption happens at the I/O level when writing to disk. It does not protect against a DBA because the data is decrypted when loaded into the buffer pool/memory, where a DBA can still view it.",
+      "file_ids": []
+    },
+    {
+      "question": "Explain the concept of 'Order Preserving Encryption' (OPE). What is the major trade-off between functionality and security when using OPE?",
+      "ground_truth": "OPE ensures that the ciphertext maintains the same numerical order as the plaintext, allowing range queries (e.g., BETWEEN) on encrypted data. The trade-off is that it leaks the distribution and order of the data to an attacker.",
+      "file_ids": []
+    },
+    {
+      "question": "A medical dataset is released using K-Anonymity with K=5. An attacker knows that 'Alice' is in the dataset and is 30 years old. If all 5 people in Alice's group have 'Flu', what attack has occurred?",
+      "ground_truth": "This is a Homogeneity Attack. Even though Alice's identity is hidden among 5 people, the lack of diversity in the sensitive attribute (Flu) allows the attacker to infer her medical condition with 100% certainty.",
+      "file_ids": []
+    },
+    {
+      "question": "How does 'Differential Privacy' provide a formal guarantee of privacy that K-Anonymity cannot?",
+      "ground_truth": "Differential Privacy adds controlled noise to query results so that the presence or absence of a single individual's data doesn't significantly change the output. K-Anonymity is vulnerable to background knowledge and homogeneity attacks, which DP mathematically limits.",
+      "file_ids": []
+    },
+    {
+      "question": "In MongoDB, what is the 'oplog' and how is it used to maintain consistency between the Primary and Secondary nodes?",
+      "ground_truth": "The oplog (operation log) is a capped collection that keeps a rolling record of all data modifications. Secondaries fetch these operations and apply them to their own data sets to stay in sync with the Primary.",
+      "file_ids": []
+    },
+    {
+      "question": "What is a 'Blind SQL Injection'? Describe the mechanism of a time-based blind injection.",
+      "ground_truth": "In Blind Injection, the server doesn't return data or errors. In a time-based attack, the hacker sends a query like 'IF(condition, SLEEP(5), 0)'. If the page takes 5 seconds to load, the condition is true, allowing the hacker to extract data bit-by-bit.",
+      "file_ids": []
+    },
+    {
+      "question": "Why is the 'Sensitive Attribute' diversity important in L-Diversity, and how does it improve upon K-Anonymity?",
+      "ground_truth": "L-Diversity requires that each equivalence class have at least 'L' well-represented values for the sensitive attribute. This prevents Homogeneity Attacks where an attacker can infer a value because everyone in a k-group has the same result.",
+      "file_ids": []
+    },
+    {
+      "question": "Calculate the AES ciphertext length for a 40-byte plaintext string in MySQL. Explain the formula.",
+      "ground_truth": "Formula: 16 * (trunc(string_length / 16) + 1). For 40 bytes: 16 * (trunc(40/16) + 1) = 16 * (2 + 1) = 48 bytes.",
+      "file_ids": []
+    },
+    {
+      "question": "Explain the concept of 'Data Redaction' in Oracle. How does it differ from permanent data masking?",
+      "ground_truth": "Data Redaction masks data on-the-fly as it is queried (dynamic), whereas permanent data masking changes the data stored on the disk. Redaction allows the original data to remain intact for authorized users.",
+      "file_ids": []
+    },
+    {
+      "question": "In a distributed database, what is 'Vertical Fragmentation'? Provide a scenario where it would be more efficient than horizontal fragmentation.",
+      "ground_truth": "Vertical Fragmentation splits a table by columns. It is efficient when certain applications only need a subset of attributes (e.g., an 'Accounting' app only needs 'Salary' and 'EmpID', not 'Address' or 'Photo'), reducing I/O for those specific tasks.",
+      "file_ids": []
+    },
+    {
+      "question": "What is 'Polyinstantiation' in Multi-level Secure (MLS) databases? How does it prevent a low-level user from inferring high-level data?",
+      "ground_truth": "Polyinstantiation allows multiple rows with the same primary key to exist at different security levels. This prevents 'inference' by allowing a low-level user to insert a record that already exists at a high level without being told 'Duplicate Key', which would reveal the high-level data's existence.",
+      "file_ids": []
+    },
+    {
+      "question": "Explain the 'Quasi-identifier' in the context of privacy protection. Why are these attributes dangerous even if names are removed?",
+      "ground_truth": "Quasi-identifiers (like ZIP code, DOB, Gender) are non-sensitive attributes that can be linked with external datasets (like voter lists) to uniquely re-identify individuals in an 'anonymous' dataset.",
+      "file_ids": []
+    },
+    {
+      "question": "What is the 'NoSQL' approach to data relationships? Compare it with the RDBMS approach using 'Joins'.",
+      "ground_truth": "NoSQL typically avoids Joins by 'denormalizing' data (embedding related data within a single document) to improve read speed and scalability. RDBMS uses Joins to link normalized tables, prioritizing data integrity and space efficiency.",
+      "file_ids": []
+    },
+    {
+      "question": "In MongoDB, what does the 'Write Concern' parameter control? How does 'w: majority' affect write latency?",
+      "ground_truth": "Write Concern controls the level of acknowledgment requested from MongoDB for write operations. 'w: majority' requires the write to be confirmed by a majority of nodes, increasing latency but ensuring the write survives a Primary failure.",
+      "file_ids": []
+    },
+    {
+      "question": "Describe the Boyce-Codd Normal Form (BCNF). How is it more restrictive than 3NF?",
+      "ground_truth": "BCNF requires that for every functional dependency X -> Y, X must be a superkey. 3NF allows X -> Y if Y is a prime attribute, even if X is not a superkey. BCNF eliminates all redundancy caused by functional dependencies.",
+      "file_ids": []
+    },
+    {
+      "question": "What are 'Deterministic Encryption' and 'Randomized Encryption' in SQL Server Always Encrypted? Which one allows for 'Equality Joins'?",
+      "ground_truth": "Deterministic encryption always produces the same ciphertext for the same plaintext, allowing Equality Joins. Randomized encryption produces different ciphertexts, making it more secure but preventing any operations other than retrieval.",
+      "file_ids": []
+    },
+    {
+      "question": "Explain the 'Two-Phase Commit' (2PC) protocol. What is the main drawback of this protocol in a high-availability distributed system?",
+      "ground_truth": "2PC has a voting phase and a commit phase to ensure all nodes agree on a transaction. Its main drawback is that it is a 'blocking' protocol; if the coordinator fails, participants may be left in an uncertain state, reducing availability.",
+      "file_ids": []
+    },
+    {
+      "question": "How does the 'Laplace Mechanism' work in Differential Privacy? What does the 'Epsilon' (ε) parameter represent?",
+      "ground_truth": "The Laplace Mechanism adds noise drawn from a Laplace distribution to the query answer. Epsilon (ε) is the 'privacy budget'; a smaller ε means more noise and higher privacy, while a larger ε means less noise and higher utility.",
+      "file_ids": []
+    },
+    {
+      "question": "In a B+ Tree index, why are all data pointers stored in the leaf nodes rather than internal nodes?",
+      "ground_truth": "Storing pointers only in leaf nodes allows internal nodes to hold more keys, increasing the 'fan-out'. This results in a shorter tree height, meaning fewer disk I/O operations are needed to find any specific record.",
+      "file_ids": []
+    },
+    {
+      "question": "Discuss the 'Data Independence' feature of a DBMS. How does it benefit application developers?",
+      "ground_truth": "Data Independence separates the physical storage details from the logical schema. This allows developers to change the physical structure (like adding an index or moving files) without needing to rewrite the application's SQL code.",
+      "file_ids": []
+    },
+    {
+      "question": "In the context of MongoDB, what is the 'mongos' process, and what is its role in a sharded cluster?",
+      "ground_truth": "The 'mongos' is a routing service that acts as the interface between the application and the sharded cluster. It determines which shards hold the requested data based on the shard key and aggregates results for the user.",
+      "file_ids": []
+    },
+    {
+      "question": "What is the 'Multivalued Dependency' (MVD) and which normal form is designed to handle it?",
+      "ground_truth": "MVD occurs when the presence of one or more rows in a table implies the presence of other rows (X ->> Y). The Fourth Normal Form (4NF) is designed to eliminate redundancies caused by MVDs.",
+      "file_ids": []
+    },
+    {
+      "question": "Explain the 'Membership Inference Attack' in privacy. How can an attacker use it against a supposedly anonymous database?",
+      "ground_truth": "An attacker uses statistical techniques to determine if a specific individual's record is part of a dataset. If they can confirm membership, they may infer sensitive information associated with that dataset (e.g., a 'Cancer Patient' list).",
+      "file_ids": []
+    },
+    {
+      "question": "Why is 'Database Sharding' considered a 'Share-Nothing' architecture?",
+      "ground_truth": "In sharding, each node (shard) has its own CPU, memory, and disk. There is no contention for shared resources, which allows the system to scale horizontally by simply adding more independent nodes.",
+      "file_ids": []
+    },
+    {
+      "question": "What is 'Role-Based Access Control' (RBAC)? How does it simplify the management of database permissions for thousands of users?",
+      "ground_truth": "RBAC assigns permissions to 'roles' (e.g., 'Manager', 'Intern') rather than individuals. When a user joins or changes jobs, the DBA only needs to assign them to a role, rather than manually updating hundreds of table-level permissions.",
+      "file_ids": []
+    },
+    {
+      "question": "In the 'Always Encrypted' architecture, where is the 'Column Encryption Key' (CEK) decrypted? Why is this significant for security?",
+      "ground_truth": "The CEK is decrypted only on the client-side application using a Master Key. The database server never sees the plaintext key or the plaintext data, ensuring that even if the server is compromised, the data remains safe.",
+      "file_ids": []
+    },
+    {
+      "question": "A query uses an 'INNER JOIN' between two tables. If a row in Table A has no matching ID in Table B, what happens to that row in the final result?",
+      "ground_truth": "The row is excluded from the final result. INNER JOIN only returns rows where there is a match in both tables.",
+      "file_ids": []
+    },
+    {
+      "question": "Describe the 'ACID' properties. Which property ensures that a transaction remains committed even in the event of a power failure?",
+      "ground_truth": "ACID stands for Atomicity, Consistency, Isolation, and Durability. 'Durability' ensures that once a transaction is committed, its changes are permanently recorded and will survive any subsequent system failures.",
+      "file_ids": []
+    },
+    {
+      "question": "In MongoDB, what is a 'Capped Collection'? Provide a use case for this type of collection.",
+      "ground_truth": "A capped collection is a fixed-size collection that automatically overwrites its oldest entries when it reaches its maximum size. A typical use case is storing log data or the 'oplog' for replication.",
+      "file_ids": []
+    },
+    {
+      "question": "Explain the concept of 'Searchable Encryption'. Why is it mathematically difficult to implement compared to standard encryption?",
+      "ground_truth": "Searchable encryption allows a server to search encrypted data without decrypting it. It is difficult because standard encryption (like AES-CBC) produces ciphertexts that look random, making it impossible to perform keyword matches without exposing the data.",
+      "file_ids": []
+    },
+    {
+      "question": "What is the 'Query Optimizer's' job in a DBMS? How does it use 'Statistics' to do its job?",
+      "ground_truth": "The Query Optimizer evaluates multiple execution plans for a SQL query and picks the most efficient one. It uses 'Statistics' (like the number of rows or distribution of values) to estimate the cost (I/O and CPU) of each plan.",
+      "file_ids": []
+    },
+    {
+      "question": "In Normalization, what is a 'Transitive Dependency'? Which normal form specifically targets its removal?",
+      "ground_truth": "A transitive dependency occurs when A -> B and B -> C, therefore A -> C. The Third Normal Form (3NF) is designed to remove these by ensuring all non-key attributes depend only on the primary key.",
+      "file_ids": []
+    },
+    {
+      "question": "Explain the 'Inference' problem in statistical databases. How can a user find a specific person's salary using only aggregate queries (like SUM or COUNT)?",
+      "ground_truth": "By issuing multiple overlapping queries (e.g., 'SUM of salaries for all employees' and 'SUM of salaries for all employees except John'), the user can subtract the results to find John's exact salary.",
+      "file_ids": []
+    },
+    {
+      "question": "In MongoDB sharding, what happens during a 'Chunk Split'? When is it triggered?",
+      "ground_truth": "A chunk split occurs when a chunk of data grows beyond a specific size (e.g., 64MB). MongoDB splits the chunk into two smaller chunks. It is triggered to keep data manageable and to facilitate future balancing across shards.",
+      "file_ids": []
+    },
+    {
+      "question": "Compare 'Database Schema' and 'Database Instance'. Use an analogy to explain the difference.",
+      "ground_truth": "The 'Schema' is the logical design or blueprint (like a class in programming), while the 'Instance' is the actual data stored at a specific moment (like an object/data in memory).",
+      "file_ids": []
+    },
+    {
+      "question": "What is 'Salted Hashing' and how does it prevent 'Rainbow Table' attacks on passwords?",
+      "ground_truth": "Salted hashing adds a unique, random string (the salt) to each password before hashing it. This ensures that two identical passwords will have different hashes, making pre-computed rainbow tables useless for an attacker.",
+      "file_ids": []
+    },
+    {
+      "question": "Explain 'Homomorphic Encryption'. What is the difference between 'Partially' and 'Fully' homomorphic encryption?",
+      "ground_truth": "Homomorphic encryption allows computations on ciphertexts. Partially homomorphic encryption supports only one type of operation (either ADD or MULT), while Fully homomorphic encryption (FHE) supports both, allowing any arbitrary computation.",
+      "file_ids": []
+    },
+    {
+      "question": "在資料庫管理系統中，當緩衝區管理員發現需要的資料區塊不在記憶體中時，會執行哪些具體步驟？",
+      "ground_truth": "緩衝區管理員會先檢查緩衝池。若不在其中，它會尋找一個空閒插槽（若無則根據替換策略移除現有區塊），然後從磁碟讀取該區塊至記憶體，並回傳該區塊的記憶體位址給請求者。",
+      "file_ids": []
+    },
+    {
+      "question": "資料庫索引通常包含哪兩個核心欄位？它是如何避免「全表掃描」來提高查詢效率的？",
+      "ground_truth": "索引包含：1. 鍵值（通常是主鍵或候選鍵的副本）；2. 磁碟區塊位址（指標）。它透過在較小的、排序過的索引結構中搜尋，直接定位到資料所在的磁碟位置，避免了逐行讀取整個表的 I/O 開銷。",
+      "file_ids": []
+    },
+    {
+      "question": "為什麼在開發 SQL 時，使用 'SELECT *' 被認為是不良的實踐？請從 I/O 和記憶體使用的角度解釋。",
+      "ground_truth": "使用 'SELECT *' 會抓取所有欄位，增加每一列資料在記憶體中的大小。這導致單一緩衝區區塊能存放的紀錄數量減少，增加了磁碟 I/O 次數，且浪費記憶體存儲不需要的資料。",
+      "file_ids": []
+    },
+    {
+      "question": "在關聯代數中，『選擇』（Selection, σ）與『投影』（Projection, π）在過濾資料的方式上有何本質區別？",
+      "ground_truth": "『選擇』是用於過濾「列」，根據條件選取符合的紀錄；『投影』是用於過濾「欄位」，僅保留指定的屬性並移除重複項。",
+      "file_ids": []
+    },
+    {
+      "question": "請比較『推式複製』與『拉式複製』。對於優先考慮「高可用性」而非「強一致性」的系統，哪一種較適合？",
+      "ground_truth": "拉式複製較適合。在推式中，主節點需等待更新傳送完成，若從節點延遲會影響效能；在拉式中，從節點依自身狀況請求更新，主節點能維持較高的回應速度（可用性）。",
+      "file_ids": []
+    },
+    {
+      "question": "一家公司在 MongoDB 中使用「範圍分片」，卻發現大部分新資料都寫入同一個分片，造成「熱點」現象。這通常是什麼原因造成的？「哈希分片」（Hashed Sharding）如何解決此問題？",
+      "ground_truth": "這通常是因為分片鍵是單調增加的值（如時間戳記）。哈希分片透過計算鍵值的雜湊，讓即使是連續的數值也會被分配到不同的分片中，從而實現資料均勻分佈。",
+      "file_ids": []
+    },
+    {
+      "question": "根據 CAP 定理，為什麼分散式系統在面臨「網路分區」時，無法同時達到完美的「一致性」與「可用性」？",
+      "ground_truth": "在分區發生時，若要維持可用性（允許寫入），各節點資料會不一致；若要維持一致性（等待同步），系統則必須停止服務直到通訊恢復，導致不可用。",
+      "file_ids": []
+    },
+    {
+      "question": "解釋 MongoDB 副本集中的「選舉」機制。為什麼需要「大多數」節點的投票？",
+      "ground_truth": "當 Primary 故障時，剩餘的 Secondary 會投票。候選者必須獲得總成員數過半的票數才能成為新 Primary，這能確保即使發生網路分區，也只有一邊能選出領導者，防止「腦裂」現象。",
+      "file_ids": []
+    },
+    {
+      "question": "在正規化過程中，為什麼含有「部分函數依賴」的表不符合 2NF？請舉一個概念性例子。",
+      "ground_truth": "2NF 要求非鍵屬性必須完全依賴於整個主鍵。例如主鍵為（學生 ID, 課程 ID），若「學生姓名」只依賴「學生 ID」，則存在部分依賴，會導致學生姓名在選多門課時重複存儲。",
+      "file_ids": []
+    },
+    {
+      "question": "描述交易管理中的「遺失更新」問題。這在兩個交易同時存取同一資料時是如何發生的？",
+      "ground_truth": "當交易 T1 與 T2 同時讀取同一值，T2 先更新並提交，隨後 T1 基於舊值更新並提交。T1 的結果會覆蓋掉 T2 的更新，導致 T2 的修改無效。",
+      "file_ids": []
+    },
+    {
+      "question": "在資料庫安全中，「身分驗證」與「授權」的主要區別為何？",
+      "ground_truth": "身分驗證是確認使用者是誰（如帳號密碼）；授權是確認該使用者具備哪些權限（如是否能對特定表執行 SELECT 或 DELETE）。",
+      "file_ids": []
+    },
+    {
+      "question": "駭客在登入介面輸入 '1' OR '1'='1'。請解釋為什麼這種做法可以繞過未經保護的 SQL 查詢邏輯？",
+      "ground_truth": "因為 '1=1' 是恆真式。當它被拼接到 WHERE 子句後，會使整個條件對資料庫中的所有列都成立，系統通常會直接讓駭客以表中第一個使用者（通常是管理員）的身分登入。",
+      "file_ids": []
+    },
+    {
+      "question": "什麼是「二階 SQL 注入」？為什麼它比普通的一階注入更難偵測？",
+      "ground_truth": "惡意代碼先被存入資料庫（此時看似無害），直到稍後被提取並用於另一個不安全的 SQL 查詢時才觸發。它難偵測是因為在初次輸入時不會立即產生攻擊行為。",
+      "file_ids": []
+    },
+    {
+      "question": "在 TDE（透明資料加密）中，加密發生在哪個層級？它能否防止具有完整存取權限的 DBA 查看資料？",
+      "ground_truth": "加密發生在 I/O 層級（寫入磁碟時）。它無法防止 DBA 查看，因為資料在讀入記憶體（Buffer Pool）時已被解密，DBA 可直接看到明文。",
+      "file_ids": []
+    },
+    {
+      "question": "解釋「保序加密」。在提供功能性與安全性之間，它做了什麼權衡？",
+      "ground_truth": "OPE 確保加密後的密文仍保有與明文相同的大小順序，因此支援範圍查詢。權衡在於它會向攻擊者洩漏資料的分佈規律與順序資訊。",
+      "file_ids": []
+    },
+    {
+      "question": "一份醫療資料集使用 K-Anonymity (K=5) 發布。攻擊者知道「愛麗絲」在資料集中且為 30 歲。若愛麗絲所屬群組的 5 個人全部患有「流感」，請問發生了什麼攻擊？",
+      "ground_truth": "發生了「同質性攻擊」。雖然身分被隱藏在 5 人中，但由於敏感屬性缺乏多樣性，攻擊者仍能 100% 推斷出愛麗絲的病情。",
+      "file_ids": []
+    },
+    {
+      "question": "「差分隱私」如何提供 K-Anonymity 無法提供的正式隱私保證？",
+      "ground_truth": "它透過在查詢結果中加入受控雜訊，確保「單一紀錄的加入或移除」不會顯著改變查詢結果。這在數學上限制了透過背景知識進行推理的可能性。",
+      "file_ids": []
+    },
+    {
+      "question": "在 MongoDB 中，「oplog」是什麼？它是如何維護 Primary 與 Secondary 節點之間的一致性的？",
+      "ground_truth": "oplog 是紀錄所有資料修改操作的日誌。Secondary 節點會定期抓取這些操作並在本地執行，從而保持與 Primary 的資料同步。",
+      "file_ids": []
+    },
+    {
+      "question": "什麼是「盲注」）？請描述「基於時間」盲注的機制。",
+      "ground_truth": "盲注是指伺服器不回傳錯誤或資料。駭客透過讓系統執行耗時操作（如 SLEEP(5)）來判斷條件是否成立。若網頁延遲回應，則代表條件為真，藉此逐字元猜測資料內容。",
+      "file_ids": []
+    },
+    {
+      "question": "為什麼在 L-Diversity 中「敏感屬性」的多樣性很重要？它如何改進了 K-Anonymity？",
+      "ground_truth": "L-Diversity 要求每個等價類中的敏感屬性至少有 L 個不同值。這解決了 K-Anonymity 在面對同質性攻擊（群組內結果全相同）時的脆弱性。",
+      "file_ids": []
+    },
+    {
+      "question": "計算 MySQL 中一個 40 位元組明文字串的 AES 加密後密文長度。請說明公式。",
+      "ground_truth": "公式：16 * (trunc(長度 / 16) + 1)。對於 40 位元組：16 * (trunc(40/16) + 1) = 16 * (2 + 1) = 48 位元組。",
+      "file_ids": []
+    },
+    {
+      "question": "解釋 Oracle 中的「資料遮掩」。它與永久性的動態遮蔽有何不同？",
+      "ground_truth": "Data Redaction 是在查詢當下動態遮蔽（On-the-fly），不改變磁碟上的原始資料；這讓獲授權者仍能存取原始資料，而一般使用者只會看到遮掩後的結果。",
+      "file_ids": []
+    },
+    {
+      "question": "在分散式資料庫中，何謂「垂直分片」？請舉出一個它比水平分片更有效的場景。",
+      "ground_truth": "垂直分片是按欄位（Column）拆分表。例如財務系統只需「薪資」與「員工 ID」，而人力系統需「地址」與「照片」，將其分開存儲可減少各系統查詢時不必要的 I/O。",
+      "file_ids": []
+    },
+    {
+      "question": "在多級安全（MLS）資料庫中，何謂「多實例化」？它如何防止低權限使用者推論出高權限資料？",
+      "ground_truth": "它允許同一主鍵在不同安全層級有不同紀錄。這防止低權限者在插入資料時因收到「主鍵重複」錯誤而推斷出該 ID 已存在於高權限層級中。",
+      "file_ids": []
+    },
+    {
+      "question": "在隱私保護背景下，解釋「準識別碼」。為什麼即使移除了姓名，這些屬性仍具危險性？",
+      "ground_truth": "準識別碼（如郵遞區號、生日、性別）雖非敏感資料，但透過與外部公開資料（如選民名冊）進行連結比對，可以唯一識別出匿名資料集中的特定個人。",
+      "file_ids": []
+    },
+    {
+      "question": "NoSQL 在處理資料關聯性上的做法與傳統 RDBMS 的「Join」有何不同？",
+      "ground_truth": "NoSQL 通常採用「反正規化」，將相關資料直接嵌入單一文件中以提升讀取效能與擴展性；RDBMS 則使用 Join 連結正規化的表，強調資料一致性與節省空間。",
+      "file_ids": []
+    },
+    {
+      "question": "在 MongoDB 中，「寫入確認」參數控制什麼？'w: majority' 對寫入延遲有何影響？",
+      "ground_truth": "它控制寫入操作需獲得多少節點確認才算成功。'w: majority' 要求過半節點確認，雖增加了延遲，但能確保即使 Primary 故障，資料也不會遺失。",
+      "file_ids": []
+    },
+    {
+      "question": "描述 BCNF。它在哪些方面比 3NF 更嚴格？",
+      "ground_truth": "BCNF 要求對於表中的每個函數依賴 X -> Y，X 都必須是超鍵（Superkey）。3NF 允許 Y 是主屬性時 X 可以不是超鍵，BCNF 則完全消除了這類冗餘。",
+      "file_ids": []
+    },
+    {
+      "question": "SQL Server Always Encrypted 中的「決定性加密」與「隨機加密」有何區別？哪一種支援「等值連接」（Equality Joins）？",
+      "ground_truth": "決定性加密相同明文對應相同密文，支援等值連接；隨機加密每次加密結果不同，安全性更高但無法進行比較運算。",
+      "file_ids": []
+    },
+    {
+      "question": "解釋「二階段提交」（Two-Phase Commit, 2PC）協定。在高可用性系統中，此協定的主要缺點是什麼？",
+      "ground_truth": "2PC 分為投票與提交階段。主要缺點是它是「阻塞性」協定，若協調者故障，所有參與者可能陷入等待狀態，降低系統可用性。",
+      "file_ids": []
+    },
+    {
+      "question": "差分隱私中的「拉普拉斯機制」如何運作？「Epsilon」（ε）參數代表什麼意義？",
+      "ground_truth": "它透過在結果中加入符合拉普拉斯分佈的隨機雜訊來保護隱私。ε 是隱私預算，值越小雜訊越多（隱私越強），值越大則資料準確性（Utility）越高。",
+      "file_ids": []
+    },
+    {
+      "question": "在 B+ Tree 索引中，為什麼所有的資料指標都存放在葉子節點，而非內部節點？",
+      "ground_truth": "這樣可以讓內部節點存放更多鍵值，增加「分叉率」（Fan-out），從而降低樹的高度，減少尋找資料時所需的磁碟 I/O 次數。",
+      "file_ids": []
+    },
+    {
+      "question": "討論 DBMS 的「資料獨立性」。這對應用程式開發者有什麼好處？",
+      "ground_truth": "資料獨立性將物理存儲與邏輯架構分離。這讓開發者在更改底層結構（如增加索引、更改存儲位址）時，不需重新撰寫應用程式的 SQL 代碼。",
+      "file_ids": []
+    },
+    {
+      "question": "在 MongoDB 分片叢集中，「mongos」進程的作用是什麼？",
+      "ground_truth": "mongos 是路由服務，作為應用程式與叢集的接口。它根據分片鍵決定資料位於哪個分片，並負責彙整各分片的查詢結果回傳給使用者。",
+      "file_ids": []
+    },
+    {
+      "question": "何謂「多值依賴」（MVD）？哪一個正規型是專門設計來處理此問題的？",
+      "ground_truth": "MVD 是指表中的一組屬性決定了另一組屬性的集合（X ->> Y）。第四正規型（4NF）專門設計來消除因多值依賴產生的冗餘。",
+      "file_ids": []
+    },
+    {
+      "question": "解釋隱私保護中的「成員推理攻擊」。攻擊者如何利用它來對付匿名資料庫？",
+      "ground_truth": "攻擊者利用統計特徵推斷特定個人是否在資料集中。若確認其在某特定病患資料集內，即使沒有具體資料，也能推斷出該人的健康狀態。",
+      "file_ids": []
+    },
+    {
+      "question": "為什麼資料庫分片（Sharding）被視為一種「無共享」（Share-Nothing）架構？",
+      "ground_truth": "因為每個分片節點擁有獨立的 CPU、記憶體與磁碟，節點間不競爭資源。這讓系統可以透過增加獨立節點來進行水平擴展。",
+      "file_ids": []
+    },
+    {
+      "question": "何謂「角色存取控制」（RBAC）？它如何簡化擁有數千名使用者的權限管理？",
+      "ground_truth": "RBAC 將權限授予「角色」（如經理、工讀生）而非個人。當員工職務變動時，管理員只需調整其所屬角色，不需逐一修改表格權限。",
+      "file_ids": []
+    },
+    {
+      "question": "在 Always Encrypted 架構中，「列加密金鑰」（CEK）是在哪裡解密的？這對安全有何重要性？",
+      "ground_truth": "CEK 僅在客戶端應用程式解密。資料庫伺服器永遠看不到明文金鑰或明文資料，確保即使伺服器被駭，資料仍受保護。",
+      "file_ids": []
+    },
+    {
+      "question": "查詢中使用 'INNER JOIN'。若 A 表的某列在 B 表找不到對應 ID，該列會出現在最終結果中嗎？",
+      "ground_truth": "不會。INNER JOIN 僅回傳兩表皆有匹配項的列。",
+      "file_ids": []
+    },
+    {
+      "question": "描述 ACID 特性。哪一項特性確保了即使發生電力故障，已提交的交易仍會被保留？",
+      "ground_truth": "持久性。它確保一旦交易成功提交，其修改會永久紀錄在磁碟上，不受後續故障影響。",
+      "file_ids": []
+    },
+    {
+      "question": "在 MongoDB 中，「固定大小集合」是什麼？請舉出一個使用場景。",
+      "ground_truth": "它是固定容量的集合，達上限後會自動覆蓋舊資料。常用於存放日誌（Logs）或副本集的 oplog。",
+      "file_ids": []
+    },
+    {
+      "question": "解釋「可搜尋加密」。為什麼它在數學實現上比普通加密更困難？",
+      "ground_truth": "它允許伺服器在不解密的情況下搜尋密文。難點在於普通加密（如 AES）會讓結果看起來像隨機雜訊，無法在不洩漏資訊的情況下進行關鍵字比對。",
+      "file_ids": []
+    },
+    {
+      "question": "DBMS 中的「查詢最佳化器」主要工作是什麼？它如何利用「統計資料」？",
+      "ground_truth": "最佳化器評估多條執行路徑並挑選成本最低者。它利用統計資料（如列數、值分佈）來估算不同路徑所需的 I/O 與 CPU 成本。",
+      "file_ids": []
+    },
+    {
+      "question": "在正規化中，何謂「遞移依賴」？哪一個正規型主要負責消除它？",
+      "ground_truth": "當 A -> B 且 B -> C 時，稱 C 遞移依賴於 A。第三正規型（3NF）負責消除此類依賴，要求非鍵屬性直接依賴於主鍵。",
+      "file_ids": []
+    },
+    {
+      "question": "解釋統計資料庫中的「推論問題」。使用者如何僅透過聚合查詢（如 SUM）查出特定人的薪水？",
+      "ground_truth": "透過重疊查詢。例如查詢「全體員工總薪資」與「扣除小明後的總薪資」，兩者相減即可得出小明的薪水。",
+      "file_ids": []
+    },
+    {
+      "question": "在 MongoDB 分片中，當「資料塊分割」（Chunk Split）發生時，其觸發條件為何？",
+      "ground_truth": "當單一資料塊大小超過設定門檻（預設 64MB）時觸發。這是為了讓資料塊保持精簡，以便後續在分片間移動。 ",
+      "file_ids": []
+    },
+    {
+      "question": "請比較「資料庫綱要」（Schema）與「資料庫實例」（Instance）。請用類比法說明。",
+      "ground_truth": "綱要是邏輯設計（如建築設計圖）；實例是特定時刻存儲的資料（如根據設計圖蓋好且住人的房子內容）。",
+      "file_ids": []
+    },
+    {
+      "question": "何謂「加鹽雜湊」？它如何防止針對密碼的「彩虹表」攻擊？",
+      "ground_truth": "在密碼雜湊前加入隨機字串（鹽）。這讓相同的密碼會產生不同的雜湊值，使預先算好的彩虹表失去作用。",
+      "file_ids": []
+    },
+    {
+      "question": "解釋「同態加密」。「部分同態」與「全同態」的區別為何？",
+      "ground_truth": "同態加密允許直接對密文進行運算。部分同態只支援加法或乘法其中一種；全同態支援兩者，可進行任意複雜運算。",
+      "file_ids": []
+    }
+  ]
+}

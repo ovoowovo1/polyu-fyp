@@ -1,0 +1,254 @@
+{
+    "test_cases": [
+        {
+            "question": "Explain the role of the Buffer Manager when a requested data block is not in the buffer pool. What specific steps does it take to provide the data to the user?",
+            "ground_truth": "The Buffer Manager first checks the buffer pool. If the block is missing, it finds a free slot (possibly by evicting an existing block based on a replacement policy), reads the requested block from the disk into that slot, and then returns the memory address of the block to the requestor.",
+            "file_ids": []
+        },
+        {
+            "question": "A database system uses an index with two columns: the primary key and the disk block address. How does this structure speed up a query compared to a full table scan?",
+            "ground_truth": "The index allows the DBMS to search a smaller, sorted data structure to find the specific disk block address of a record. This avoids reading every block of the entire table from the disk, significantly reducing I/O operations.",
+            "file_ids": []
+        },
+        {
+            "question": "A developer performs a 'SELECT *' on a table with 1 million rows but only needs 2 specific columns. According to the lecture, why is this practice inefficient in terms of I/O and memory?",
+            "ground_truth": "Using 'SELECT *' fetches all attributes, increasing the size of each row in memory. This reduces the number of records that can fit in a single buffer block, leading to more disk I/O and wasted memory for data that won't be used.",
+            "file_ids": []
+        },
+        {
+            "question": "In Relational Algebra, what is the difference between the 'Selection' (σ) and 'Projection' (π) operators in terms of how they filter a table?",
+            "ground_truth": "Selection (σ) filters rows based on a given condition, reducing the horizontal subset of the table. Projection (π) filters columns, keeping only specific attributes and removing duplicates, reducing the vertical subset of the table.",
+            "file_ids": []
+        },
+        {
+            "question": "Compare 'Push Replication' and 'Pull Replication'. Which one is better suited for a system that prioritizes high availability over immediate consistency?",
+            "ground_truth": "Pull Replication is better for high availability. In Push Replication, the master sends updates immediately, which can cause delays if nodes are slow. In Pull Replication, replicas request updates when they are ready, allowing the system to remain responsive even if some nodes lag.",
+            "file_ids": []
+        },
+        {
+            "question": "A company is using MongoDB with Range-based Sharding. They notice that most new data is being written to a single shard, creating a 'hotspot'. What likely caused this, and how could Hashed Sharding solve it?",
+            "ground_truth": "This occurs because the shard key is likely a monotonically increasing value (like a timestamp). Hashed Sharding solves this by computing a hash of the key value, ensuring that even sequential values are distributed across different shards more evenly.",
+            "file_ids": []
+        },
+        {
+            "question": "According to the CAP Theorem, why is it impossible for a distributed system to achieve both perfect Consistency and perfect Availability during a network partition?",
+            "ground_truth": "During a partition, if the system allows writes to ensure Availability, different nodes will have different data (losing Consistency). If the system blocks writes to ensure all nodes stay synchronized (Consistency), it becomes unavailable to users.",
+            "file_ids": []
+        },
+        {
+            "question": "Explain the 'Election' process in a MongoDB Replica Set when the Primary node fails. What role do the 'majority' of nodes play?",
+            "ground_truth": "When the Primary is unreachable, the remaining Secondaries hold an election. A candidate must receive a majority of votes from the total number of members in the replica set to become the new Primary, ensuring that only one side of a network partition can elect a leader.",
+            "file_ids": []
+        },
+        {
+            "question": "In the context of Normalization, why is a table with partial functional dependencies not in 2NF? Provide a conceptual example.",
+            "ground_truth": "A table is not in 2NF if a non-key attribute depends on only a part of a composite primary key. For example, in (StudentID, CourseID) -> Grade, StudentName. StudentName depends only on StudentID, which creates redundancy if the student takes multiple courses.",
+            "file_ids": []
+        },
+        {
+            "question": "Describe the 'Lost Update' problem in transaction management. How can it occur when two transactions access the same data item simultaneously?",
+            "ground_truth": "It occurs when T1 reads a value, T2 reads the same value, T2 updates and commits, and then T1 updates based on its old read and commits. T1's update overwrites T2's work, effectively 'losing' T2's update.",
+            "file_ids": []
+        },
+        {
+            "question": "What is the primary difference between Authentication and Authorization in database security?",
+            "ground_truth": "Authentication is the process of verifying who the user is (e.g., login credentials). Authorization is the process of determining what the verified user is allowed to do (e.g., SELECT or DELETE permissions on specific tables).",
+            "file_ids": []
+        },
+        {
+            "question": "A hacker uses '1' OR '1'='1' in a login form. Explain why this bypasses the authentication logic in an unsanitized SQL query.",
+            "ground_truth": "The 'OR 1=1' condition is a tautology (always true). When appended to a WHERE clause, it makes the entire condition true for every row, often allowing the hacker to log in as the first user in the table (usually the admin) without a password.",
+            "file_ids": []
+        },
+        {
+            "question": "What is 'Second-order SQL Injection'? Why is it harder to detect than standard first-order injection?",
+            "ground_truth": "In second-order injection, malicious code is stored in the database first (appearing safe). The attack is triggered later when that stored data is retrieved and used in a second, unsafe SQL query. It's harder to detect because the input doesn't cause immediate harm at the point of entry.",
+            "file_ids": []
+        },
+        {
+            "question": "In TDE (Transparent Data Encryption), where does the encryption/decryption happen? Does it protect data against a DBA who has full access to the running database?",
+            "ground_truth": "Encryption happens at the I/O level when writing to disk. It does not protect against a DBA because the data is decrypted when loaded into the buffer pool/memory, where a DBA can still view it.",
+            "file_ids": []
+        },
+        {
+            "question": "Explain the concept of 'Order Preserving Encryption' (OPE). What is the major trade-off between functionality and security when using OPE?",
+            "ground_truth": "OPE ensures that the ciphertext maintains the same numerical order as the plaintext, allowing range queries (e.g., BETWEEN) on encrypted data. The trade-off is that it leaks the distribution and order of the data to an attacker.",
+            "file_ids": []
+        },
+        {
+            "question": "A medical dataset is released using K-Anonymity with K=5. An attacker knows that 'Alice' is in the dataset and is 30 years old. If all 5 people in Alice's group have 'Flu', what attack has occurred?",
+            "ground_truth": "This is a Homogeneity Attack. Even though Alice's identity is hidden among 5 people, the lack of diversity in the sensitive attribute (Flu) allows the attacker to infer her medical condition with 100% certainty.",
+            "file_ids": []
+        },
+        {
+            "question": "How does 'Differential Privacy' provide a formal guarantee of privacy that K-Anonymity cannot?",
+            "ground_truth": "Differential Privacy adds controlled noise to query results so that the presence or absence of a single individual's data doesn't significantly change the output. K-Anonymity is vulnerable to background knowledge and homogeneity attacks, which DP mathematically limits.",
+            "file_ids": []
+        },
+        {
+            "question": "In MongoDB, what is the 'oplog' and how is it used to maintain consistency between the Primary and Secondary nodes?",
+            "ground_truth": "The oplog (operation log) is a capped collection that keeps a rolling record of all data modifications. Secondaries fetch these operations and apply them to their own data sets to stay in sync with the Primary.",
+            "file_ids": []
+        },
+        {
+            "question": "What is a 'Blind SQL Injection'? Describe the mechanism of a time-based blind injection.",
+            "ground_truth": "In Blind Injection, the server doesn't return data or errors. In a time-based attack, the hacker sends a query like 'IF(condition, SLEEP(5), 0)'. If the page takes 5 seconds to load, the condition is true, allowing the hacker to extract data bit-by-bit.",
+            "file_ids": []
+        },
+        {
+            "question": "Why is the 'Sensitive Attribute' diversity important in L-Diversity, and how does it improve upon K-Anonymity?",
+            "ground_truth": "L-Diversity requires that each equivalence class have at least 'L' well-represented values for the sensitive attribute. This prevents Homogeneity Attacks where an attacker can infer a value because everyone in a k-group has the same result.",
+            "file_ids": []
+        },
+        {
+            "question": "Calculate the AES ciphertext length for a 40-byte plaintext string in MySQL. Explain the formula.",
+            "ground_truth": "Formula: 16 * (trunc(string_length / 16) + 1). For 40 bytes: 16 * (trunc(40/16) + 1) = 16 * (2 + 1) = 48 bytes.",
+            "file_ids": []
+        },
+        {
+            "question": "Explain the concept of 'Data Redaction' in Oracle. How does it differ from permanent data masking?",
+            "ground_truth": "Data Redaction masks data on-the-fly as it is queried (dynamic), whereas permanent data masking changes the data stored on the disk. Redaction allows the original data to remain intact for authorized users.",
+            "file_ids": []
+        },
+        {
+            "question": "In a distributed database, what is 'Vertical Fragmentation'? Provide a scenario where it would be more efficient than horizontal fragmentation.",
+            "ground_truth": "Vertical Fragmentation splits a table by columns. It is efficient when certain applications only need a subset of attributes (e.g., an 'Accounting' app only needs 'Salary' and 'EmpID', not 'Address' or 'Photo'), reducing I/O for those specific tasks.",
+            "file_ids": []
+        },
+        {
+            "question": "What is 'Polyinstantiation' in Multi-level Secure (MLS) databases? How does it prevent a low-level user from inferring high-level data?",
+            "ground_truth": "Polyinstantiation allows multiple rows with the same primary key to exist at different security levels. This prevents 'inference' by allowing a low-level user to insert a record that already exists at a high level without being told 'Duplicate Key', which would reveal the high-level data's existence.",
+            "file_ids": []
+        },
+        {
+            "question": "Explain the 'Quasi-identifier' in the context of privacy protection. Why are these attributes dangerous even if names are removed?",
+            "ground_truth": "Quasi-identifiers (like ZIP code, DOB, Gender) are non-sensitive attributes that can be linked with external datasets (like voter lists) to uniquely re-identify individuals in an 'anonymous' dataset.",
+            "file_ids": []
+        },
+        {
+            "question": "What is the 'NoSQL' approach to data relationships? Compare it with the RDBMS approach using 'Joins'.",
+            "ground_truth": "NoSQL typically avoids Joins by 'denormalizing' data (embedding related data within a single document) to improve read speed and scalability. RDBMS uses Joins to link normalized tables, prioritizing data integrity and space efficiency.",
+            "file_ids": []
+        },
+        {
+            "question": "In MongoDB, what does the 'Write Concern' parameter control? How does 'w: majority' affect write latency?",
+            "ground_truth": "Write Concern controls the level of acknowledgment requested from MongoDB for write operations. 'w: majority' requires the write to be confirmed by a majority of nodes, increasing latency but ensuring the write survives a Primary failure.",
+            "file_ids": []
+        },
+        {
+            "question": "Describe the Boyce-Codd Normal Form (BCNF). How is it more restrictive than 3NF?",
+            "ground_truth": "BCNF requires that for every functional dependency X -> Y, X must be a superkey. 3NF allows X -> Y if Y is a prime attribute, even if X is not a superkey. BCNF eliminates all redundancy caused by functional dependencies.",
+            "file_ids": []
+        },
+        {
+            "question": "What are 'Deterministic Encryption' and 'Randomized Encryption' in SQL Server Always Encrypted? Which one allows for 'Equality Joins'?",
+            "ground_truth": "Deterministic encryption always produces the same ciphertext for the same plaintext, allowing Equality Joins. Randomized encryption produces different ciphertexts, making it more secure but preventing any operations other than retrieval.",
+            "file_ids": []
+        },
+        {
+            "question": "Explain the 'Two-Phase Commit' (2PC) protocol. What is the main drawback of this protocol in a high-availability distributed system?",
+            "ground_truth": "2PC has a voting phase and a commit phase to ensure all nodes agree on a transaction. Its main drawback is that it is a 'blocking' protocol; if the coordinator fails, participants may be left in an uncertain state, reducing availability.",
+            "file_ids": []
+        },
+        {
+            "question": "How does the 'Laplace Mechanism' work in Differential Privacy? What does the 'Epsilon' (ε) parameter represent?",
+            "ground_truth": "The Laplace Mechanism adds noise drawn from a Laplace distribution to the query answer. Epsilon (ε) is the 'privacy budget'; a smaller ε means more noise and higher privacy, while a larger ε means less noise and higher utility.",
+            "file_ids": []
+        },
+        {
+            "question": "In a B+ Tree index, why are all data pointers stored in the leaf nodes rather than internal nodes?",
+            "ground_truth": "Storing pointers only in leaf nodes allows internal nodes to hold more keys, increasing the 'fan-out'. This results in a shorter tree height, meaning fewer disk I/O operations are needed to find any specific record.",
+            "file_ids": []
+        },
+        {
+            "question": "Discuss the 'Data Independence' feature of a DBMS. How does it benefit application developers?",
+            "ground_truth": "Data Independence separates the physical storage details from the logical schema. This allows developers to change the physical structure (like adding an index or moving files) without needing to rewrite the application's SQL code.",
+            "file_ids": []
+        },
+        {
+            "question": "In the context of MongoDB, what is the 'mongos' process, and what is its role in a sharded cluster?",
+            "ground_truth": "The 'mongos' is a routing service that acts as the interface between the application and the sharded cluster. It determines which shards hold the requested data based on the shard key and aggregates results for the user.",
+            "file_ids": []
+        },
+        {
+            "question": "What is the 'Multivalued Dependency' (MVD) and which normal form is designed to handle it?",
+            "ground_truth": "MVD occurs when the presence of one or more rows in a table implies the presence of other rows (X ->> Y). The Fourth Normal Form (4NF) is designed to eliminate redundancies caused by MVDs.",
+            "file_ids": []
+        },
+        {
+            "question": "Explain the 'Membership Inference Attack' in privacy. How can an attacker use it against a supposedly anonymous database?",
+            "ground_truth": "An attacker uses statistical techniques to determine if a specific individual's record is part of a dataset. If they can confirm membership, they may infer sensitive information associated with that dataset (e.g., a 'Cancer Patient' list).",
+            "file_ids": []
+        },
+        {
+            "question": "Why is 'Database Sharding' considered a 'Share-Nothing' architecture?",
+            "ground_truth": "In sharding, each node (shard) has its own CPU, memory, and disk. There is no contention for shared resources, which allows the system to scale horizontally by simply adding more independent nodes.",
+            "file_ids": []
+        },
+        {
+            "question": "What is 'Role-Based Access Control' (RBAC)? How does it simplify the management of database permissions for thousands of users?",
+            "ground_truth": "RBAC assigns permissions to 'roles' (e.g., 'Manager', 'Intern') rather than individuals. When a user joins or changes jobs, the DBA only needs to assign them to a role, rather than manually updating hundreds of table-level permissions.",
+            "file_ids": []
+        },
+        {
+            "question": "In the 'Always Encrypted' architecture, where is the 'Column Encryption Key' (CEK) decrypted? Why is this significant for security?",
+            "ground_truth": "The CEK is decrypted only on the client-side application using a Master Key. The database server never sees the plaintext key or the plaintext data, ensuring that even if the server is compromised, the data remains safe.",
+            "file_ids": []
+        },
+        {
+            "question": "A query uses an 'INNER JOIN' between two tables. If a row in Table A has no matching ID in Table B, what happens to that row in the final result?",
+            "ground_truth": "The row is excluded from the final result. INNER JOIN only returns rows where there is a match in both tables.",
+            "file_ids": []
+        },
+        {
+            "question": "Describe the 'ACID' properties. Which property ensures that a transaction remains committed even in the event of a power failure?",
+            "ground_truth": "ACID stands for Atomicity, Consistency, Isolation, and Durability. 'Durability' ensures that once a transaction is committed, its changes are permanently recorded and will survive any subsequent system failures.",
+            "file_ids": []
+        },
+        {
+            "question": "In MongoDB, what is a 'Capped Collection'? Provide a use case for this type of collection.",
+            "ground_truth": "A capped collection is a fixed-size collection that automatically overwrites its oldest entries when it reaches its maximum size. A typical use case is storing log data or the 'oplog' for replication.",
+            "file_ids": []
+        },
+        {
+            "question": "Explain the concept of 'Searchable Encryption'. Why is it mathematically difficult to implement compared to standard encryption?",
+            "ground_truth": "Searchable encryption allows a server to search encrypted data without decrypting it. It is difficult because standard encryption (like AES-CBC) produces ciphertexts that look random, making it impossible to perform keyword matches without exposing the data.",
+            "file_ids": []
+        },
+        {
+            "question": "What is the 'Query Optimizer's' job in a DBMS? How does it use 'Statistics' to do its job?",
+            "ground_truth": "The Query Optimizer evaluates multiple execution plans for a SQL query and picks the most efficient one. It uses 'Statistics' (like the number of rows or distribution of values) to estimate the cost (I/O and CPU) of each plan.",
+            "file_ids": []
+        },
+        {
+            "question": "In Normalization, what is a 'Transitive Dependency'? Which normal form specifically targets its removal?",
+            "ground_truth": "A transitive dependency occurs when A -> B and B -> C, therefore A -> C. The Third Normal Form (3NF) is designed to remove these by ensuring all non-key attributes depend only on the primary key.",
+            "file_ids": []
+        },
+        {
+            "question": "Explain the 'Inference' problem in statistical databases. How can a user find a specific person's salary using only aggregate queries (like SUM or COUNT)?",
+            "ground_truth": "By issuing multiple overlapping queries (e.g., 'SUM of salaries for all employees' and 'SUM of salaries for all employees except John'), the user can subtract the results to find John's exact salary.",
+            "file_ids": []
+        },
+        {
+            "question": "In MongoDB sharding, what happens during a 'Chunk Split'? When is it triggered?",
+            "ground_truth": "A chunk split occurs when a chunk of data grows beyond a specific size (e.g., 64MB). MongoDB splits the chunk into two smaller chunks. It is triggered to keep data manageable and to facilitate future balancing across shards.",
+            "file_ids": []
+        },
+        {
+            "question": "Compare 'Database Schema' and 'Database Instance'. Use an analogy to explain the difference.",
+            "ground_truth": "The 'Schema' is the logical design or blueprint (like a class in programming), while the 'Instance' is the actual data stored at a specific moment (like an object/data in memory).",
+            "file_ids": []
+        },
+        {
+            "question": "What is 'Salted Hashing' and how does it prevent 'Rainbow Table' attacks on passwords?",
+            "ground_truth": "Salted hashing adds a unique, random string (the salt) to each password before hashing it. This ensures that two identical passwords will have different hashes, making pre-computed rainbow tables useless for an attacker.",
+            "file_ids": []
+        },
+        {
+            "question": "Explain 'Homomorphic Encryption'. What is the difference between 'Partially' and 'Fully' homomorphic encryption?",
+            "ground_truth": "Homomorphic encryption allows computations on ciphertexts. Partially homomorphic encryption supports only one type of operation (either ADD or MULT), while Fully homomorphic encryption (FHE) supports both, allowing any arbitrary computation.",
+            "file_ids": []
+        }
+    ]
+}

@@ -1,0 +1,37 @@
+{
+  "timestamp": "20251231_191803",
+  "config": {
+    "k": 5,
+    "methods": [
+      "vector_only"
+    ]
+  },
+  "results": {
+    "vector_only": [
+      {
+        "question": "A financial bank is designing its core transaction system. The system requires that account balances on all nodes must remain consistent at all times. Even if a network partition occurs causing some nodes to disconnect, it would rather suspend service than allow reading old data. According to the CAP theorem, which two attributes did this system choose? And which one did it sacrifice?",
+        "ground_truth": "The system chose **Consistency** and **Partition Tolerance**, sacrificing **Availability**. This aligns with the characteristics of a CP system (such as the behavior of traditional RDBMS in distributed settings).",
+        "answer": "根據上下文，該金融銀行設計的核心交易系統選擇了以下兩個屬性，並犧牲了一個屬性：\n\n*   **選擇的屬性：**\n    *   **一致性 (Consistency)：** 系統要求所有節點上的帳戶餘額必須始終保持一致，並且不允許讀取舊數據。這符合強一致性的定義。\n    *   **分區容忍性 (Partition tolerance)：** 即使發生網路分區導致某些節點斷開連接，系統也寧願暫停服務，這表明它考慮了分區情況下的行為。\n\n*   **犧牲的屬性：**\n    *   **可用性 (Availability)：** 系統寧願暫停服務也不允許讀取舊數據，這意味著在網路分區發生時，系統可能無法響應請求，從而犧牲了可用性。\n\n**總結：** 該系統選擇了**一致性 (Consistency)** 和**分區容忍性 (Partition tolerance)**，並犧牲了**可用性 (Availability)**。",
+        "num_contexts": 5
+      }
+    ]
+  },
+  "metrics": [
+    {
+      "user_input": "A financial bank is designing its core transaction system. The system requires that account balances on all nodes must remain consistent at all times. Even if a network partition occurs causing some nodes to disconnect, it would rather suspend service than allow reading old data. According to the CAP theorem, which two attributes did this system choose? And which one did it sacrifice?",
+      "retrieved_contexts": [
+        "CAP Theorem\n•Proposed in 2000\n•Consistency\n•In a distributed database, consistency takes a bigger role\n•All nodes should see the same data at the same time, which \nmeans that the replicas should be immediately updated . \n•Strong Consistency in this theorem. \n•Availability\n•A request should always  be fulfilled by the system\n•This is a paramount requirement of all web -centric organizations\n•Partition tolerance\n•The system continues to operate even in the event of a node \nfailure\n•The system will fail only if all nodes fail\n•Only TWO of the THREE can be guaranteed\n•Typically, P is always required because we don’t want our system to \nbe unavailable.\n•One node failure is very common.\n•Simplified question: Choose C or A.\n•Depends on the application scenarios.",
+        "CAP Theorem\n•Consistency or Availability?\n•Traditional databases prefer consistency .\n•ACID: Atomicity, Consistency, Isolation and Durability.\n•RDBMS is distributed, but conservative.\n•2PC (2 -Phase Commit protocol): if one operation fails on at least one \nmachine, all changes made at the other machines participating in the \noperation will be undone to maintain a consistent database state",
+        "CAP Theorem\n•Consistency or Availability?\n•Modern  databases prefer availability, which sacrifices consistency .\n•BASE: a relaxed  ACID on consistency. \n•Basically Availability: The database appears to work most of the time.\n•Soft-state: Data can have transient or temporary states that may \nchange over time, even without external triggers or inputs. It \ndescribes the record’s transitional state when several applications \nupdate it simultaneously. \n•Eventually Consistency: The record will achieve consistency when all \nthe concurrent updates have been completed. Although the replicas \nmay be different, they will be identical eventually.",
+        "Consistency\n•Any given transaction transforms a consistent state of the database into \nanother consistent state, without necessarily preserving consistency at all \nintermediate points\n•A database state is consistent if and only if it satisfies all defined \nconstraints. \n•For example, transfer $100 from A to B.\n•Two sub -steps\n•Deduct $100 from A.\n•Add $100 to B.\n•Consistency constraints: the sum of balances should be equal \nafter this transaction.\n•At the point between Sub -step 1 and Sub -step 2, the sum is not \nequal.\n•Nevertheless, the state after this transactions satisfies the \nconstraints.\n•Consistency is to ensure integrity\n•Consistency types\n•Strong consistency\n•Eventual consistency\n•Quorum consistency",
+        "Strong consistency\n•Read will always  reflect the most recent write\n•Make sure that the write to all replicas are completed before committing\n•Latency: Need to wait for all the replica to respond\n•Slower “write”\n•Commit: The modification can be aware by the new operations."
+      ],
+      "response": "根據上下文，該金融銀行設計的核心交易系統選擇了以下兩個屬性，並犧牲了一個屬性：\n\n*   **選擇的屬性：**\n    *   **一致性 (Consistency)：** 系統要求所有節點上的帳戶餘額必須始終保持一致，並且不允許讀取舊數據。這符合強一致性的定義。\n    *   **分區容忍性 (Partition tolerance)：** 即使發生網路分區導致某些節點斷開連接，系統也寧願暫停服務，這表明它考慮了分區情況下的行為。\n\n*   **犧牲的屬性：**\n    *   **可用性 (Availability)：** 系統寧願暫停服務也不允許讀取舊數據，這意味著在網路分區發生時，系統可能無法響應請求，從而犧牲了可用性。\n\n**總結：** 該系統選擇了**一致性 (Consistency)** 和**分區容忍性 (Partition tolerance)**，並犧牲了**可用性 (Availability)**。",
+      "reference": "The system chose **Consistency** and **Partition Tolerance**, sacrificing **Availability**. This aligns with the characteristics of a CP system (such as the behavior of traditional RDBMS in distributed settings).",
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0,
+      "faithfulness": 0.8461538461538461,
+      "retrieval_method": "vector_only"
+    }
+  ]
+}

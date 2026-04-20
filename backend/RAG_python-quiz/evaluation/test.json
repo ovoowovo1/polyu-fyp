@@ -1,0 +1,12 @@
+{
+  "_description": "Advanced Test Set: Contains scenario-based and inference questions designed to test the semantic understanding capabilities of Hybrid Search.",
+  "_how_to_get_file_ids": "Run python evaluation/list_documents.py to view all available documents and their IDs",
+  "_suggested_test_count": "5 high-quality scenario questions",
+  "test_cases": [
+    {
+      "question": "A financial bank is designing its core transaction system. The system requires that account balances on all nodes must remain consistent at all times. Even if a network partition occurs causing some nodes to disconnect, it would rather suspend service than allow reading old data. According to the CAP theorem, which two attributes did this system choose? And which one did it sacrifice?",
+      "ground_truth": "The system chose **Consistency** and **Partition Tolerance**, sacrificing **Availability**. This aligns with the characteristics of a CP system (such as the behavior of traditional RDBMS in distributed settings).",
+      "file_ids": []
+    }
+  ]
+}

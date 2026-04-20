@@ -1,0 +1,1 @@
+uvicorn main:app  --host localhost --port 3000 --reload                      

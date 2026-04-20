@@ -1,0 +1,679 @@
+{
+  "criteria": [
+    {
+      "name": "relevance_to_material",
+      "score": 4.8,
+      "evidence": "絕大多數題目均直接對應教材特定章節，包括 Buffer Management (Page 10), SQL JOINs (Page 32), NoSQL Characteristics (Page 37), Sharding (Page 98-105), SQL Injection (Page 210+), 與 Homomorphic Encryption (Page 614)。",
+      "issues": [
+        "MCQ 第 10 題將 OPE 的範例（Marked balls）歸類為同態加密，雖概念相關但章節歸屬不精確。"
+      ]
+    },
+    {
+      "name": "coverage",
+      "score": 4.5,
+      "evidence": "試卷廣泛覆蓋了課程的四大支柱：資料庫基礎原理、SQL 語言應用、NoSQL 分散式架構、以及資料庫安全與加密技術。",
+      "issues": [
+        "索引（Indexing）與交易管理（Transactions/ACID）的相關題目較少，若教材有深入涵蓋這些章節，建議增加相關配分。"
+      ]
+    },
+    {
+      "name": "difficulty_alignment",
+      "score": 4.2,
+      "evidence": "題目難度分佈合理，從基礎記憶（如 DCL 指令）到進階分析（如 SQL Injection 流程、Sharding 策略比較），符合大學課程評量標準。",
+      "issues": [
+        "部分簡答題（Short Answer）如 '列舉 DDL 指令' 較為基礎，建議改為給定情境判斷應使用的指令。"
+      ]
+    },
+    {
+      "name": "logical_coherence",
+      "score": 4.6,
+      "evidence": "試題編排邏輯清晰，由淺入深，先測驗基本定義再進入複雜的應用場景分析。",
+      "issues": []
+    },
+    {
+      "name": "pedagogical_value",
+      "score": 4.5,
+      "evidence": "Essay 題目設計優良，特別是要求『設計安全策略』與『評鑑 Sharding 方式』，能有效強迫學生綜合運用知識。",
+      "issues": [
+        "MCQ 第 10 題的混淆可能會誤導學生對『同態加密』定義的精確理解。"
+      ]
+    },
+    {
+      "name": "clarity",
+      "score": 4.2,
+      "evidence": "題幹敘述大致清晰，無歧義。",
+      "issues": [
+        "Short Answer 第 8 題要求寫 SQL，但未指定欄位限制，學生可能會寫出過於複雜或不一致的答案。"
+      ]
+    },
+    {
+      "name": "answerability",
+      "score": 4.5,
+      "evidence": "所有題目（除 MCQ #10 存在爭議外）均可依據提供的教材內容作答。",
+      "issues": []
+    }
+  ],
+  "question_evaluations": [
+    {
+      "question_number": 1,
+      "section": "multiple_choice",
+      "section_question_number": 1,
+      "bloom_level": "understand",
+      "question_text": "在資料庫管理系統（DBMS）的架構中，Buffer Pool 的主要功能為何？",
+      "supported_by_material": "supported",
+      "material_pages": [
+        10
+      ],
+      "evidence_excerpt": "Buffer pool is a portion of main memory available to store copies of disk blocks.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 5,
+        "pedagogical_value": 4,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 2,
+      "section": "multiple_choice",
+      "section_question_number": 2,
+      "bloom_level": "apply",
+      "question_text": "在 SQL 中，若希望查詢結果包含左表和右表中所有匹配的紀錄，以及兩表中所有未匹配的紀錄（即聯集），應使用哪種 JOIN？",
+      "supported_by_material": "supported",
+      "material_pages": [
+        32
+      ],
+      "evidence_excerpt": "FULL JOIN: Returns all records when there is a match in either left or right table.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 4,
+        "pedagogical_value": 4,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 3,
+      "section": "multiple_choice",
+      "section_question_number": 3,
+      "bloom_level": "remember",
+      "question_text": "下列哪一個指令屬於資料控制語言（DCL），用於賦予使用者對資料庫物件的存取權限？",
+      "supported_by_material": "supported",
+      "material_pages": [
+        35
+      ],
+      "evidence_excerpt": "Data Control Language (DCL) - includes commands such as GRANT and REVOKE.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 3,
+        "pedagogical_value": 3,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 4,
+      "section": "multiple_choice",
+      "section_question_number": 4,
+      "bloom_level": "understand",
+      "question_text": "關於 NoSQL 資料庫的特性，下列敘述何者正確？",
+      "supported_by_material": "supported",
+      "material_pages": [
+        37
+      ],
+      "evidence_excerpt": "NoSQL databases... support horizontal scaling (scale out) and are suitable for web-scale applications.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 4,
+        "pedagogical_value": 4,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 5,
+      "section": "multiple_choice",
+      "section_question_number": 5,
+      "bloom_level": "analyze",
+      "question_text": "在 MongoDB 的分片（Sharding）架構中，Client 端應該連接到哪個元件以進行讀寫操作？",
+      "supported_by_material": "supported",
+      "material_pages": [
+        101
+      ],
+      "evidence_excerpt": "Clients only connect to Mongos, never connect directly to the shards.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 4,
+        "pedagogical_value": 5,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 6,
+      "section": "multiple_choice",
+      "section_question_number": 6,
+      "bloom_level": "understand",
+      "question_text": "關於 Range-based Sharding（基於範圍的分片），下列敘述何者錯誤？",
+      "supported_by_material": "supported",
+      "material_pages": [
+        102,
+        105
+      ],
+      "evidence_excerpt": "Range-based Sharding: based on the shard key values... Hashed Sharding: computes a hash of the shard key value.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 4,
+        "pedagogical_value": 4,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 7,
+      "section": "multiple_choice",
+      "section_question_number": 7,
+      "bloom_level": "apply",
+      "question_text": "在 SQL Injection 攻擊中，攻擊者使用 ' UNION SELECT NULL, NULL -- 的主要目的是什麼？",
+      "supported_by_material": "supported",
+      "material_pages": [
+        275
+      ],
+      "evidence_excerpt": "Finding the number of columns... Use a UNION SELECT statement with the right number of NULL values.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 4,
+        "pedagogical_value": 5,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 8,
+      "section": "multiple_choice",
+      "section_question_number": 8,
+      "bloom_level": "analyze",
+      "question_text": "攻擊者在 SQL Injection 測試中輸入 ' UNION SELECT 'a', NULL --，若資料庫回傳錯誤，最可能的原因是什麼？",
+      "supported_by_material": "supported",
+      "material_pages": [
+        276
+      ],
+      "evidence_excerpt": "Find Columns with Appropriate Data Type... Probe each column by injecting a string value, and see if the query fails.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 4,
+        "pedagogical_value": 5,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 9,
+      "section": "multiple_choice",
+      "section_question_number": 9,
+      "bloom_level": "remember",
+      "question_text": "同態加密（Homomorphic Encryption）的主要特性是什麼？",
+      "supported_by_material": "supported",
+      "material_pages": [
+        614
+      ],
+      "evidence_excerpt": "Allows operations at the ciphertext domain directly without decryption.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 3,
+        "pedagogical_value": 4,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 10,
+      "section": "multiple_choice",
+      "section_question_number": 10,
+      "bloom_level": "understand",
+      "question_text": "在教材提及的同態加密範例（Marked balls/intervals）中，若將區間從 [51, 76] 縮小到 [51, 63]，這對應到加密過程中的哪種操作概念？",
+      "supported_by_material": "partially_supported",
+      "material_pages": [
+        420,
+        422
+      ],
+      "evidence_excerpt": "Marked balls 範例實際上位於教材 Order Preserving Encryption (OPE) 章節，雖然物理意義相似，但嚴格來說不是 Homomorphic Encryption 章節的內容。",
+      "scores": {
+        "relevance_to_material": 3,
+        "difficulty_alignment": 3,
+        "pedagogical_value": 3,
+        "clarity": 2,
+        "answerability": 3
+      },
+      "issues": [
+        "分類錯誤：題目將 OPE 的『標記球』範例稱為『同態加密範例』，這會導致觀念混淆。",
+        "教學建議：應區分加密搜尋 (Searchable/OPE) 與同態運算 (Computation) 的差異。"
+      ],
+      "suggested_revision": "將題幹修改為『在保序加密 (OPE) 的 Marked balls 範例中...』，或改考同態加密的『Eval』操作概念。"
+    },
+    {
+      "question_number": 11,
+      "section": "short_answer",
+      "section_question_number": 1,
+      "bloom_level": "understand",
+      "question_text": "簡述 DBMS 與 Database 的區別，並舉例說明。",
+      "supported_by_material": "supported",
+      "material_pages": [
+        7
+      ],
+      "evidence_excerpt": "Database: a collection of interrelated data... DBMS: a general-purpose software system... Analogy: a warehouse vs a warehouse manager.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 3,
+        "pedagogical_value": 4,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 12,
+      "section": "short_answer",
+      "section_question_number": 2,
+      "bloom_level": "remember",
+      "question_text": "請解釋 SQL 中 DDL（Data Definition Language）的主要用途，並列舉兩個指令。",
+      "supported_by_material": "supported",
+      "material_pages": [
+        33
+      ],
+      "evidence_excerpt": "DDL - includes commands for defining database schemas... create and drop.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 3,
+        "pedagogical_value": 3,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 13,
+      "section": "short_answer",
+      "section_question_number": 3,
+      "bloom_level": "apply",
+      "question_text": "在 `CREATE TABLE` 語法中，`Foreign Key` 的作用為何？若違反此限制會發生什麼事？",
+      "supported_by_material": "supported",
+      "material_pages": [
+        34
+      ],
+      "evidence_excerpt": "Foreign key constraint... SQL prevents any update to the database that violates an integrity constraint.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 4,
+        "pedagogical_value": 4,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 14,
+      "section": "short_answer",
+      "section_question_number": 4,
+      "bloom_level": "analyze",
+      "question_text": "為什麼對於 LinkedIn 這類社交網絡應用，使用 NoSQL 可能比關聯式資料庫（RDBMS）更合適？",
+      "supported_by_material": "supported",
+      "material_pages": [
+        38
+      ],
+      "evidence_excerpt": "Example: representing a LinkedIn profile... complicated and hard to read [in RDBMS]. NoSQL [JSON] is more suitable.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 4,
+        "pedagogical_value": 5,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 15,
+      "section": "short_answer",
+      "section_question_number": 5,
+      "bloom_level": "understand",
+      "question_text": "解釋 MongoDB 中的 Hashed Sharding 運作方式。",
+      "supported_by_material": "supported",
+      "material_pages": [
+        105
+      ],
+      "evidence_excerpt": "Hashed sharding involves computing a hash of the shard key field’s value. Each chunk is then assigned... based on the hash value.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 4,
+        "pedagogical_value": 4,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 16,
+      "section": "short_answer",
+      "section_question_number": 6,
+      "bloom_level": "apply",
+      "question_text": "若一個查詢不包含 Shard Key，`mongos` 會如何處理該查詢？這會對效能產生什麼影響？",
+      "supported_by_material": "supported",
+      "material_pages": [
+        104
+      ],
+      "evidence_excerpt": "If a query does not include the shard key, the mongos must direct the query to all shards... scatter/gather.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 4,
+        "pedagogical_value": 5,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 17,
+      "section": "short_answer",
+      "section_question_number": 7,
+      "bloom_level": "analyze",
+      "question_text": "在 SQL Injection 中，攻擊者如何利用 `UNION SELECT` 來探測某個欄位的資料型態是否為字串？",
+      "supported_by_material": "supported",
+      "material_pages": [
+        276
+      ],
+      "evidence_excerpt": "Probe each column by injecting a string value, and see if the query fails.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 5,
+        "pedagogical_value": 5,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 18,
+      "section": "short_answer",
+      "section_question_number": 8,
+      "bloom_level": "create",
+      "question_text": "請寫出一個 SQL 指令，建立一個名為 `instructor` 的資料表，包含 `ID` (char 5, Primary Key) 和 `name` (varchar 20)。",
+      "supported_by_material": "supported",
+      "material_pages": [
+        34
+      ],
+      "evidence_excerpt": "CREATE TABLE instructor ( ID char(5), name varchar(20)... );",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 3,
+        "pedagogical_value": 4,
+        "clarity": 4,
+        "answerability": 5
+      },
+      "issues": [
+        "教材範例包含 dept_name, salary 等多個欄位。若題目僅要求兩個欄位，建議明確標註『僅需包含上述兩欄位』，以免學生困惑是否需要寫完整版。"
+      ],
+      "suggested_revision": "建議修改為：『...僅需包含這兩個欄位，無需加入 Foreign Key 或其他屬性。』"
+    },
+    {
+      "question_number": 19,
+      "section": "short_answer",
+      "section_question_number": 9,
+      "bloom_level": "apply",
+      "question_text": "若要撤銷使用者 `xie` 對 `database_name.table_name` 的 `SELECT` 權限，應使用什麼 SQL 指令？",
+      "supported_by_material": "supported",
+      "material_pages": [
+        35
+      ],
+      "evidence_excerpt": "REVOKE SELECT ON database_name.table_name FROM 'xie'@'polyu';",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 4,
+        "pedagogical_value": 4,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 20,
+      "section": "short_answer",
+      "section_question_number": 10,
+      "bloom_level": "understand",
+      "question_text": "簡述同態加密（Homomorphic Encryption）中 `Eval` 程序的作用。",
+      "supported_by_material": "supported",
+      "material_pages": [
+        614
+      ],
+      "evidence_excerpt": "Procedure Eval... performs computations on c1 and c2, and obtains c*.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 4,
+        "pedagogical_value": 4,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 21,
+      "section": "short_answer",
+      "section_question_number": 11,
+      "bloom_level": "analyze",
+      "question_text": "比較 Range-based Sharding 與 Hashed Sharding 在「範圍查詢（Range Query）」效能上的差異。",
+      "supported_by_material": "supported",
+      "material_pages": [
+        102,
+        105
+      ],
+      "evidence_excerpt": "Range-based: close values in same chunk (efficient range query). Hashed: close values distributed (scatter/gather, inefficient range query).",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 4,
+        "pedagogical_value": 5,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 22,
+      "section": "short_answer",
+      "section_question_number": 12,
+      "bloom_level": "understand",
+      "question_text": "DBMS 如何透過 `Disk Space Management` 與 `Buffer Management` 協同運作來處理資料存取？",
+      "supported_by_material": "supported",
+      "material_pages": [
+        9,
+        10
+      ],
+      "evidence_excerpt": "Buffer Management... Buffer pool portion of main memory available to store copies of disk blocks.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 4,
+        "pedagogical_value": 5,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 23,
+      "section": "essay",
+      "section_question_number": 1,
+      "bloom_level": "evaluate",
+      "question_text": "請詳細比較關聯式資料庫（RDBMS）與 NoSQL 資料庫。請從「資料模型」、「擴展性」與「適用場景」三個面向進行評析。",
+      "supported_by_material": "supported",
+      "material_pages": [
+        37,
+        38,
+        40
+      ],
+      "evidence_excerpt": "RDBMS: structured, scale-up, complex joins. NoSQL: schema-less, scale-out, web-scale applications.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 5,
+        "pedagogical_value": 5,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 24,
+      "section": "essay",
+      "section_question_number": 2,
+      "bloom_level": "analyze",
+      "question_text": "請分析 SQL Injection 中的 Union-based 攻擊流程。攻擊者如何一步步從「探測」到「獲取資料」？請包含判斷欄位數量與型態的步驟。",
+      "supported_by_material": "supported",
+      "material_pages": [
+        273,
+        276
+      ],
+      "evidence_excerpt": "Determine number of columns -> Find columns with appropriate data type -> Union Select to extract data.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 5,
+        "pedagogical_value": 5,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 25,
+      "section": "essay",
+      "section_question_number": 3,
+      "bloom_level": "evaluate",
+      "question_text": "在 MongoDB 的分片策略中，請評鑑「Range-based Sharding」與「Hashed Sharding」的優缺點，並說明在何種情況下應選擇 Hashed Sharding。",
+      "supported_by_material": "supported",
+      "material_pages": [
+        102,
+        105
+      ],
+      "evidence_excerpt": "Range: efficient range queries, risk of uneven distribution. Hashed: even distribution, poor range queries. Choose Hashed for monotonically changing keys.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 5,
+        "pedagogical_value": 5,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 26,
+      "section": "essay",
+      "section_question_number": 4,
+      "bloom_level": "create",
+      "question_text": "假設你是一個資料庫管理員，請設計一套綜合性的安全策略來保護關聯式資料庫。請至少包含「存取控制（DCL）」與「防範 SQL Injection」兩個層面。",
+      "supported_by_material": "supported",
+      "material_pages": [
+        35,
+        293
+      ],
+      "evidence_excerpt": "DCL (Grant/Revoke), Least Privilege. SQL Injection countermeasures (Input validation, Prepared statements).",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 5,
+        "pedagogical_value": 5,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    },
+    {
+      "question_number": 27,
+      "section": "essay",
+      "section_question_number": 5,
+      "bloom_level": "understand",
+      "question_text": "請解釋「同態加密（Homomorphic Encryption）」的核心概念，並舉例說明它如何改變雲端運算的隱私保護模式。",
+      "supported_by_material": "supported",
+      "material_pages": [
+        614
+      ],
+      "evidence_excerpt": "Allows operations at the ciphertext domain directly without decryption. Cloud can compute on encrypted data without knowing the secret.",
+      "scores": {
+        "relevance_to_material": 5,
+        "difficulty_alignment": 5,
+        "pedagogical_value": 5,
+        "clarity": 5,
+        "answerability": 5
+      },
+      "issues": [],
+      "suggested_revision": ""
+    }
+  ],
+  "unsupported_questions": [
+    {
+      "question_number": 10,
+      "reason": "題目引用了教材中的『Marked balls/intervals』範例並將其標籤為『同態加密』，但該範例在教材中實際屬於『Order Preserving Encryption (OPE)』或加密搜尋的章節（Page 418-420）。這是一個概念歸類上的錯誤，可能導致學生混淆。"
+    }
+  ],
+  "overall_comment": "這是一份高品質的試卷，題目設計緊扣課程教材，涵蓋面廣且層次分明。從基礎的 DBMS 定義到進階的 SQL Injection 攻防分析，均能有效評估學生的學習成果。然而，MCQ 第 10 題存在明顯的觀念混淆（OPE vs HE），必須修正。此外，部分實作題（如 SQL 撰寫）建議增加限制條件以減少評分爭議。",
+  "strengths": [
+    "題目與教材內容（Evidence-based）高度一致，幾乎每一題都能找到對應的講義頁數。",
+    "包含多種 Bloom's Taxonomy 層次的題目，不僅考記憶，更考分析與應用（如 Sharding 策略選擇）。",
+    "Essay 題目設計具備實務價值，特別是關於安全策略與架構選型的題目。"
+  ],
+  "weaknesses": [
+    "第 10 題的術語分類錯誤（將 OPE 範例歸為 HE）需要修正。",
+    "部分 SQL 撰寫題（Short Answer #8）缺乏欄位限制，可能導致學生過度作答。",
+    "針對『索引最佳化』或『交易控制』等傳統 DBMS 重點的著墨較少（依賴教材比重而定）。"
+  ],
+  "summary": {
+    "exam_name": "資料庫系統原理與安全 (Database Systems and Security)",
+    "total_questions": 27,
+    "total_marks_estimate": 100,
+    "bloom_distribution": {
+      "understand": 8,
+      "apply": 5,
+      "remember": 3,
+      "analyze": 6,
+      "create": 2,
+      "evaluate": 3
+    },
+    "strengths": [
+      "題目高度貼合教材。",
+      "涵蓋理論與實務（尤其是安全攻防）。",
+      "題型分佈均衡。"
+    ],
+    "weaknesses": [
+      "第 10 題分類精確度問題。",
+      "部分題目限制條件不夠明確。"
+    ],
+    "overall_comment": "試卷品質優良，僅需微調第 10 題與部分簡答題敘述即可定稿。"
+  }
+}

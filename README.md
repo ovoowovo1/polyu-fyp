@@ -1,0 +1,253 @@
+# PolyU FYP Learning Platform
+
+This repository contains an educational assessment platform built for the PolyU FYP project. It combines Retrieval-Augmented Generation (RAG), a multi-agent exam-generation workflow, and a web-based teaching interface to help teachers manage materials, generate assessments, and support student learning with grounded AI outputs.
+
+## Project Overview
+
+Modern educational assessment faces two recurring problems: manual feedback is time-consuming, and general-purpose LLM output can be unreliable for high-stakes academic use. This project addresses those issues with an integrated system that grounds AI responses in teacher-provided materials and uses structured agent workflows to improve question quality, answerability, and pedagogical alignment.
+
+The platform is centered on the **Intelligent Exam Studio**, a workflow-driven environment for generating exams and quizzes from course materials. It uses RAG to retrieve evidence from uploaded documents, supports Bloom's Taxonomy-aware question generation, and keeps document management, classroom workflows, and assessment tools in one application.
+
+## Key Capabilities
+
+- Grounded Q&A over teacher-provided course materials
+- Standardized exam generation with a multi-agent workflow
+- Rapid quiz generation for lower-latency formative assessment
+- Automated grading support for quizzes and short-answer assessments
+- Bloom's Taxonomy control for difficulty and cognitive-depth alignment
+- Integrated class, document, and assessment workflow in one web app
+
+## Architecture and Workflow
+
+The system follows a decoupled full-stack architecture: a React/Vite frontend communicates with a FastAPI backend, which coordinates retrieval, generation, grading, and storage services over PostgreSQL and model APIs.
+
+![Figure 3.1: System Architecture Overview](docs/images/readme/figure-3-1-system-architecture.png)
+
+*Figure 3.1. High-level system architecture showing the client, React/Vite frontend, FastAPI backend, PostgreSQL data layer, and external model service integration.*
+
+![Figure 3.2: System Entity Relationship Diagram](docs/images/readme/figure-3-2-erd.png)
+
+*Figure 3.2. Entity relationship design for users, classes, documents, and chunk-level storage used to support retrieval and source grounding.*
+
+![Figure 3.3: Hybrid Search Workflow combining Vector and Keyword Search using RRF](docs/images/readme/figure-3-3-hybrid-search-workflow.png)
+
+*Figure 3.3. Hybrid retrieval pipeline that combines vector search and keyword search, then merges ranked results with Reciprocal Rank Fusion (RRF).*
+
+![Figure 3.4: Multi-Agent State Graph for Automated Exam Generation](docs/images/readme/figure-3-4-multi-agent-state-graph.png)
+
+*Figure 3.4. Multi-agent state graph used by the exam-generation workflow, where retrieval, generation, visualization, and review are coordinated through explicit state transitions.*
+
+## Product Preview
+
+The current system already integrates the main teacher workflow: document selection, exam setup, AI-assisted generation, and interactive assessment support inside one interface.
+
+![Figure 4.1: Project Actual Progress](docs/images/readme/figure-4-1-project-progress.png)
+
+*Figure 4.1. Project progress snapshot from the final report, reflecting the implementation status achieved during development.*
+
+![Figure 4.2: Intelligent Exam Studio Configuration](docs/images/readme/figure-4-2-intelligent-exam-studio.png)
+
+*Figure 4.2. Intelligent Exam Studio configuration screen for setting topic, question types, marks, difficulty, chart generation, and additional requirements.*
+
+![Figure 4.3: Interactive Assessment with Pre-computed Rationale](docs/images/readme/figure-4-3-interactive-assessment.png)
+
+*Figure 4.3. Interactive assessment experience with pre-computed rationale and source-aware assistance inside the learning workspace.*
+
+## Evaluation Highlights
+
+The final report evaluated retrieval quality in both cross-lingual and monolingual settings. The main findings were:
+
+- Vector retrieval performed best for Chinese-to-English cross-lingual queries, where semantic similarity was more useful than direct lexical overlap.
+- Hybrid retrieval provided the best overall trade-off in monolingual English settings by combining semantic matching with stronger keyword recall.
+
+These results support the design choice to use retrieval strategies selectively rather than relying on a single retrieval mode for every classroom scenario.
+
+## Repository Structure
+
+```text
+.
+|-- backend/
+|   |-- RAG_python-quiz/
+|-- docs/
+|   |-- images/
+|       |-- readme/
+|-- fontend/
+|   |-- vite-project/
+```
+
+Note: the frontend directory is named `fontend` in this repository and the commands below use that exact path.
+
+## Tech Stack
+
+- Frontend: React 18, Vite, Ant Design, Redux Toolkit
+- Backend: FastAPI, Pydantic Settings, LangChain, LangGraph
+- Database: PostgreSQL with vector-based retrieval support
+- Models and APIs: Gemini-family models and OpenAI-compatible embedding endpoints
+
+## Prerequisites
+
+Before running the project locally, install:
+
+- Python 3.12 recommended
+- Node.js 20 or newer
+- npm
+- PostgreSQL
+- Provider API keys for Google Gemini/OpenRouter-compatible services
+
+## Backend Setup
+
+From the repository root:
+
+```powershell
+cd backend\RAG_python-quiz
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+uvicorn main:app --host 0.0.0.0 --port 3000 --reload
+```
+
+If you are using macOS or Linux, replace the activation and copy commands with the shell equivalents:
+
+```bash
+source .venv/bin/activate
+cp .env.example .env
+```
+
+Important notes:
+
+- The backend reads settings from `backend/RAG_python-quiz/.env`.
+- PostgreSQL must be reachable before starting the API.
+- The application initializes its vector index on startup, so database connectivity is required during launch.
+
+## Frontend Setup
+
+From the repository root:
+
+```powershell
+cd fontend\vite-project
+npm install
+Copy-Item .env.example .env
+npm run dev
+```
+
+The frontend uses `VITE_API_BASE_URL` to decide which backend base URL to call.
+
+## Local Development Workflow
+
+Run the backend first:
+
+```powershell
+cd backend\RAG_python-quiz
+.\.venv\Scripts\Activate.ps1
+uvicorn main:app --host 0.0.0.0 --port 3000 --reload
+```
+
+Then start the frontend in a separate terminal:
+
+```powershell
+cd fontend\vite-project
+npm run dev
+```
+
+Default local URLs:
+
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:3000`
+
+## Environment Variables
+
+### Frontend
+
+The frontend example file is located at `fontend/vite-project/.env.example`.
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `VITE_API_BASE_URL` | Yes | Base URL for the FastAPI backend, for example `http://localhost:3000`. |
+
+### Backend
+
+The backend example file is located at `backend/RAG_python-quiz/.env.example`.
+
+Required runtime variables:
+
+| Variable | Description |
+| --- | --- |
+| `PG_DSN` | PostgreSQL connection string used by the backend services. |
+| `JWT_SECRET_KEY` | Secret used to sign and verify auth tokens. |
+| `GOOGLE_API_KEY_LIST` | Comma-separated list of Google API keys used by Gemini-related flows. |
+| `OPENAI_EMBEDDING_API_KEY` | API key for the OpenAI-compatible embeddings provider. |
+
+Optional variables with documented defaults:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `PORT` | `3000` | Backend port used by the local server. |
+| `GOOGLE_AI_MODEL` | `google/gemini-3-flash-preview` | Main generation model. |
+| `GOOGLE_AI_EMBEDDINGS` | `gemini-embedding-001` | Configured Google embeddings model setting. |
+| `GOOGLE_TTS_MODEL` | `gemini-2.5-flash-preview-tts` | Text-to-speech model. |
+| `OPENAI_EMBEDDING_BASE_URL` | `https://openrouter.ai/api/v1` | Base URL for the embeddings provider. |
+| `OPENAI_EMBEDDING_MODEL` | `google/gemini-embedding-001` | Primary embeddings model. |
+| `OPENAI_EMBEDDING_ACTIVE_COLUMN` | `embedding` | Primary PostgreSQL embedding column. |
+| `OPENAI_EMBEDDING_FALLBACK_MODEL` | `google/gemini-embedding-2-preview` | Fallback embeddings model. |
+| `OPENAI_EMBEDDING_FALLBACK_COLUMN` | `embedding_v2` | Fallback PostgreSQL embedding column. |
+
+The minimal `.env.example` intentionally omits unused legacy `NEO4J_*` settings and the unused `JINA_API_KEY`.
+
+Optional manual smoke and evaluation variables:
+
+| Variable | Description |
+| --- | --- |
+| `GENAI_API_KEY` | Optional override for manual Google GenAI smoke scripts. |
+| `GENAI_BASE_URL` | Optional custom base URL for GenAI smoke scripts when using a proxy or gateway. |
+| `EVAL_LLM_API_KEY` | Credential for manual evaluation utilities that call an OpenAI-compatible chat endpoint. |
+| `EVAL_LLM_BASE_URL` | Base URL for the evaluation LLM provider. |
+| `EVAL_LLM_MODEL` | Model name used by the evaluation LLM utilities. |
+| `EVAL_EMBEDDING_API_KEY` | Credential for evaluation embedding utilities. |
+| `EVAL_EMBEDDING_BASE_URL` | Base URL for the evaluation embedding provider. |
+| `EVAL_EMBEDDING_MODEL` | Model name used by evaluation embedding utilities. |
+
+## Testing and Verification
+
+### Backend
+
+```powershell
+cd backend\RAG_python-quiz
+python -m pytest -q
+```
+
+Manual backend smoke and evaluation scripts must load provider credentials from `.env` or shell environment variables. Do not commit live API keys into backend test or evaluation files.
+
+### Frontend
+
+```powershell
+cd fontend\vite-project
+npm install
+npm run build
+```
+
+## API Areas
+
+The current backend exposes these main API areas:
+
+- `/auth`
+- `/classes`
+- `/quiz`
+- `/exam`
+- `/api/query-stream`
+- `/tts`
+- `/upload-multiple`
+- `/upload-link`
+
+There are also compatibility and document-related routes such as:
+
+- `/query-stream`
+- `/neo4j/files`
+
+## Smoke Check
+
+After both services are running:
+
+1. Open the frontend login page.
+2. Confirm the frontend can reach the backend through `VITE_API_BASE_URL`.
+3. Sign in and verify the main class and document flows load without obvious API or CORS errors.

@@ -1,0 +1,40 @@
+{
+  "_說明": "請在 test_cases 中填入您的測試問題。每個測試案例需要：question（問題）、ground_truth（預期的標準答案）、file_ids（相關文檔的 UUID 列表）",
+  "_如何獲取 file_ids": "執行 python evaluation/list_documents.py 查看所有可用文檔及其 ID",
+  "_建議測試數量": "建議準備 15-20 個問題以獲得統計意義",
+  "test_cases": [
+    {
+      "question": "在分散式資料庫系統中，CAP 定理代表哪三個屬性？且根據定理限制最多能同時滿足幾個？",
+      "ground_truth": "CAP 代表一致性 (Consistency)、可用性 (Availability) 和分區容錯性 (Partition Tolerance)。根據定理，一個分散式系統最多只能同時滿足這三項中的兩項。",
+      "file_ids": [
+      ]
+    },
+    {
+      "question": "什麼是 SQL Injection 中的 Second-order (Stored) SQL Injection？",
+      "ground_truth": "Second-order SQL Injection (Stored SQL Injection) 是指應用程式將惡意輸入存入資料庫時（例如註冊時的用戶名含有特殊字符），資料庫雖然安全地存儲了它，但稍後應用程式在處理另一個請求並檢索該數據時，不安全地將其拼接到新的 SQL 查詢中，導致惡意代碼被執行。",
+      "file_ids": [
+      ]
+    },
+    {
+      "question": "在 Windows 檔案系統安全中，BitLocker 和 EFS (Encrypting File System) 的主要區別是什麼？",
+      "ground_truth": "BitLocker 是對整個磁碟區 (Volume) 進行加密，通常在系統啟動時解鎖；而 EFS 是針對個別檔案或資料夾進行加密。BitLocker 的加密對使用者是透明的，但 EFS 需要使用者擁有私鑰才能解密特定檔案。",
+      "file_ids": [
+
+      ]
+    },
+    {
+      "question": "在資料庫加密層級中，TDE (Transparent Data Encryption) 的主要優點和缺點是什麼？",
+      "ground_truth": "優點：對應用程式透明，不需要修改程式碼或資料庫架構，且能防止作業系統層級的使用者直接讀取資料庫檔案（如防止硬碟失竊）。缺點：資料在資料庫伺服器的記憶體中是解密的（Data-in-use），且擁有資料庫管理權限的特權使用者（如 DBA）通常可以看到解密後的數據。",
+      "file_ids": [
+
+      ]
+    },
+    {
+      "question": "什麼是 K-Anonymity (K-匿名性)？它如何保護隱私？",
+      "ground_truth": "K-Anonymity 是一種隱私保護模型，要求在發布的資料表中，任何一條記錄的準識別符 (Quasi-identifiers，如生日、性別、郵遞區號) 組合，必須至少與 k-1 條其他記錄相同。這樣攻擊者就無法將特定記錄與少於 k 個人的群體區分開來。",
+      "file_ids": [
+
+      ]
+    }
+  ]
+}

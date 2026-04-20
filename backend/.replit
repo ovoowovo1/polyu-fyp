@@ -1,0 +1,40 @@
+modules = ["python-3.12"]
+[agent]
+expertMode = true
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd RAG_python-quiz && /home/runner/workspace/.pythonlibs/bin/uvicorn main:app --host 0.0.0.0 --port 5000 --reload"
+waitForPort = 5000
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[nix]
+channel = "stable-25_05"
+packages = ["cairo", "cargo", "ffmpeg-full", "freetype", "ghostscript", "glibcLocales", "gobject-introspection", "gtk3", "libiconv", "libxcrypt", "pkg-config", "qhull", "rustc", "tcl", "tk"]
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["bash", "-c", "cd RAG_python-quiz && uvicorn main:app --host 0.0.0.0 --port 5000 --workers 4"]
+build = ["pip", "install", "-r", "RAG_python-quiz/requirements.txt"]

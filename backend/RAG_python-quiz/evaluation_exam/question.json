@@ -1,0 +1,417 @@
+{
+    "exam_name": "資料庫系統原理與安全 (Database Systems and Security)",
+    "multiple_choice_questions": [
+        {
+            "question_type": "multiple_choice",
+            "bloom_level": "understand",
+            "question_text": "在資料庫管理系統（DBMS）的架構中，Buffer Pool 的主要功能為何？",
+            "choices": [
+                "負責將 SQL 查詢轉換為執行計畫",
+                "管理磁碟上的檔案與索引結構",
+                "作為主記憶體（RAM）中的一部分，用於暫存從磁碟讀取的資料區塊（Disk Blocks）",
+                "負責管理使用者的存取權限與認證"
+            ],
+            "correct_answer_index": 2,
+            "marks": 1,
+            "marking_criteria": [
+                "正確識別 Buffer Pool 是記憶體中的快取機制"
+            ],
+            "rationale": "根據教材 Page 10，Buffer Pool 是主記憶體的一部分，用於儲存磁碟區塊的副本，以減少 Disk I/O。",
+            "image_description": null
+        },
+        {
+            "question_type": "multiple_choice",
+            "bloom_level": "apply",
+            "question_text": "在 SQL 中，若希望查詢結果包含左表（Left Table）和右表（Right Table）中所有匹配的紀錄，以及兩表中所有未匹配的紀錄（即聯集），應使用哪種 JOIN？",
+            "choices": [
+                "INNER JOIN",
+                "LEFT JOIN",
+                "RIGHT JOIN",
+                "FULL JOIN"
+            ],
+            "correct_answer_index": 3,
+            "marks": 1,
+            "marking_criteria": [
+                "理解不同 JOIN 的集合操作行為"
+            ],
+            "rationale": "根據教材 Page 30-40 範圍，FULL JOIN 會回傳左右兩表中所有的紀錄，無論是否有匹配。",
+            "image_description": null
+        },
+        {
+            "question_type": "multiple_choice",
+            "bloom_level": "remember",
+            "question_text": "下列哪一個指令屬於資料控制語言（DCL），用於賦予使用者對資料庫物件的存取權限？",
+            "choices": [
+                "ALTER",
+                "GRANT",
+                "CREATE",
+                "DROP"
+            ],
+            "correct_answer_index": 1,
+            "marks": 1,
+            "marking_criteria": [
+                "區分 DDL 與 DCL 指令"
+            ],
+            "rationale": "根據教材 'Data Control Language (DCL)' 部分，GRANT 用於給予權限，REVOKE 用於撤銷；而 ALTER, CREATE, DROP 屬於 DDL。",
+            "image_description": null
+        },
+        {
+            "question_type": "multiple_choice",
+            "bloom_level": "understand",
+            "question_text": "關於 NoSQL 資料庫的特性，下列敘述何者正確？",
+            "choices": [
+                "必須在建立資料庫前嚴格定義資料綱要（Schema）",
+                "主要設計用於垂直擴展（Scale Up），依賴單一強大伺服器",
+                "通常不支援 SQL 或僅支援類 SQL 語言，且適合分散式叢集架構（Scale Out）",
+                "不適合用於社群網絡或物聯網（IoT）等 Web-scale 應用"
+            ],
+            "correct_answer_index": 2,
+            "marks": 1,
+            "marking_criteria": [
+                "識別 NoSQL 的 Scale-out 與 Schema-less 特性"
+            ],
+            "rationale": "根據教材 NoSQL 章節，NoSQL 旨在 Scale out，不需預先定義 Schema，且適合 Web-scale 應用。",
+            "image_description": null
+        },
+        {
+            "question_type": "multiple_choice",
+            "bloom_level": "analyze",
+            "question_text": "在 MongoDB 的分片（Sharding）架構中，Client 端應該連接到哪個元件以進行讀寫操作？",
+            "choices": [
+                "單一 Shard Server",
+                "Config Database",
+                "Mongos Router",
+                "Replica Set Member"
+            ],
+            "correct_answer_index": 2,
+            "marks": 1,
+            "marking_criteria": [
+                "理解 MongoDB 分片架構中的路由機制"
+            ],
+            "rationale": "根據教材 'Connecting to a Sharded Cluster'，Client 必須連接到 mongos router，由其負責路由查詢，Client 不應直接連接單個 Shard。",
+            "image_description": null
+        },
+        {
+            "question_type": "multiple_choice",
+            "bloom_level": "understand",
+            "question_text": "關於 Range-based Sharding（基於範圍的分片），下列敘述何者錯誤？",
+            "choices": [
+                "將資料依據 Shard Key 的值切分為多個 Chunks",
+                "Shard Key 值相近的資料通常會存放在同一個 Chunk 中",
+                "這是 MongoDB 預設的分片策略",
+                "它保證了 Shard Key 的雜湊值（Hash）均勻分佈在所有 Shards 上"
+            ],
+            "correct_answer_index": 3,
+            "marks": 1,
+            "marking_criteria": [
+                "區分 Range-based 與 Hashed Sharding 的差異"
+            ],
+            "rationale": "根據教材，選項 D 描述的是 Hashed Sharding。Range-based 是依據實際值的範圍，而非雜湊值。",
+            "image_description": null
+        },
+        {
+            "question_type": "multiple_choice",
+            "bloom_level": "apply",
+            "question_text": "在 SQL Injection 攻擊中，攻擊者使用 ' UNION SELECT NULL, NULL -- 的主要目的是什麼？",
+            "choices": [
+                "刪除資料庫中的資料表",
+                "猜測資料庫管理員的密碼",
+                "測試原始查詢結果的欄位數量（Column Count）",
+                "繞過登入驗證直接取得最高權限"
+            ],
+            "correct_answer_index": 2,
+            "marks": 1,
+            "marking_criteria": [
+                "理解 SQL Injection 中探測欄位數量的技巧"
+            ],
+            "rationale": "根據教材 SQL Injection 章節，攻擊者透過增加 NULL 的數量來匹配原始查詢的欄位數，若數量不符會報錯。",
+            "image_description": null
+        },
+        {
+            "question_type": "multiple_choice",
+            "bloom_level": "analyze",
+            "question_text": "攻擊者在 SQL Injection 測試中輸入 ' UNION SELECT 'a', NULL --，若資料庫回傳錯誤，最可能的原因是什麼？",
+            "choices": [
+                "資料庫系統已關機",
+                "原始查詢的第一個欄位資料型態與字串（String）不相容",
+                "SQL 語法中的註解符號 -- 無效",
+                "資料庫不支援 UNION 操作"
+            ],
+            "correct_answer_index": 1,
+            "marks": 1,
+            "marking_criteria": [
+                "分析 SQL Injection 中的資料型態探測錯誤"
+            ],
+            "rationale": "根據教材 'Find Columns with Appropriate Data Type'，若注入的資料型態（如 'a'）與欄位型態不相容，資料庫會回傳錯誤。",
+            "image_description": null
+        },
+        {
+            "question_type": "multiple_choice",
+            "bloom_level": "remember",
+            "question_text": "同態加密（Homomorphic Encryption）的主要特性是什麼？",
+            "choices": [
+                "加密速度比傳統 AES 快",
+                "允許在密文（Ciphertext）上直接進行運算，且解密後結果與在明文上運算相同",
+                "使用相同的金鑰進行加密與解密（對稱式加密）",
+                "資料一旦加密後就無法被任何方式解密"
+            ],
+            "correct_answer_index": 1,
+            "marks": 1,
+            "marking_criteria": [
+                "定義同態加密的核心概念"
+            ],
+            "rationale": "根據教材 'Homomorphic Encryption' 章節，其允許 'operations at the ciphertext domain directly without decryption'。",
+            "image_description": null
+        },
+        {
+            "question_type": "multiple_choice",
+            "bloom_level": "understand",
+            "question_text": "在教材提及的同態加密範例（Marked balls/intervals）中，若將區間從 [51, 76] 縮小到 [51, 63]，這對應到加密過程中的哪種操作概念？",
+            "choices": [
+                "金鑰生成（Key Generation）",
+                "取樣（Sampling）與縮小搜尋空間以定位明文",
+                "密文的加法運算",
+                "暴力破解攻擊"
+            ],
+            "correct_answer_index": 1,
+            "marks": 1,
+            "marking_criteria": [
+                "理解同態加密範例中的物理意義"
+            ],
+            "rationale": "根據教材 Page 420-421 範例，透過不斷縮小區間（New R）來定位標記球的位置，即對應加密/取樣過程。",
+            "image_description": null
+        }
+    ],
+    "short_answer_questions": [
+        {
+            "question_type": "short_answer",
+            "bloom_level": "understand",
+            "question_text": "簡述 DBMS 與 Database 的區別，並舉例說明。",
+            "model_answer": "Database 是一個儲存資料的集合（例如：員工的個人資料集合）；而 DBMS（資料庫管理系統）是一個軟體系統，負責建立、管理與操作資料庫中的資料（例如：MySQL 軟體）。關係如同「倉庫（Database）」與「倉庫管理員（DBMS）」。",
+            "marks": 2,
+            "marking_criteria": [
+                "正確定義 Database 為資料集合",
+                "正確定義 DBMS 為管理軟體",
+                "提供合適的比喻或例子"
+            ],
+            "rationale": "參考教材 Page 7 'Database vs. DBMS'。",
+            "image_description": null
+        },
+        {
+            "question_type": "short_answer",
+            "bloom_level": "understand",
+            "question_text": "請解釋 SQL 中 DDL（Data Definition Language）的主要用途，並列舉兩個指令。",
+            "model_answer": "DDL 用於定義資料庫的綱要（Schema），即建立或修改資料庫物件的結構。常見指令包括：\n1. CREATE：用於建立資料庫或資料表。\n2. DROP：用於刪除資料庫物件。\n3. ALTER：用於修改資料庫結構。",
+            "marks": 2,
+            "marking_criteria": [
+                "說明 DDL 用於定義 Schema",
+                "列出至少兩個正確指令 (CREATE, DROP, ALTER, RENAME)"
+            ],
+            "rationale": "參考教材 'Data Definition Language (DDL)' 部分。",
+            "image_description": null
+        },
+        {
+            "question_type": "short_answer",
+            "bloom_level": "apply",
+            "question_text": "在 CREATE TABLE 語法中，Foreign Key 的作用為何？若違反此限制會發生什麼事？",
+            "model_answer": "Foreign Key（外鍵）是一個資料表中的欄位，用來參照另一個資料表的 Primary Key，以維護資料的參考完整性（Referential Integrity）。若對資料庫進行的更新或插入操作違反了外鍵限制（例如插入一個不存在於參照表中的 ID），SQL 會阻止該操作並回報錯誤。",
+            "marks": 2,
+            "marking_criteria": [
+                "解釋 Foreign Key 用於連結與參考完整性",
+                "說明違反限制時 SQL 會阻止操作"
+            ],
+            "rationale": "參考教材 'Types of integrity constraints' 部分。",
+            "image_description": null
+        },
+        {
+            "question_type": "short_answer",
+            "bloom_level": "analyze",
+            "question_text": "為什麼對於 LinkedIn 這類社交網絡應用，使用 NoSQL 可能比關聯式資料庫（RDBMS）更合適？",
+            "model_answer": "1. 結構複雜度：社交網絡的資料（如 Profile）結構多變且連結眾多，用 RDBMS 需要大量表格與複雜的 JOIN，導致可讀性與效能差。\n2. 擴展性：NoSQL 設計用於 Scale-out（水平擴展），能透過硬體叢集處理 Web-scale 的大流量與資料量。",
+            "marks": 2,
+            "marking_criteria": [
+                "提及 RDBMS JOIN 的複雜度問題",
+                "提及 NoSQL 的 Scale-out 優勢"
+            ],
+            "rationale": "參考教材 'Example: Representing a LinkedIn profile' 及 NoSQL 特性部分。",
+            "image_description": null
+        },
+        {
+            "question_type": "short_answer",
+            "bloom_level": "understand",
+            "question_text": "解釋 MongoDB 中的 Hashed Sharding 運作方式。",
+            "model_answer": "Hashed Sharding 會計算 Shard Key 欄位值的雜湊（Hash），並依據雜湊值將 Chunk 分配給不同的 Shard。這種方式即使 Shard Key 的原始值很接近，其雜湊值通常會分散，因此能確保資料更均勻地分佈在叢集中。",
+            "marks": 2,
+            "marking_criteria": [
+                "說明計算 Shard Key 的 Hash",
+                "說明依據 Hash 值分配 Chunk 以達均勻分佈"
+            ],
+            "rationale": "參考教材 'Hashed Sharding' 部分。",
+            "image_description": null
+        },
+        {
+            "question_type": "short_answer",
+            "bloom_level": "apply",
+            "question_text": "若一個查詢不包含 Shard Key，mongos 會如何處理該查詢？這會對效能產生什麼影響？",
+            "model_answer": "若查詢不包含 Shard Key，mongos 無法確定資料位於哪個 Shard，因此必須將查詢導向叢集中的「所有」Shards（Scatter-Gather）。這會導致讀取效率低落，因為需要等待所有 Shards 回應。",
+            "marks": 2,
+            "marking_criteria": [
+                "指出查詢會被導向所有 Shards",
+                "說明效能會變差（效率低）"
+            ],
+            "rationale": "參考教材 'Read operations on sharded clusters'。",
+            "image_description": null
+        },
+        {
+            "question_type": "short_answer",
+            "bloom_level": "understand",
+            "question_text": "在 SQL Injection 中，攻擊者如何利用 UNION SELECT 來探測某個欄位的資料型態是否為字串？",
+            "model_answer": "攻擊者會依序在 UNION SELECT 的各個位置放入字串值（如 'a'）並將其他位置設為 NULL。例如 ' UNION SELECT 'a', NULL --。若該位置的原始欄位型態相容於字串，查詢會成功；若不相容，資料庫會回報錯誤，藉此確認該欄位的型態。",
+            "marks": 2,
+            "marking_criteria": [
+                "描述注入字串值進行測試的方法",
+                "說明根據錯誤訊息判斷型態相容性"
+            ],
+            "rationale": "參考教材 'Find Columns with Appropriate Data Type'。",
+            "image_description": null
+        },
+        {
+            "question_type": "short_answer",
+            "bloom_level": "create",
+            "question_text": "請寫出一個 SQL 指令，建立一個名為 instructor 的資料表，包含 ID (char 5, Primary Key) 和 name (varchar 20)。",
+            "model_answer": "CREATE TABLE instructor (\n  ID char(5),\n  name varchar(20),\n  PRIMARY KEY (ID)\n);",
+            "marks": 2,
+            "marking_criteria": [
+                "正確使用 CREATE TABLE 語法",
+                "正確定義欄位型態",
+                "正確設定 Primary Key"
+            ],
+            "rationale": "參考教材 'Create Table' 範例。",
+            "image_description": null
+        },
+        {
+            "question_type": "short_answer",
+            "bloom_level": "apply",
+            "question_text": "若要撤銷使用者 xie 對 database_name.table_name 的 SELECT 權限，應使用什麼 SQL 指令？",
+            "model_answer": "REVOKE SELECT ON database_name.table_name FROM 'xie'@'polyu';",
+            "marks": 2,
+            "marking_criteria": [
+                "正確使用 REVOKE 關鍵字",
+                "語法結構正確 (ON table FROM user)"
+            ],
+            "rationale": "參考教材 'Data Control Language (DCL)' 的 REVOKE 範例。",
+            "image_description": null
+        },
+        {
+            "question_type": "short_answer",
+            "bloom_level": "understand",
+            "question_text": "簡述同態加密（Homomorphic Encryption）中 Eval 程序的作用。",
+            "model_answer": "Eval 程序允許在密文（Ciphertext）上執行運算（如加法、乘法），其輸出為加密的結果（c*）。這個過程不需要解密金鑰，且解密後的結果等同於在明文上執行相同運算。",
+            "marks": 2,
+            "marking_criteria": [
+                "說明 Eval 是在密文上操作",
+                "說明不需要解密即可運算"
+            ],
+            "rationale": "參考教材 'Homomorphic Encryption - Procedure Eval'。",
+            "image_description": null
+        },
+        {
+            "question_type": "short_answer",
+            "bloom_level": "analyze",
+            "question_text": "比較 Range-based Sharding 與 Hashed Sharding 在「範圍查詢（Range Query）」效能上的差異。",
+            "model_answer": "Range-based Sharding 因為將數值相近的資料放在同一個 Chunk/Shard，對於範圍查詢非常有效率（只需針對特定 Shard）。反之，Hashed Sharding 將資料打散，範圍查詢的資料可能散落在所有 Shards，導致必須向全叢集廣播查詢，效能較差。",
+            "marks": 2,
+            "marking_criteria": [
+                "指出 Range-based 適合範圍查詢（Targeted）",
+                "指出 Hashed Sharding 範圍查詢效能差（Broadcast）"
+            ],
+            "rationale": "綜合比較教材中兩種 Sharding 的特性。",
+            "image_description": null
+        },
+        {
+            "question_type": "short_answer",
+            "bloom_level": "understand",
+            "question_text": "DBMS 如何透過 Disk Space Management 與 Buffer Management 協同運作來處理資料存取？",
+            "model_answer": "Disk Space Management 負責在硬碟上以 Block 為單位儲存資料。當程式需要資料時，Buffer Management 會負責將這些 Disk Blocks 載入到主記憶體的 Buffer Pool 中，讓程式能快速存取記憶體中的副本，而非每次都直接讀寫硬碟。",
+            "marks": 2,
+            "marking_criteria": [
+                "說明 Disk Space Management 的角色（硬碟 Block）",
+                "說明 Buffer Management 的角色（記憶體快取）"
+            ],
+            "rationale": "參考教材 Page 9-10。",
+            "image_description": null
+        }
+    ],
+    "essay_questions": [
+        {
+            "question_type": "essay",
+            "bloom_level": "evaluate",
+            "question_text": "請詳細比較關聯式資料庫（RDBMS）與 NoSQL 資料庫。請從「資料模型（Data Model）」、「擴展性（Scalability）」與「適用場景（Use Cases）」三個面向進行評析。",
+            "model_answer": "1. 資料模型：RDBMS 使用表格（Table）與預先定義的 Schema，強調資料的一致性與關聯性，適合結構化資料。NoSQL 則多樣化（如 Document, Key-Value），通常為 Schema-less，允許靈活的資料結構（如 JSON），適合半結構化或非結構化資料。\n\n2. 擴展性：RDBMS 傳統上依賴 Scale-up（垂直擴展），即升級單機硬體，成本高且有極限。NoSQL 設計為 Scale-out（水平擴展），透過在叢集中增加平價硬體來提升容量與效能，更具彈性。\n\n3. 適用場景：RDBMS 適合需要強一致性、複雜交易處理的系統（如銀行、會計系統）。NoSQL 適合需要高吞吐量、海量資料儲存且資料結構變動頻繁的 Web-scale 應用（如社群網絡、IoT、遊戲 Profile）。",
+            "marks": 5,
+            "marking_criteria": [
+                "清楚比較資料模型（Table vs Document/JSON）",
+                "清楚比較擴展性（Scale-up vs Scale-out）",
+                "提供合理的適用場景對比"
+            ],
+            "rationale": "綜合教材中 Database Fundamentals 與 NoSQL 章節的內容。",
+            "image_description": null
+        },
+        {
+            "question_type": "essay",
+            "bloom_level": "analyze",
+            "question_text": "請分析 SQL Injection 中的 Union-based 攻擊流程。攻擊者如何一步步從「探測」到「獲取資料」？請包含判斷欄位數量與型態的步驟。",
+            "model_answer": "Union-based SQL Injection 的流程如下：\n1. 注入點測試：攻擊者在輸入框嘗試輸入 SQL 符號（如單引號），觀察是否引發錯誤。\n2. 判斷欄位數量：使用 ORDER BY 或 UNION SELECT NULL, NULL...。透過不斷增加 NULL 的數量，直到資料庫不再回報「欄位數量不符」的錯誤，藉此確認原始查詢的欄位數。\n3. 判斷欄位型態：在確認數量後，依序將 NULL 替換為特定型態的值（如字串 'a'）。若資料庫未報錯，表示該位置的欄位型態與測試值相容。\n4. 獲取資料：確認可用的顯示欄位後，攻擊者使用 UNION SELECT 結合系統表或目標表（如 UNION SELECT username, password FROM users），將敏感資料合併在正常的查詢結果中回傳。",
+            "marks": 5,
+            "marking_criteria": [
+                "描述判斷欄位數量的邏輯（增加 NULL）",
+                "描述判斷欄位型態的邏輯（替換測試值）",
+                "說明如何透過 UNION 取出資料"
+            ],
+            "rationale": "基於教材中 SQL Injection 部分的詳細步驟。",
+            "image_description": null
+        },
+        {
+            "question_type": "essay",
+            "bloom_level": "evaluate",
+            "question_text": "在 MongoDB 的分片策略中，請評鑑「Range-based Sharding」與「Hashed Sharding」的優缺點，並說明在何種情況下應選擇 Hashed Sharding。",
+            "model_answer": "1. Range-based Sharding：\n   - 優點：將 Key 值相近的資料放在一起，對於「範圍查詢」非常高效，因為查詢只需導向特定的 Shard。\n   - 缺點：若 Shard Key 分佈不均（如單調遞增的 Key），可能導致寫入集中在單一 Shard（Hotspot），造成負載不平衡。\n\n2. Hashed Sharding：\n   - 優點：透過 Hash 打散資料，即使 Key 值相近也會被分到不同 Shard，能確保資料與讀寫負載的均勻分佈，避免 Hotspot。\n   - 缺點：範圍查詢效率極差，因為資料分散，必須向所有 Shard 廣播查詢（Scatter-Gather）。\n\n選擇建議：若應用程式的主要存取模式是隨機讀寫，且 Shard Key 可能導致單調遞增（如時間戳記或流水號），應選擇 Hashed Sharding 以確保負載平衡；若應用極度依賴範圍查詢，則應冒險使用 Range-based 但需謹慎選擇 Key。",
+            "marks": 5,
+            "marking_criteria": [
+                "正確評估 Range-based 的優缺點（範圍查詢好 vs 可能有 Hotspot）",
+                "正確評估 Hashed 的優缺點（分佈均勻 vs 範圍查詢差）",
+                "提出選擇 Hashed 的情境（單調 Key、負載平衡優先）"
+            ],
+            "rationale": "綜合教材中 Sharding 策略的比較。",
+            "image_description": null
+        },
+        {
+            "question_type": "essay",
+            "bloom_level": "create",
+            "question_text": "假設你是一個資料庫管理員，請設計一套綜合性的安全策略來保護關聯式資料庫。請至少包含「存取控制（DCL）」與「防範 SQL Injection」兩個層面。",
+            "model_answer": "資料庫安全策略應包含多層次防護：\n1. 存取控制（DCL）：\n   - 使用 CREATE USER 為不同人員建立獨立帳號，避免共用 root 帳號。\n   - 遵循「最小權限原則」，利用 GRANT 僅賦予使用者執行工作所需的最小權限（如僅給予 SELECT，不給 DROP）。\n   - 定期使用 REVOKE 移除不再需要的權限。\n\n2. 防範 SQL Injection：\n   - 應用程式層面：嚴格過濾與驗證所有使用者輸入，不應直接將輸入字串拼接到 SQL 指令中。\n   - 使用 Parameterized Queries（參數化查詢）或 Prepared Statements，確保使用者輸入被視為資料而非可執行的程式碼。\n   - 資料庫層面：限制 Web 應用程式使用的資料庫帳號權限，即使被注入攻擊，損害也能被控制在最小範圍（例如無法刪除表格）。",
+            "marks": 5,
+            "marking_criteria": [
+                "具體說明 DCL 的應用（GRANT/REVOKE, 最小權限）",
+                "具體說明防範 Injection 的方法（驗證輸入、權限隔離）",
+                "邏輯清晰且策略全面"
+            ],
+            "rationale": "結合教材中的 DCL 與 SQL Injection 防護概念。",
+            "image_description": null
+        },
+        {
+            "question_type": "essay",
+            "bloom_level": "understand",
+            "question_text": "請解釋「同態加密（Homomorphic Encryption）」的核心概念，並舉例說明它如何改變雲端運算的隱私保護模式。",
+            "model_answer": "核心概念：同態加密是一種特殊的加密形式，允許在密文（Ciphertext）上直接進行數學運算（如加法、乘法），其運算結果解密後，與在原始明文上進行相同運算的結果一致。即 Dec(Eval(Enc(m1), Enc(m2))) = m1 op m2。\n\n對雲端隱私的影響：傳統雲端運算中，若要處理資料（如搜尋、統計），必須先在雲端解密，這使得資料暴露於雲端服務商或駭客的風險中。使用同態加密後，使用者可以將加密後的資料上傳至雲端，雲端伺服器在「完全不知道資料內容」的情況下進行運算並回傳加密結果，使用者下載後再自行解密。這實現了「端到端」的隱私保護，使得將敏感資料（如醫療紀錄、金融數據）外包給雲端處理成為可能。",
+            "marks": 5,
+            "marking_criteria": [
+                "清楚定義同態加密（密文運算）",
+                "說明傳統雲端運算的隱私痛點（需解密）",
+                "說明同態加密如何解決此問題（雲端不需解密即可運算）"
+            ],
+            "rationale": "基於教材中 Homomorphic Encryption 的定義與應用潛力。",
+            "image_description": null
+        }
+    ]
+}
