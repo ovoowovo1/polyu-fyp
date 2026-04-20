@@ -1,6 +1,7 @@
 import asyncio
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
@@ -129,7 +130,7 @@ class ExamApiTests(unittest.TestCase):
         self.assertEqual(missing.status_code, 404)
 
         with tempfile.TemporaryDirectory() as tmpdir, patch("app.routers.exam.IMAGES_DIR", tmpdir):
-            path = f"{tmpdir}\\exam-1_chart.png"
+            path = Path(tmpdir) / "exam-1_chart.png"
             with open(path, "wb") as handle:
                 handle.write(b"png")
             response = self.client.get("/exam/exam-1/image/exam-1_chart.png")

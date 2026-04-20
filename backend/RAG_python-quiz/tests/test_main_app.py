@@ -10,8 +10,8 @@ import main
 
 class MainAppTests(unittest.TestCase):
     def test_default_static_dir_points_to_backend_static_folder(self):
-        static_dir = main._default_static_dir()
-        self.assertTrue(static_dir.endswith("backend\\RAG_python-quiz\\static"))
+        static_dir = Path(main._default_static_dir()).resolve()
+        self.assertEqual(static_dir.parts[-3:], ("backend", "RAG_python-quiz", "static"))
 
     def test_create_startup_handler_calls_vector_index_setup(self):
         with patch("main.pg_service.setup_vector_index") as setup_vector_index:
