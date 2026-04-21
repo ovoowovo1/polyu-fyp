@@ -7,10 +7,11 @@ import { Bubble, Sender } from '@ant-design/x';
 import MarkdownIt from 'markdown-it';
 import { useTranslation } from 'react-i18next';
 
-import { handleProChatRequest, handleProChatRequestWithProgress, generateWelcomeMessage } from '../utils/proChatHelpers.jsx';
+import { handleProChatRequest, generateWelcomeMessage } from '../utils/proChatHelpers.jsx';
+import { handleProChatRequestWithSse } from '../utils/proChatRequestWithSse.js';
 import Citation from '../components/Citation.jsx';
 import TTSButton from '../components/TTSButton.jsx';
-import RetrievalProgress from '../components/RetrievalProgress.jsx';
+import AdaptiveRetrievalProgress from '../components/AdaptiveRetrievalProgress.jsx';
 import extractMessageText from '../utils/extractMessageText';
 
 
@@ -147,7 +148,7 @@ export default function Chat({ widthSize = null }) {
         };
 
         const apiCall = enableProgress
-            ? handleProChatRequestWithProgress(messagesForAPI, {
+            ? handleProChatRequestWithSse(messagesForAPI, {
                 ...requestOptions,
                 onProgress: (progressEvent) => {
                     setProgressMessages(prev => [...prev, progressEvent]);
@@ -196,8 +197,8 @@ export default function Chat({ widthSize = null }) {
                                 if (status === 'loading' && enableProgress) {
       
                                     finalContent = (
-                                        <div className='w-full'>
-                                            <RetrievalProgress progressMessages={progressMessages} />
+                                            <div className='w-full'>
+                                            <AdaptiveRetrievalProgress progressMessages={progressMessages} />
                                             <div className="flex items-center gap-2 mt-2">
                                                 <Spin size="small" />
                                                 <span>{message}</span>
@@ -210,7 +211,7 @@ export default function Chat({ widthSize = null }) {
                                     if (isLastMessage && enableProgress && progressMessages.length > 0) {
                                         finalContent = (
                                             <div className='w-full'>
-                                                <RetrievalProgress progressMessages={progressMessages} />
+                                                <AdaptiveRetrievalProgress progressMessages={progressMessages} />
                                                 {renderMessageContent(message)}
                                             </div>
                                         );

@@ -355,6 +355,11 @@
     "saveFailed": "儲存失敗"
   },
   "retrieval": {
+    "router": "問題路由",
+    "retrieval": "文件檢索",
+    "grader": "相關性評估",
+    "rewrite": "查詢改寫",
+    "generation": "答案生成",
     "vectorRetrieval": "向量檢索",
     "fulltextRetrieval": "全文檢索",
     "graphRetrieval": "圖譜檢索",
@@ -362,6 +367,7 @@
     "running": "執行中",
     "completed": "已完成",
     "results": "結果",
+    "attempt": "第 {{count}} 次",
     "queryComplete": "查詢完成"
   },
   "chat": {
@@ -377,4 +383,3 @@
     "notLoggedIn": "請先登入"
   }
 }
-

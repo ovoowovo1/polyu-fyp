@@ -9,7 +9,10 @@ from typing import Any, Dict, List
 
 from app.logger import get_logger
 from app.services import pg_service
-from app.services.vector_query_service import is_retryable_embedding_error, retrieve_vector_context
+from app.services.adaptive_retrieval_service import (
+    NO_RELEVANT_DOCUMENTS_FALLBACK_REASON,
+    run_adaptive_retrieval,
+)
 
 logger = get_logger(__name__)
 
@@ -42,6 +45,14 @@ def _append_warning(warnings: List[str], message: str) -> List[str]:
     return warnings + [message]
 
 
+def _build_search_query(topic: str, difficulty: str, research_goal: str | None) -> str:
+    if research_goal:
+        return f"{research_goal} {difficulty} level details"
+    if topic:
+        return f"{topic} {difficulty} level exam questions"
+    return f"key concepts main topics important definitions {difficulty}"
+
+
 async def retriever_node(state: Dict[str, Any]) -> Dict[str, Any]:
     file_ids = state.get("file_ids", [])
     topic = state.get("topic", "")
@@ -52,82 +63,58 @@ async def retriever_node(state: Dict[str, Any]) -> Dict[str, Any]:
     existing_chunks = state.get("context_chunks", []) or []
     warnings = state.get("warnings", []) or []
 
-    logger.info("[Retriever] Starting retrieval - files=%s iteration=%s", len(file_ids), search_iterations)
+    logger.info(
+        "[Retriever] Starting retrieval - files=%s iteration=%s topic=%r research_goal=%r existing_chunks=%s",
+        len(file_ids),
+        search_iterations,
+        topic[:120],
+        (research_goal or "")[:120],
+        len(existing_chunks),
+    )
 
     if not file_ids:
         raise ValueError("At least one file id is required for exam retrieval")
 
     top_k = max(DEFAULT_TOP_K, num_questions * 2)
+    search_query = _build_search_query(topic, difficulty, research_goal)
+    logger.info("[Retriever] Adaptive retrieval query=%r top_k=%s", search_query[:160], top_k)
 
-    if research_goal:
-        logger.info("[Retriever] Running follow-up research query: %s", research_goal)
-        search_query = f"{research_goal} {difficulty} level details"
-    elif topic:
-        search_query = f"{topic} {difficulty} level exam questions"
-    else:
-        search_query = f"key concepts main topics important definitions {difficulty}"
+    retrieval_result = await run_adaptive_retrieval(
+        search_query,
+        file_ids,
+        retrieval_k=top_k,
+        max_docs_to_grade=min(MAX_TOTAL_CHUNKS, top_k),
+        log_prefix="ExamRetriever",
+    )
+    filtered_chunks = retrieval_result.get("documents", [])
+    warnings_out = warnings
 
-    logger.info("[Retriever] Generating query vector: %s...", search_query[:50])
+    if retrieval_result.get("vector_retrieval_degraded"):
+        warnings_out = _append_warning(warnings_out, DEGRADED_RETRIEVAL_WARNING)
 
-    try:
-        chunks, retrieval_mode = await retrieve_vector_context(
-            search_query,
-            file_ids,
-            k=top_k,
-            log_prefix="Retriever",
+    logger.info(
+        "[Retriever] Adaptive retrieval completed - filtered=%s candidates=%s rewrite_count=%s fallback_reason=%r degraded=%s",
+        len(filtered_chunks),
+        len(retrieval_result.get("candidate_documents", [])),
+        retrieval_result.get("rewrite_count", 0),
+        retrieval_result.get("fallback_reason"),
+        retrieval_result.get("vector_retrieval_degraded", False),
+    )
+
+    if not filtered_chunks and not existing_chunks:
+        logger.warning(
+            "[Retriever] No adaptive retrieval matches found; falling back to selected files full text reason=%r",
+            retrieval_result.get("fallback_reason") or NO_RELEVANT_DOCUMENTS_FALLBACK_REASON,
         )
-        logger.info(
-            "[Retriever] Vector retrieval completed - mode=%s top_k=%s results=%s",
-            retrieval_mode,
-            top_k,
-            len(chunks),
-        )
-    except Exception as err:
-        if not is_retryable_embedding_error(err):
-            raise
-
-        logger.warning("[Retriever] Both embedding models unavailable; degrading retrieval: %s", err)
-        degraded_warnings = _append_warning(warnings, DEGRADED_RETRIEVAL_WARNING)
-        next_iteration = _next_search_iteration(search_iterations, research_goal)
-
-        if existing_chunks:
-            return {
-                **state,
-                "context": _build_context_from_chunks(existing_chunks),
-                "context_chunks": existing_chunks,
-                "warnings": degraded_warnings,
-                "search_iterations": next_iteration,
-                "research_goal": None,
-            }
-
         full_text = await asyncio.to_thread(pg_service.get_files_text_content, file_ids)
         return {
             **state,
             "context": full_text,
             "context_chunks": [],
-            "warnings": degraded_warnings,
-            "search_iterations": next_iteration,
-            "research_goal": None,
-        }
-
-    if not chunks and not existing_chunks:
-        logger.warning("[Retriever] No vector matches found; falling back to selected files full text")
-        full_text = await asyncio.to_thread(pg_service.get_files_text_content, file_ids)
-        return {
-            **state,
-            "context": full_text,
-            "context_chunks": [],
+            "warnings": warnings_out,
             "search_iterations": _next_search_iteration(search_iterations, research_goal),
             "research_goal": None,
         }
-
-    filtered_chunks = [
-        chunk
-        for chunk in chunks
-        if chunk.get("score") is None or chunk.get("score", 1) < (1 - MIN_SCORE_THRESHOLD)
-    ]
-    if not filtered_chunks and chunks:
-        filtered_chunks = chunks[: top_k // 2]
 
     existing_contents = {chunk.get("text", "").strip() for chunk in existing_chunks}
     unique_new_chunks = []
@@ -137,7 +124,12 @@ async def retriever_node(state: Dict[str, Any]) -> Dict[str, Any]:
             unique_new_chunks.append(chunk)
             existing_contents.add(text)
 
-    logger.info("[Retriever] Added %s new unique chunks", len(unique_new_chunks))
+    logger.info(
+        "[Retriever] Added %s new unique chunks; existing=%s final_before_cap=%s",
+        len(unique_new_chunks),
+        len(existing_chunks),
+        len(unique_new_chunks) + len(existing_chunks),
+    )
 
     final_chunks = (unique_new_chunks + existing_chunks)[:MAX_TOTAL_CHUNKS]
     logger.info("[Retriever] Final context chunks=%s max=%s", len(final_chunks), MAX_TOTAL_CHUNKS)
@@ -146,6 +138,7 @@ async def retriever_node(state: Dict[str, Any]) -> Dict[str, Any]:
         **state,
         "context": _build_context_from_chunks(final_chunks),
         "context_chunks": final_chunks,
+        "warnings": warnings_out,
         "search_iterations": _next_search_iteration(search_iterations, research_goal),
         "research_goal": None,
     }

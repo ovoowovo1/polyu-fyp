@@ -11,6 +11,85 @@ def make_chat_client(response):
 
 
 class AiServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_generate_structured_json_and_text_completion_cover_success_and_empty_paths(self):
+        response = SimpleNamespace()
+        client = make_chat_client(response)
+
+        async def fake_retry(_name, func, *args, error_type=RuntimeError):
+            return await func("api-key", *args)
+
+        with patch("app.services.ai_service.get_genai_client", return_value=client), patch(
+            "app.services.ai_service.get_default_model_name",
+            return_value="model",
+        ), patch(
+            "app.services.ai_service.extract_chat_completion_text",
+            return_value='{"ok": true}',
+        ), patch(
+            "app.services.ai_service.with_gemini_retry_async",
+            side_effect=fake_retry,
+        ):
+            result = await ai_service.generate_structured_json(
+                "prompt",
+                {"type": "object"},
+                operation_name="structured",
+                system_prompt="system",
+                temperature=0.2,
+            )
+        self.assertEqual(result, {"ok": True})
+        create_kwargs = client.chat.completions.create.call_args.kwargs
+        self.assertEqual(create_kwargs["messages"][0], {"role": "system", "content": "system"})
+        self.assertEqual(create_kwargs["temperature"], 0.2)
+
+        with patch("app.services.ai_service.get_genai_client", return_value=client), patch(
+            "app.services.ai_service.get_default_model_name",
+            return_value="model",
+        ), patch(
+            "app.services.ai_service.extract_chat_completion_text",
+            return_value="  hello world  ",
+        ), patch(
+            "app.services.ai_service.with_gemini_retry_async",
+            side_effect=fake_retry,
+        ):
+            text = await ai_service.generate_text_completion(
+                "prompt",
+                operation_name="text",
+            )
+        self.assertEqual(text, "hello world")
+
+        with patch("app.services.ai_service.get_genai_client", return_value=client), patch(
+            "app.services.ai_service.get_default_model_name",
+            return_value="model",
+        ), patch(
+            "app.services.ai_service.extract_chat_completion_text",
+            return_value="",
+        ), patch(
+            "app.services.ai_service.with_gemini_retry_async",
+            side_effect=fake_retry,
+        ):
+            with self.assertRaises(RuntimeError):
+                await ai_service.generate_structured_json(
+                    "prompt",
+                    {"type": "object"},
+                    operation_name="structured",
+                )
+
+        with patch("app.services.ai_service.get_genai_client", return_value=client), patch(
+            "app.services.ai_service.get_default_model_name",
+            return_value="model",
+        ), patch(
+            "app.services.ai_service.extract_chat_completion_text",
+            return_value="",
+        ), patch(
+            "app.services.ai_service.with_gemini_retry_async",
+            side_effect=fake_retry,
+        ):
+            with self.assertRaises(RuntimeError):
+                await ai_service.generate_text_completion(
+                    "prompt",
+                    operation_name="text",
+                    system_prompt="system",
+                )
+
     async def test_generate_answer_with_langchain_returns_structured_result(self):
         response = SimpleNamespace()
         client = make_chat_client(response)

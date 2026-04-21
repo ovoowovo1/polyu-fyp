@@ -115,8 +115,8 @@ class PgServiceVectorAndFileTests(PgServiceBase):
 
         cursor = FakeCursor(
             fetchall_results=[
-                [{"text": "chunk", "score": None, "source": None, "page_start": 1, "fileid": "file-1", "chunkid": "chunk-1"}],
-                [{"text": "chunk", "score": 0.2, "source": None, "page_start": 2, "fileid": "file-2", "chunkid": "chunk-2"}],
+                [{"text": "chunk", "score": None, "source": "lesson.pdf", "page_start": 1, "fileid": "file-1", "chunkid": "chunk-1"}],
+                [{"text": "chunk", "score": 0.2, "source": "slides.pdf", "page_start": 2, "fileid": "file-2", "chunkid": "chunk-2"}],
             ]
         )
         with self.patch_conn(cursor):
@@ -124,9 +124,13 @@ class PgServiceVectorAndFileTests(PgServiceBase):
             filtered = pg_service.retrieve_context_by_keywords("sql", selected_file_ids=["file-2"], k=5)
 
         self.assertIsNone(no_filter[0]["score"])
+        self.assertEqual(no_filter[0]["source"], "lesson.pdf")
         self.assertEqual(filtered[0]["page"], 2)
+        self.assertEqual(filtered[0]["source"], "slides.pdf")
         self.assertNotIn("ANY", cursor.executed[0][0])
         self.assertIn("ANY", cursor.executed[1][0])
+        self.assertIn("JOIN public.documents AS d ON d.id = c.document_id", cursor.executed[0][0])
+        self.assertNotIn("NULL::text AS source", cursor.executed[0][0])
 
     def test_file_listing_and_mutations_cover_success_and_missing_rows(self):
         upload_time = datetime(2025, 1, 2, 3, 4, 5)

@@ -76,8 +76,13 @@ class KeyManagementTests(ApiKeyManagerBase):
         self.assertEqual(openai_cls.call_args.kwargs["api_key"], "explicit-key")
 
         api_key_manager._keys = []
-        with self.assertRaises(RuntimeError):
-            api_key_manager.get_genai_client()
+        api_key_manager._index = 0
+        with patch(
+            "app.utils.api_key_manager.get_settings",
+            return_value=SimpleNamespace(google_api_key_list="", google_ai_model=""),
+        ):
+            with self.assertRaises(RuntimeError):
+                api_key_manager.get_genai_client()
 
         with patch(
             "app.utils.api_key_manager.get_settings",
@@ -349,7 +354,16 @@ class StructuredModelFactoryTests(ApiKeyManagerBase):
 
         api_key_manager._keys = []
         api_key_manager._index = 0
-        self.assertIsNone(api_key_manager.get_query_entity_extraction_model())
+        with patch(
+            "app.utils.api_key_manager.get_settings",
+            return_value=SimpleNamespace(google_api_key_list="", google_ai_model="flash-model"),
+        ):
+            self.assertIsNone(api_key_manager.get_query_entity_extraction_model())
+            self.assertIsNone(api_key_manager.get_graph_extraction_model())
+            self.assertIsNone(api_key_manager.get_answer_generation_model({"type": "object"}))
+
+        api_key_manager._keys = ["key-1"]
+        api_key_manager._index = 1
         self.assertIsNone(api_key_manager.get_graph_extraction_model())
         self.assertIsNone(api_key_manager.get_answer_generation_model({"type": "object"}))
 

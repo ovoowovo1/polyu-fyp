@@ -355,6 +355,11 @@
     "saveFailed": "Save failed"
   },
   "retrieval": {
+    "router": "question routing",
+    "retrieval": "document retrieval",
+    "grader": "relevance grading",
+    "rewrite": "query rewrite",
+    "generation": "answer generation",
     "vectorRetrieval": "vector retrieval",
     "fulltextRetrieval": "fulltext retrieval",
     "graphRetrieval": "graph retrieval",
@@ -362,6 +367,7 @@
     "running": "Running",
     "completed": "Completed",
     "results": "results",
+    "attempt": "attempt {{count}}",
     "queryComplete": "Query complete"
   },
   "chat": {
@@ -377,4 +383,3 @@
     "notLoggedIn": "Please log in first"
   }
 }
-

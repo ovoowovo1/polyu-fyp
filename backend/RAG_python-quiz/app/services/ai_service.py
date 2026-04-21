@@ -9,6 +9,84 @@ from app.logger import get_logger
 logger = get_logger(__name__)
 
 
+async def generate_structured_json(
+    prompt: str,
+    schema: Dict[str, Any],
+    *,
+    operation_name: str,
+    system_prompt: Optional[str] = None,
+    temperature: float = 0.0,
+) -> Dict[str, Any]:
+    async def _generate(api_key: str) -> Dict[str, Any]:
+        import json
+
+        client = get_genai_client(api_key)
+        model_name = get_default_model_name()
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        response = await asyncio.to_thread(
+            client.chat.completions.create,
+            model=model_name,
+            messages=messages,
+            temperature=temperature,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "structured_response",
+                    "strict": False,
+                    "schema": schema,
+                },
+            },
+        )
+
+        text = extract_chat_completion_text(response, operation_name)
+        if not text:
+            raise RuntimeError(f"{operation_name} returned empty content")
+        return json.loads(text)
+
+    return await with_gemini_retry_async(
+        operation_name,
+        _generate,
+        error_type=RuntimeError,
+    )
+
+
+async def generate_text_completion(
+    prompt: str,
+    *,
+    operation_name: str,
+    system_prompt: Optional[str] = None,
+    temperature: float = 0.0,
+) -> str:
+    async def _generate(api_key: str) -> str:
+        client = get_genai_client(api_key)
+        model_name = get_default_model_name()
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        response = await asyncio.to_thread(
+            client.chat.completions.create,
+            model=model_name,
+            messages=messages,
+            temperature=temperature,
+        )
+        text = extract_chat_completion_text(response, operation_name)
+        if not text:
+            raise RuntimeError(f"{operation_name} returned empty content")
+        return text.strip()
+
+    return await with_gemini_retry_async(
+        operation_name,
+        _generate,
+        error_type=RuntimeError,
+    )
+
+
 async def generate_answer_with_langchain(context: str, question: str, context_with_file_id: List[str], chunk_ids: List[str]) -> Dict[str, Any]:
     schema = {
         "title": "answer_generation_schema",
@@ -469,4 +547,3 @@ Write the comment now."""
     except Exception as e:
         logger.error(f"AI overall comment failed: {e}")
         return "AI comment generation failed."
-

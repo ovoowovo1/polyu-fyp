@@ -221,11 +221,12 @@ def retrieve_context_by_keywords(keywords: str, selected_file_ids: list[str] = [
             SELECT
                 c.text,
                 paradedb.score(c.id) AS score,
-                NULL::text AS source,
+                d.name AS source,
                 c.page_start,
                 c.document_id AS fileid,
                 c.id AS chunkid
             FROM public.chunks AS c
+            JOIN public.documents AS d ON d.id = c.document_id
             WHERE c.text @@@ %s
         """
         params = [keywords]
