@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { memo, useState, useEffect, useRef } from 'react'
 import { Card, Typography, Button, message, Divider, List, Tag } from 'antd'
 import { useSelector, useDispatch } from 'react-redux'
 import { useTranslation } from 'react-i18next'
@@ -22,7 +22,7 @@ import { getExamList, deleteExam, downloadExamPdf } from '../../api/exam'
 import { getCurrentUser } from '../../api/auth'
 
 
-export default function StudioCard({ widthSize = null }) {
+function StudioCard({ widthSize = null }) {
     const { t, i18n } = useTranslation();
     const dispatch = useDispatch();
     const { Title } = Typography;
@@ -200,7 +200,7 @@ export default function StudioCard({ widthSize = null }) {
     return (
 
         <Card
-            className={`h-full border-r border-gray-100 flex flex-col transition-all duration-300 ease-in-out`}
+            className="h-full border-r border-gray-100 flex flex-col"
             style={{ width: widthSize || '100%' }}
             hoverable
             styles={{ body: { height: '100%', padding: isStudioCardCollapsed ? '1.5rem 0.75rem' : '1.5rem', display: 'flex', flexDirection: 'column' } }}
@@ -419,3 +419,5 @@ export default function StudioCard({ widthSize = null }) {
 
     )
 }
+
+export default memo(StudioCard)

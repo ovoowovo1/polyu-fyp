@@ -56,7 +56,7 @@ const RenameModal = ({ visible, onCancel, docId, currentName }) => {
             confirmLoading={loading}
             okText={t('common.confirm')}
             cancelText={t('common.cancel')}
-            destroyOnClose
+            destroyOnHidden
         >
             <div className="py-4">
                 <Input
@@ -76,4 +76,3 @@ const RenameModal = ({ visible, onCancel, docId, currentName }) => {
 };
 
 export default RenameModal;
-

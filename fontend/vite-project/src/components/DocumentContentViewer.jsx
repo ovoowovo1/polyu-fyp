@@ -10,12 +10,12 @@ const DocumentContentViewer = ({
     selectedShowDocumentContentID
 }) => {
     const dispatch = useDispatch();
-
-
-    const { documentData, isLoading } = useSelector((state) => ({
-        documentData: state.documents?.documentsById[selectedShowDocumentContentID],
-        isLoading: state.documents?.contentLoading,
-    }));
+    const documentData = useSelector(
+        (state) => state.documents?.documentsById[selectedShowDocumentContentID]
+    );
+    const isLoading = useSelector(
+        (state) => state.documents?.contentLoading
+    );
 
 
     useEffect(() => {

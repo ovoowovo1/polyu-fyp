@@ -158,7 +158,7 @@ export default function ClassListPage() {
 							onCancel={closeCreateModal}
 							okText={t('common.create')}
 							centered
-							destroyOnClose
+							destroyOnHidden
 						>
 							<Form layout="vertical" form={form} onFinish={handleCreate}>
 								<Form.Item

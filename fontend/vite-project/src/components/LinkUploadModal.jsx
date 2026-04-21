@@ -44,7 +44,7 @@ const LinkUploadModal = ({ visible, onCancel, onSuccess }) => {
       onOk={handleOk}
       okText={uploading ? '提交中...' : '提交'}
       okButtonProps={{ disabled: !link.trim(), loading: uploading }}
-      destroyOnClose
+      destroyOnHidden
     >
       <Input
         placeholder="輸入要抓取的連結，例如 https://example.com/article"
@@ -62,4 +62,3 @@ const LinkUploadModal = ({ visible, onCancel, onSuccess }) => {
 };
 
 export default LinkUploadModal;
-

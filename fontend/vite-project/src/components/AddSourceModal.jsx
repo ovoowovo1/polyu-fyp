@@ -15,7 +15,7 @@ const AddSourceModal = ({ visible, onCancel, onSelect }) => {
       onCancel={onCancel}
       footer={null}
       width={520}
-      destroyOnClose
+      destroyOnHidden
     >
       <div className="flex flex-col gap-4">
         <Text className="text-zinc-500">{t('documents.chooseSourceType')}</Text>
@@ -43,5 +43,4 @@ const AddSourceModal = ({ visible, onCancel, onSelect }) => {
 };
 
 export default AddSourceModal;
-
 

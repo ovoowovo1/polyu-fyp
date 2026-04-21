@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { memo, useState, useEffect, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { Card, List, Typography, Button, Input, message } from 'antd';
 import { MenuFoldOutlined, MenuUnfoldOutlined, ShrinkOutlined, PlusOutlined } from '@ant-design/icons';
@@ -25,7 +25,7 @@ import DocumentListItem from './DocumentListItem';
 const { Title, Text } = Typography;
 const { Search } = Input;
 
-export default function DocumentList({ widthSize, isMediumScreen }) {
+function DocumentList({ widthSize, isMediumScreen }) {
     const { t } = useTranslation();
     const dispatch = useDispatch();
     const {
@@ -104,7 +104,7 @@ export default function DocumentList({ widthSize, isMediumScreen }) {
     return (
         <>
             <Card
-                className={`h-full  border-r border-gray-100 flex flex-col transition-all duration-300 ease-in-out`}
+                className="h-full border-r border-gray-100 flex flex-col"
                 style={{ width: widthSize || '100%' }}
                 hoverable
                 styles={{ body: { height: '100%', padding: isDocumentListCollapsed ? '1.5rem 0.75rem' : '1.5rem', display: 'flex', flexDirection: 'column' } }}
@@ -286,3 +286,5 @@ export default function DocumentList({ widthSize, isMediumScreen }) {
         </>
     );
 }
+
+export default memo(DocumentList);

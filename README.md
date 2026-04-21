@@ -17,6 +17,11 @@ The platform is centered on the **Intelligent Exam Studio**, a workflow-driven e
 - Bloom's Taxonomy control for difficulty and cognitive-depth alignment
 - Integrated class, document, and assessment workflow in one web app
 
+Current repository implementation note:
+
+- The live repository now uses adaptive retrieval / adaptive RAG in the current grounded Q&A and exam retrieval implementation.
+- This is a post-FYP repository update to the maintained codebase, not part of the assessed FYP submission snapshot.
+
 ## Architecture and Workflow
 
 The system follows a decoupled full-stack architecture: a React/Vite frontend communicates with a FastAPI backend, which coordinates retrieval, generation, grading, and storage services over PostgreSQL and model APIs.
@@ -44,6 +49,17 @@ The current system already integrates the main teacher workflow: document select
 ![Figure 4.1: Project Actual Progress](docs/images/readme/figure-4-1-project-progress.png)
 
 *Figure 4.1. Project progress snapshot from the final report, reflecting the implementation status achieved during development.*
+
+## Repository Update Note
+
+This README describes both the FYP project context and the repository's ongoing engineering updates. Those two scopes are not identical.
+
+- The FYP final report, assessed submission scope, and Figure 4.1 progress snapshot describe the implementation status reached during the formal project period.
+- The current repository may contain post-FYP implementation updates added after that snapshot.
+- The adaptive RAG / adaptive retrieval work in the current codebase is one of those post-FYP repository updates.
+- These updates improve the maintained implementation, but they should not be read as part of the official FYP progress, milestone record, or assessed deliverable scope.
+
+For a concise record of ongoing repository updates, see [docs/repository-updates.md](docs/repository-updates.md).
 
 ![Figure 4.2: Intelligent Exam Studio Configuration](docs/images/readme/figure-4-2-intelligent-exam-studio.png)
 

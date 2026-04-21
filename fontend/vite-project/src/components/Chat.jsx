@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import React, { memo, useCallback, useMemo, useState, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { useSelector } from 'react-redux';
 import { Card, Button, Spin, message, Switch, Tooltip, Space, Typography } from 'antd';
@@ -50,7 +50,7 @@ const renderMessageContent = (content) => {
     return <div>{String(content)}</div>;
 };
 
-export default function Chat({ widthSize = null }) {
+function Chat({ widthSize = null }) {
     const { i18n } = useTranslation();
     const { items: documents, selectedFileIds } = useSelector((state) => state.documents);
     const filteredDocuments = useMemo(() => documents, [documents]);
@@ -182,7 +182,7 @@ export default function Chat({ widthSize = null }) {
     }, [handleChatRequest])
 
     return (
-        <Card hoverable className={`h-full flex flex-col transition-all duration-300 ease-in-out`} style={{ width: widthSize || '100%' }} styles={{ body: { height: '100%', padding: 0, display: 'flex', flexDirection: 'column' } }}>
+        <Card hoverable className="h-full flex flex-col" style={{ width: widthSize || '100%' }} styles={{ body: { height: '100%', padding: 0, display: 'flex', flexDirection: 'column' } }}>
             <div className="flex flex-col h-full gap-4">
                 <div className="flex-1 overflow-y-auto p-4">
                     {messages.length === 0 ? (
@@ -299,3 +299,5 @@ export default function Chat({ widthSize = null }) {
         </Card>
     );
 }
+
+export default memo(Chat);

@@ -150,7 +150,7 @@ const UploadModal = ({ visible, onCancel, onSuccess }) => {
         </Button>
       ]}
       width={600}
-      destroyOnClose
+      destroyOnHidden
     >
       <Dragger
         {...props}
