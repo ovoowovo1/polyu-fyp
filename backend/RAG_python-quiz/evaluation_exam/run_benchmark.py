@@ -16,9 +16,9 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from app.utils.api_key_manager import (  # noqa: E402
-    with_gemini_retry_async,
-    get_genai_client,
-    get_default_model_name,
+    with_llm_retry_async,
+    get_llm_client,
+    get_default_llm_model_name,
 )
 
 
@@ -196,10 +196,10 @@ def _parse_json(text: str) -> Dict[str, Any]:
 
 async def _run_llm_evaluation(prompt: str) -> Dict[str, Any]:
     schema = _evaluation_schema()
-    model_name = get_default_model_name()
+    model_name = get_default_llm_model_name()
 
     async def _call(api_key: str, prompt: str, schema: Dict[str, Any], model_name: str) -> Dict[str, Any]:
-        client = get_genai_client(api_key)
+        client = get_llm_client(api_key)
         response = await asyncio.to_thread(
             client.chat.completions.create,
             model=model_name,
@@ -220,7 +220,7 @@ async def _run_llm_evaluation(prompt: str) -> Dict[str, Any]:
         raw_text = response.choices[0].message.content if response.choices else ""
         return _parse_json(raw_text)
 
-    return await with_gemini_retry_async(
+    return await with_llm_retry_async(
         "Exam Benchmark",
         _call,
         prompt,
@@ -284,7 +284,7 @@ def main() -> int:
         "overall_comment": result.get("overall_comment"),
         "strengths": result.get("strengths") or [],
         "weaknesses": result.get("weaknesses") or [],
-        "model": get_default_model_name(),
+        "model": get_default_llm_model_name(),
         "generated_at": datetime.utcnow().isoformat() + "Z",
     }
 

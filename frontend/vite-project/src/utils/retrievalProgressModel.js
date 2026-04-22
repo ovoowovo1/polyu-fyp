@@ -40,13 +40,18 @@ const updateStageMetrics = (stage, event) => {
 export const buildRetrievalProgressModel = (messages = [], t) => {
   const stages = createInitialStages(t);
   let activeStageKey = null;
+  let hasGenerationEvent = false;
+  let hasTerminalResult = false;
 
   messages.forEach((event) => {
     const stageKey = normalizeProgressType(event?.type);
 
     if (event?.type === 'result') {
+      hasTerminalResult = true;
       markCompleted(stages[activeStageKey]);
-      stages.generation.status = 'completed';
+      if (activeStageKey === 'generation' || hasGenerationEvent) {
+        stages.generation.status = 'completed';
+      }
       activeStageKey = null;
       return;
     }
@@ -61,6 +66,10 @@ export const buildRetrievalProgressModel = (messages = [], t) => {
 
     const stage = stages[stageKey];
     updateStageMetrics(stage, event);
+
+    if (stageKey === 'generation') {
+      hasGenerationEvent = true;
+    }
 
     if (stage.status === 'waiting') {
       stage.status = 'running';
@@ -78,7 +87,8 @@ export const buildRetrievalProgressModel = (messages = [], t) => {
   });
 
   const stageList = STAGE_ORDER.map((key) => stages[key]);
-  const isCompleted = stageList.every((stage) => stage.status === 'completed')
+  const isCompleted = hasTerminalResult
+    || stageList.every((stage) => stage.status === 'completed')
     || stages.generation.status === 'completed';
   const completedCount = stageList.filter((stage) => stage.status === 'completed').length;
   const runningCount = stageList.filter((stage) => stage.status === 'running').length;

@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
-Visualizer Node - 圖表生成節點（The Coder）
-使用 Python 代碼（Matplotlib）生成統計圖表
-對於非圖表類型的圖像，使用 Gemini 圖像生成 API
+Visualizer Node - ?”??蝭暺?The Coder嚗?雿輻 Python 隞?Ⅳ嚗atplotlib嚗??絞閮?銵?撠??銵券?????嚗蝙??Gemini ???? API
 """
 
 from typing import Dict, Any, List, Optional, Literal
@@ -15,28 +13,28 @@ import base64
 from app.agents.schemas import ExamQuestion
 from app.config import get_settings
 from app.utils.api_key_manager import (
-    with_gemini_retry_async,
-    get_genai_client,
-    get_default_model_name
+    with_llm_retry_async,
+    get_llm_client,
+    get_default_llm_model_name
 )
 from app.utils.openai_response import extract_chat_completion_text
 from app.logger import get_logger
 
 logger = get_logger(__name__)
 
-# 模型配置
-CLASSIFICATION_MODEL = "google/gemini-2.5-flash-lite"  # 分類任務使用輕量模型
-IMAGE_GENERATION_MODEL = "google/gemini-3.1-flash-image-preview"  # 圖像生成模型
+# 璅∪??蔭
+CLASSIFICATION_MODEL = "google/gemini-2.5-flash-lite"  # ??隞餃?雿輻頛?璅∪?
+IMAGE_GENERATION_MODEL = "google/gemini-3.1-flash-image-preview"  # ????璅∪?
 
-# 圖片存儲目錄
+# ??摮?桅?
 IMAGES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "static", "images")
 
-# 確保目錄存在
+# 蝣箔??桅?摮
 os.makedirs(IMAGES_DIR, exist_ok=True)
 
 
 # ============================================================================
-# 圖像類型分類
+# ??憿???
 # ============================================================================
 
 async def _classify_image_type(
@@ -44,17 +42,16 @@ async def _classify_image_type(
     description: str
 ) -> Literal["chart", "illustration"]:
     """
-    使用 AI 分類圖像描述是統計圖表還是非圖表插圖
+    雿輻 AI ?????膩?舐絞閮?銵券??舫??”??
     
     Args:
         api_key: Gemini API key
-        description: 圖像描述
+        description: ???膩
     
     Returns:
-        "chart" - 統計圖表（柱狀圖、折線圖、餅圖等）
-        "illustration" - 非圖表（示意圖、概念圖、流程圖等）
+        "chart" - 蝯梯??”嚗???蝺?????嚗?        "illustration" - ??銵剁?蝷箸???敹萄???蝔?蝑?
     """
-    client = get_genai_client(api_key)
+    client = get_llm_client(api_key)
     
     prompt = f"""Please analyze the following image description and determine if it is a "Statistical Chart" or a "Non-Chart Illustration".
 
@@ -66,7 +63,7 @@ async def _classify_image_type(
 - **illustration** (Non-Chart Illustration): Diagram, concept map, flowchart, architecture diagram, scene illustration, object icon, etc., that requires drawing specific graphics.
 """
 
-    # 使用 JSON schema 控制響應格式
+    # 雿輻 JSON schema ?批?踵??澆?
     classification_schema = {
         "type": "object",
         "properties": {
@@ -96,7 +93,7 @@ async def _classify_image_type(
         }
     )
     
-    result_text = extract_chat_completion_text(response, "圖片類型分類")
+    result_text = extract_chat_completion_text(response, "??憿???")
     
     try:
         result = json.loads(result_text)
@@ -104,18 +101,18 @@ async def _classify_image_type(
         if image_type in ["chart", "illustration"]:
             return image_type
     except json.JSONDecodeError:
-        logger.warning(f"[Visualizer] JSON 解析失敗，使用預設值: {result_text}")
+        logger.warning(f"[Visualizer] JSON 閫??憭望?嚗蝙?券?閮剖? {result_text}")
     
     return "illustration"
 
 
 # ============================================================================
-# Matplotlib 圖表生成
+# Matplotlib ?”??
 # ============================================================================
 
 def _build_code_generation_prompt(image_description: str, output_path: str) -> str:
-    """建構 Matplotlib 代碼生成的 prompt"""
-    # 將路徑中的反斜線轉換為正斜線，避免字符串轉義問題
+    """撱箸? Matplotlib 隞?Ⅳ????prompt"""
+    # 撠楝敺葉????頧??箸迤??嚗??蝚虫葡頧儔??
     safe_path = output_path.replace("\\", "/")
     
     return f"""You are a Python data visualization expert. Please generate executable Matplotlib Python code based on the following chart description.
@@ -157,36 +154,34 @@ Now please generate the complete code based on the chart description:"""
 
 def _execute_matplotlib_code(code: str) -> bool:
     """
-    執行 Matplotlib 代碼
+    ?瑁? Matplotlib 隞?Ⅳ
     
-    注意：這是一個簡化的實現。在生產環境中，
-    應該使用更安全的沙箱執行環境。
-    """
+    瘜冽?嚗銝?陛??撖衣???啣?銝哨?
+    ?府雿輻?游??函?瘝拳?瑁??啣???    """
     try:
-        # 先編譯檢查語法
-        compile(code, '<string>', 'exec')
+        # ?楊霅舀炎?亥?瘜?        compile(code, '<string>', 'exec')
         
-        # 準備執行環境
+        # 皞??瑁??啣?
         exec_globals = {
             "__builtins__": __builtins__,
         }
         
-        # 執行代碼
+        # ?瑁?隞?Ⅳ
         exec(code, exec_globals)
         return True
     except SyntaxError as e:
-        logger.error(f"[Visualizer] 代碼語法錯誤: {e}")
-        logger.debug(f"[Visualizer] 問題代碼:\n{code}")
+        logger.error(f"[Visualizer] 隞?Ⅳ隤??航炊: {e}")
+        logger.debug(f"[Visualizer] ??隞?Ⅳ:\n{code}")
         return False
     except Exception as e:
-        logger.error(f"[Visualizer] 代碼執行失敗: {e}")
-        logger.debug(f"[Visualizer] 問題代碼:\n{code}")
+        logger.error(f"[Visualizer] 隞?Ⅳ?瑁?憭望?: {e}")
+        logger.debug(f"[Visualizer] ??隞?Ⅳ:\n{code}")
         return False
 
 
 async def _generate_chart_code(api_key: str, description: str, output_path: str, model_name: str) -> str:
-    """使用 Gemini 生成 Matplotlib 代碼"""
-    client = get_genai_client(api_key)
+    """雿輻 Gemini ?? Matplotlib 隞?Ⅳ"""
+    client = get_llm_client(api_key)
     prompt = _build_code_generation_prompt(description, output_path)
     
     response = await asyncio.to_thread(
@@ -197,9 +192,9 @@ async def _generate_chart_code(api_key: str, description: str, output_path: str,
         ]
     )
     
-    code = extract_chat_completion_text(response, "Matplotlib 圖表程式生成")
+    code = extract_chat_completion_text(response, "Matplotlib ?”蝔???")
     
-    # 清理代碼（移除 markdown 標記）
+    # Strip markdown code fences if the model returned them.
     if "```python" in code:
         code = code.split("```python")[1].split("```")[0]
     elif "```" in code:
@@ -215,24 +210,24 @@ async def _generate_chart_with_matplotlib(
     model_name: str
 ) -> bool:
     """
-    使用 Matplotlib 生成圖表
+    雿輻 Matplotlib ???”
     
     Returns:
-        bool: 是否成功生成圖表
+        bool: ?臬?????”
     """
-    # 生成 Matplotlib 代碼
+    # ?? Matplotlib 隞?Ⅳ
     code = await _generate_chart_code(api_key, description, output_path, model_name)
     
-    logger.debug(f"[Visualizer] 生成的 Matplotlib 代碼:\n{code[:500]}...")
+    logger.debug(f"[Visualizer] ????Matplotlib 隞?Ⅳ:\n{code[:500]}...")
     
-    # 執行代碼生成圖表
+    # ?瑁?隞?Ⅳ???”
     success = await asyncio.to_thread(_execute_matplotlib_code, code)
     
     return success and os.path.exists(output_path)
 
 
 # ============================================================================
-# Gemini 圖像生成 API
+# Gemini ???? API
 # ============================================================================
 
 async def _transform_to_image_prompt(
@@ -240,16 +235,16 @@ async def _transform_to_image_prompt(
     description: str
 ) -> str:
     """
-    使用 AI 將圖像描述轉換成適合圖像生成 API 的 prompt
+    雿輻 AI 撠???餈啗????拙????? API ??prompt
     
     Args:
         api_key: Gemini API key
-        description: 原始圖像描述
+        description: ?????膩
     
     Returns:
-        優化後的圖像生成 prompt
+        ?芸?敺????? prompt
     """
-    client = get_genai_client(api_key)
+    client = get_llm_client(api_key)
     
     prompt = f"""You are a professional AI image generation prompt engineer. Please convert the following image description into a prompt suitable for an AI image generation model.
 
@@ -268,13 +263,13 @@ Output only the converted prompt, without any explanation or extra text."""
 
     response = await asyncio.to_thread(
         client.chat.completions.create,
-        model=CLASSIFICATION_MODEL,  # 使用輕量模型
+        model=CLASSIFICATION_MODEL,  # 雿輻頛?璅∪?
         messages=[
             {"role": "user", "content": prompt}
         ]
     )
     
-    result = extract_chat_completion_text(response, "圖片提示詞轉換").strip()
+    result = extract_chat_completion_text(response, "Image prompt transformation").strip()
     return result if result else description
 
 
@@ -284,21 +279,20 @@ async def _generate_image_with_gemini(
     output_path: str
 ) -> bool:
     """
-    使用 OpenRouter 圖像生成 API 生成圖像
+    雿輻 OpenRouter ???? API ????
     
     Args:
         api_key: API key
-        description: 圖像描述（會先轉換成優化的 prompt）
-        output_path: 輸出路徑
+        description: ???膩嚗??????芸???prompt嚗?        output_path: 頛詨頝臬?
     
     Returns:
-        bool: 是否成功生成圖像
+        bool: ?臬??????
     """
-    client = get_genai_client(api_key)
+    client = get_llm_client(api_key)
     
-    # 先將描述轉換成優化的 prompt
+    # ???膩頧???? prompt
     optimized_prompt = await _transform_to_image_prompt(api_key, description)
-    logger.debug(f"[Visualizer] 優化後的圖像 prompt: {optimized_prompt[:200]}...")
+    logger.debug(f"[Visualizer] ?芸?敺??? prompt: {optimized_prompt[:200]}...")
     
     try:
         response = await asyncio.to_thread(
@@ -349,19 +343,19 @@ async def _generate_image_with_gemini(
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             with open(output_path, "wb") as f:
                 f.write(image_bytes)
-            logger.info(f"[Visualizer] OpenRouter 圖像生成成功: {output_path}")
+            logger.info(f"[Visualizer] OpenRouter ??????: {output_path}")
             return True
 
         logger.warning("[Visualizer] OpenRouter response did not contain any usable image data")
         return False
         
     except Exception as e:
-        logger.error(f"[Visualizer] OpenRouter 圖像生成失敗: {e}")
+        logger.error(f"[Visualizer] OpenRouter ????憭望?: {e}")
         return False
 
 
 # ============================================================================
-# 主要圖像生成邏輯
+# 銝餉??????摩
 # ============================================================================
 
 async def _generate_single_image(
@@ -370,43 +364,40 @@ async def _generate_single_image(
     model_name: str
 ) -> Optional[str]:
     """
-    為單個題目生成圖像
-    
-    流程：
-    1. AI 分類 image_description（圖表 vs 非圖表）
-    2. 根據分類結果選擇生成方式：
-       - chart: 使用 Matplotlib 生成統計圖表
-       - illustration: 使用 Gemini 圖像生成 API
+    ?箏???桃?????    
+    瘚?嚗?    1. AI ?? image_description嚗?銵?vs ??銵剁?
+    2. ?寞???蝯??豢????孵?嚗?       - chart: 雿輻 Matplotlib ??蝯梯??”
+       - illustration: 雿輻 Gemini ???? API
     """
     if not question.image_description:
         return None
     
-    # 生成圖片文件名
+    # Build a stable filename for the generated image asset.
     image_filename = f"{exam_id}_{question.question_id}.png"
     output_path = os.path.join(IMAGES_DIR, image_filename)
     relative_path = f"/static/images/{image_filename}"
     
-    logger.info(f"[Visualizer] 開始生成圖像: {question.question_id}")
+    logger.info(f"[Visualizer] ??????: {question.question_id}")
     
     try:
-        # Step 1: AI 分類圖像類型
-        image_type = await with_gemini_retry_async(
-            "圖像類型分類",
+        # Step 1: AI ????憿?
+        image_type = await with_llm_retry_async(
+            "??憿???",
             _classify_image_type,
             question.image_description,
             error_type=RuntimeError
         )
         
-        logger.info(f"[Visualizer] 圖像類型分類結果: {image_type}")
+        logger.info(f"[Visualizer] ??憿???蝯?: {image_type}")
         
         success = False
         
-        # Step 2: 根據分類結果選擇生成方式
+        # Step 2: ?寞???蝯??豢????孵?
         if image_type == "chart":
-            # 使用 Matplotlib 生成統計圖表
-            logger.info(f"[Visualizer] 使用 Matplotlib 生成圖表")
-            success = await with_gemini_retry_async(
-                "Matplotlib 圖表生成",
+            # 雿輻 Matplotlib ??蝯梯??”
+            logger.info(f"[Visualizer] 雿輻 Matplotlib ???”")
+            success = await with_llm_retry_async(
+                "Matplotlib ?”??",
                 _generate_chart_with_matplotlib,
                 question.image_description,
                 output_path,
@@ -414,10 +405,10 @@ async def _generate_single_image(
                 error_type=RuntimeError
             )
         else:
-            # 使用 Gemini 圖像生成 API 生成插圖
-            logger.info(f"[Visualizer] 使用 Gemini 圖像 API 生成插圖")
-            success = await with_gemini_retry_async(
-                "Gemini 圖像生成",
+            # 雿輻 Gemini ???? API ????
+            logger.info(f"[Visualizer] 雿輻 Gemini ?? API ????")
+            success = await with_llm_retry_async(
+                "Gemini ????",
                 _generate_image_with_gemini,
                 question.image_description,
                 output_path,
@@ -425,68 +416,63 @@ async def _generate_single_image(
             )
         
         if success and os.path.exists(output_path):
-            logger.info(f"[Visualizer] 圖像生成成功: {relative_path}")
+            logger.info(f"[Visualizer] ??????: {relative_path}")
             return relative_path
         else:
-            logger.warning(f"[Visualizer] 圖像生成失敗或文件不存在: {output_path}")
+            logger.warning(f"[Visualizer] ????憭望???隞嗡?摮: {output_path}")
             return None
             
     except Exception as e:
-        logger.error(f"[Visualizer] 生成圖像時發生錯誤: {e}")
+        logger.error(f"[Visualizer] ??????隤? {e}")
         return None
 
 
 async def visualizer_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Visualizer Node - 生成題目所需的圖像
+    Visualizer Node - ??憿??????    
+    ?舀?拍車???孵?嚗?    - 蝯梯??”嚗蝙??Matplotlib ??嚗???蝺?????嚗?    - ??銵冽???雿輻 Gemini ???? API嚗內????敹萄?蝑?
     
-    支援兩種生成方式：
-    - 統計圖表：使用 Matplotlib 生成（柱狀圖、折線圖、餅圖等）
-    - 非圖表插圖：使用 Gemini 圖像生成 API（示意圖、概念圖等）
+    頛詨 State:
+        - questions: 憿?”嚗??賣? image_description嚗?        - exam_id: ?岫 ID
     
-    輸入 State:
-        - questions: 題目列表（部分可能有 image_description）
-        - exam_id: 考試 ID
-    
-    輸出 State 更新:
-        - questions: 更新後的題目列表（包含 image_path）
-        - images: 圖像路徑映射
+    頛詨 State ?湔:
+        - questions: ?湔敺?憿?”嚗???image_path嚗?        - images: ??頝臬???
     """
     questions: List[ExamQuestion] = state.get("questions", [])
     exam_id = state.get("exam_id", "exam_unknown")
     
-    # 找出需要生成圖像的題目
+    # ?曉?閬?????憿
     questions_with_images = [q for q in questions if q.image_description]
     
     if not questions_with_images:
-        logger.info("[Visualizer] 沒有需要生成圖像的題目，跳過")
+        logger.info("[Visualizer] No questions require generated images")
         return {
             **state,
             "images": {}
         }
     
-    logger.info(f"[Visualizer] 需要生成 {len(questions_with_images)} 個圖像")
+    logger.info("[Visualizer] Generating images for %s questions", len(questions_with_images))
     
     settings = get_settings()
-    model_name = settings.google_ai_model or "gemini-2.5-flash"
+    model_name = settings.llm_model or "gemini-2.5-flash"
     
-    # 依序生成圖像
+    # 靘?????
     images: Dict[str, str] = {}
     updated_questions: List[ExamQuestion] = []
     
     for question in questions:
         if question.image_description:
-            # 生成圖像
+            # ????
             image_path = await _generate_single_image(question, exam_id, model_name)
             
             if image_path:
-                # 更新題目的 image_path
+                # ?湔憿??image_path
                 question.image_path = image_path
                 images[question.question_id] = image_path
         
         updated_questions.append(question)
     
-    logger.info(f"[Visualizer] 圖像生成完成 - 成功: {len(images)}/{len(questions_with_images)}")
+    logger.info(f"[Visualizer] ????摰? - ??: {len(images)}/{len(questions_with_images)}")
     
     return {
         **state,

@@ -46,7 +46,7 @@ class FakeConnection:
 
 
 def make_settings(active_column="embedding_v2"):
-    return SimpleNamespace(openai_embedding_active_column=active_column)
+    return SimpleNamespace(embedding_active_column=active_column)
 
 
 class PgServiceEmbeddingColumnTests(unittest.TestCase):

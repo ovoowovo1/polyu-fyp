@@ -28,9 +28,9 @@ def make_settings(
     base_url="https://openrouter.ai/api/v1",
 ):
     return SimpleNamespace(
-        openai_embedding_fallback_model=fallback_model,
-        openai_embedding_fallback_column=fallback_column,
-        openai_embedding_base_url=base_url,
+        embedding_fallback_model=fallback_model,
+        embedding_fallback_column=fallback_column,
+        embedding_base_url=base_url,
     )
 
 

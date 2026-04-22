@@ -14,9 +14,9 @@ from pydantic import BaseModel
 from app.agents.schemas import ExamQuestion, ReviewIssue, ReviewResult
 from app.logger import get_logger
 from app.utils.api_key_manager import (
-    get_default_model_name,
-    get_genai_client,
-    with_gemini_retry_async,
+    get_default_llm_model_name,
+    get_llm_client,
+    with_llm_retry_async,
 )
 from app.utils.openai_response import extract_chat_completion_text
 
@@ -257,7 +257,7 @@ async def _run_review(
     model_name: str,
     image_paths: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
-    client = get_genai_client(api_key)
+    client = get_llm_client(api_key)
     content_list: List[Dict[str, Any]] = [{"type": "text", "text": prompt}]
 
     if image_paths:
@@ -339,7 +339,7 @@ async def reviewer_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "warnings": warnings + ["No questions were generated for review."],
         }
 
-    model_name = get_default_model_name()
+    model_name = get_default_llm_model_name()
     image_paths = [question.image_path for question in questions if question.image_path]
     has_images = bool(image_paths)
     if has_images:
@@ -354,7 +354,7 @@ async def reviewer_node(state: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     try:
-        result = await with_gemini_retry_async(
+        result = await with_llm_retry_async(
             "憿撖拇",
             _run_review,
             prompt,

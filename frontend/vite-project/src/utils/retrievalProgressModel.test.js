@@ -52,3 +52,15 @@ test('buildRetrievalProgressModel leaves rewrite idle when no rewrite event occu
   assert.equal(model.stages.find((stage) => stage.key === 'rewrite').status, 'waiting');
   assert.equal(model.latestMessage, 'answer generation started');
 });
+
+test('buildRetrievalProgressModel marks routing complete when a route rejection returns a result', () => {
+  const model = buildRetrievalProgressModel([
+    { type: 'router', message: 'routing question' },
+    { type: 'result', result_reason: 'unsupported_question' },
+  ], t);
+
+  assert.equal(model.isCompleted, true);
+  assert.equal(model.percent, 100);
+  assert.equal(model.stages.find((stage) => stage.key === 'router').status, 'completed');
+  assert.equal(model.stages.find((stage) => stage.key === 'generation').status, 'waiting');
+});

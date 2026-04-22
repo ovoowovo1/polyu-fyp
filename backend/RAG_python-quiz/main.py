@@ -42,7 +42,7 @@ def create_app(*, settings=None, static_dir: str | None = None) -> FastAPI:
     )
 
     app.include_router(upload_router)
-    app.include_router(files_router, prefix="/neo4j")
+    app.include_router(files_router)
     app.include_router(query_router, prefix="/api")
     app.include_router(sse_router)
     app.include_router(quiz_router, prefix="/quiz")

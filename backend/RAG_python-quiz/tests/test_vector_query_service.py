@@ -8,8 +8,8 @@ from app.utils.ingest_errors import EmbeddingProviderError
 
 def make_settings():
     return SimpleNamespace(
-        openai_embedding_active_column="embedding",
-        openai_embedding_fallback_column="embedding_v2",
+        embedding_active_column="embedding",
+        embedding_fallback_column="embedding_v2",
     )
 
 

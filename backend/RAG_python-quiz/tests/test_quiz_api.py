@@ -40,9 +40,9 @@ class QuizApiTests(unittest.TestCase):
                 return_value=conn,
             ), patch(
                 "app.routers.quiz.get_settings",
-                return_value=SimpleNamespace(google_ai_model="test-model"),
+                return_value=SimpleNamespace(llm_model="test-model"),
             ), patch(
-                "app.routers.quiz.with_gemini_retry_async",
+                "app.routers.quiz.with_llm_retry_async",
                 return_value={"quiz_name": "Quiz", "questions": [make_question()]},
             ), patch(
                 "app.routers.quiz.pg_service.save_quiz",
@@ -70,9 +70,9 @@ class QuizApiTests(unittest.TestCase):
                 return_value=conn,
             ), patch(
                 "app.routers.quiz.get_settings",
-                return_value=SimpleNamespace(google_ai_model="test-model"),
+                return_value=SimpleNamespace(llm_model="test-model"),
             ), patch(
-                "app.routers.quiz.with_gemini_retry_async",
+                "app.routers.quiz.with_llm_retry_async",
                 side_effect=["summary", {"quiz_name": "Quiz", "questions": [make_question()]}],
             ), patch(
                 "app.routers.quiz.pg_service.save_quiz",
@@ -195,15 +195,15 @@ class QuizApiTests(unittest.TestCase):
                 return_value=FakeConnection(FakeCursor(fetchall_results=[[{"class_id": "class-1"}]])),
             ), patch(
                 "app.routers.quiz.get_settings",
-                return_value=SimpleNamespace(google_ai_model="test-model"),
+                return_value=SimpleNamespace(llm_model="test-model"),
             ), patch(
-                "app.routers.quiz.get_genai_client",
+                "app.routers.quiz.get_llm_client",
                 return_value=fake_client,
             ), patch(
                 "app.routers.quiz.extract_chat_completion_text",
                 return_value="",
             ), patch(
-                "app.routers.quiz.with_gemini_retry_async",
+                "app.routers.quiz.with_llm_retry_async",
                 side_effect=fake_retry,
             ):
                 return await quiz.generate_quiz(
@@ -233,9 +233,9 @@ class QuizApiTests(unittest.TestCase):
                 return_value=make_conn(),
             ), patch(
                 "app.routers.quiz.get_settings",
-                return_value=SimpleNamespace(google_ai_model="test-model"),
+                return_value=SimpleNamespace(llm_model="test-model"),
             ), patch(
-                "app.routers.quiz.get_genai_client",
+                "app.routers.quiz.get_llm_client",
                 return_value=fake_client,
             ), patch(
                 "app.routers.quiz.extract_chat_completion_text",
@@ -246,7 +246,7 @@ class QuizApiTests(unittest.TestCase):
                     }
                 ),
             ), patch(
-                "app.routers.quiz.with_gemini_retry_async",
+                "app.routers.quiz.with_llm_retry_async",
                 side_effect=fake_retry,
             ), patch(
                 "app.routers.quiz.pg_service.save_quiz",
@@ -269,15 +269,15 @@ class QuizApiTests(unittest.TestCase):
                 return_value=make_conn(),
             ), patch(
                 "app.routers.quiz.get_settings",
-                return_value=SimpleNamespace(google_ai_model="test-model"),
+                return_value=SimpleNamespace(llm_model="test-model"),
             ), patch(
-                "app.routers.quiz.get_genai_client",
+                "app.routers.quiz.get_llm_client",
                 return_value=fake_client,
             ), patch(
                 "app.routers.quiz.extract_chat_completion_text",
                 return_value="not-json",
             ), patch(
-                "app.routers.quiz.with_gemini_retry_async",
+                "app.routers.quiz.with_llm_retry_async",
                 side_effect=fake_retry,
             ):
                 return await quiz.generate_quiz(
@@ -303,9 +303,9 @@ class QuizApiTests(unittest.TestCase):
             return_value=FakeConnection(FakeCursor(fetchall_results=[[{"class_id": "class-1"}]])),
         ), patch(
             "app.routers.quiz.get_settings",
-            return_value=SimpleNamespace(google_ai_model="test-model"),
+            return_value=SimpleNamespace(llm_model="test-model"),
         ), patch(
-            "app.routers.quiz.get_genai_client",
+            "app.routers.quiz.get_llm_client",
             side_effect=[summary_client, quiz_client],
         ), patch(
             "app.routers.quiz.maybe_truncate_or_summarize",
@@ -314,7 +314,7 @@ class QuizApiTests(unittest.TestCase):
             "app.routers.quiz.extract_chat_completion_text",
             return_value=json.dumps({"quiz_name": "Quiz", "questions": [make_question().model_dump()]}),
         ), patch(
-            "app.routers.quiz.with_gemini_retry_async",
+            "app.routers.quiz.with_llm_retry_async",
             side_effect=fake_retry,
         ), patch(
             "app.routers.quiz.pg_service.save_quiz",
@@ -365,7 +365,7 @@ class QuizApiTests(unittest.TestCase):
         with patch("app.routers.quiz.pg_service.get_quiz_by_id", return_value={"id": "quiz-1"}):
             self.assertEqual(self.client.get("/quiz/quiz-1").status_code, 200)
 
-        with patch("app.routers.quiz.pg_service.get_quiz_by_id", side_effect=RuntimeError("測驗不存在")):
+        with patch("app.routers.quiz.pg_service.get_quiz_by_id", side_effect=RuntimeError("Quiz not found")):
             self.assertEqual(self.client.get("/quiz/quiz-1").status_code, 404)
 
         with patch("app.routers.quiz.pg_service.get_quiz_by_id", side_effect=RuntimeError("db")):
@@ -389,7 +389,7 @@ class QuizApiTests(unittest.TestCase):
 
         self.assertEqual(self.client.put("/quiz/quiz-1", json={}).status_code, 400)
 
-        with patch("app.routers.quiz.pg_service.update_quiz", side_effect=RuntimeError("測驗不存在")):
+        with patch("app.routers.quiz.pg_service.update_quiz", side_effect=RuntimeError("Quiz not found")):
             self.assertEqual(self.client.put("/quiz/quiz-1", json={"questions": []}).status_code, 404)
 
         with patch("app.routers.quiz.pg_service.update_quiz", side_effect=RuntimeError("db")):
@@ -398,7 +398,7 @@ class QuizApiTests(unittest.TestCase):
         with patch("app.routers.quiz.pg_service.delete_quiz", return_value={"message": "deleted"}):
             self.assertEqual(self.client.delete("/quiz/quiz-1").status_code, 200)
 
-        with patch("app.routers.quiz.pg_service.delete_quiz", side_effect=RuntimeError("測驗不存在")):
+        with patch("app.routers.quiz.pg_service.delete_quiz", side_effect=RuntimeError("Quiz not found")):
             self.assertEqual(self.client.delete("/quiz/quiz-1").status_code, 404)
 
         with patch("app.routers.quiz.pg_service.delete_quiz", side_effect=RuntimeError("db")):
@@ -477,3 +477,6 @@ class QuizApiTests(unittest.TestCase):
         with patch("app.routers.quiz.generate_quiz_feedback_text", AsyncMock(side_effect=HTTPException(status_code=418, detail="teapot"))):
             teapot = self.client.post("/quiz/quiz-1/feedback", json=payload)
         self.assertEqual(teapot.status_code, 418)
+
+
+

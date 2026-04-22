@@ -246,7 +246,7 @@ class GeneratorUnitTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with patch(
-            "app.agents.nodes.generator.get_genai_client",
+            "app.agents.nodes.generator.get_llm_client",
             return_value=fake_client,
         ), patch(
             "app.agents.nodes.generator.asyncio.to_thread",
@@ -266,7 +266,7 @@ class GeneratorUnitTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_generate_question_section_retry_and_terminal_failure(self):
         with patch(
-            "app.agents.nodes.generator.with_gemini_retry_async",
+            "app.agents.nodes.generator.with_llm_retry_async",
             new=AsyncMock(side_effect=['{"multiple_choice_questions":[{"question_type":"multiple_choice"}]}'] * 3),
         ):
             with self.assertRaises(RuntimeError) as ctx:
@@ -297,7 +297,7 @@ class GeneratorUnitTests(unittest.IsolatedAsyncioTestCase):
             }
         )
         with patch(
-            "app.agents.nodes.generator.with_gemini_retry_async",
+            "app.agents.nodes.generator.with_llm_retry_async",
             new=AsyncMock(return_value=valid_payload),
         ):
             result = await generator_module._generate_question_section(
@@ -406,10 +406,10 @@ class GeneratorUnitTests(unittest.IsolatedAsyncioTestCase):
             }
         )
         with patch(
-            "app.agents.nodes.generator.with_gemini_retry_async",
+            "app.agents.nodes.generator.with_llm_retry_async",
             new=AsyncMock(return_value=mc_payload),
         ), patch(
-            "app.agents.nodes.generator.get_default_model_name",
+            "app.agents.nodes.generator.get_default_llm_model_name",
             return_value="model",
         ):
             result = await generator_module.generator_node(
@@ -425,3 +425,5 @@ class GeneratorUnitTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["exam_name"], "Generated Exam")
         self.assertEqual(len(result["questions"]), 1)
         self.assertEqual(result["feedback"], "")
+
+

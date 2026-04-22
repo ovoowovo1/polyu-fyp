@@ -15,7 +15,7 @@ from google import genai
 from google.genai import types
 
 from app.config import get_settings
-from app.utils.api_key_manager import with_gemini_retry_sync, get_genai_client
+from app.utils.api_key_manager import with_llm_retry_sync, get_llm_client
 from app.logger import get_logger
 
 logger = get_logger(__name__)
@@ -130,7 +130,7 @@ def _find_inline_audio_part(resp: types.GenerateContentResponse) -> Optional[typ
 
 
 def _make_client(api_key: str) -> genai.Client:
-    return get_genai_client(api_key)
+    return get_llm_client(api_key)
 
 
 def _synthesize_once(api_key: str, text: str, voice_name: Optional[str], model_name: Optional[str]) -> Tuple[bytes, str]:
@@ -141,7 +141,7 @@ def _synthesize_once(api_key: str, text: str, voice_name: Optional[str], model_n
     # OpenAI TTS models: tts-1 or tts-1-hd
     model = "tts-1" 
 
-    client = get_genai_client(api_key)
+    client = get_llm_client(api_key)
 
     # OpenAI TTS API
     # Voice options: alloy, echo, fable, onyx, nova, shimmer
@@ -187,14 +187,13 @@ def tts(req: TTSRequest):
     if not text:
         raise HTTPException(status_code=400, detail="Text must not be empty.")
 
-    # 使用統一的重試機制
-    audio_bytes, mime_type = with_gemini_retry_sync(
-        "語音合成",
+    audio_bytes, mime_type = with_llm_retry_sync(
+        "TTS generation",
         _synthesize_once,
         text,
         req.voice_name,
         req.model,
-        error_type=HTTPException
+        error_type=HTTPException,
     )
 
     # OpenAI returns MP3, no need to wrap in WAV container if we return audio/mpeg

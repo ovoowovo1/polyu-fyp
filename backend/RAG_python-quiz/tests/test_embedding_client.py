@@ -20,10 +20,12 @@ class FakeResponse:
 
 def make_settings():
     return SimpleNamespace(
-        openai_embedding_api_key="test-key",
-        openai_embedding_base_url="https://openrouter.ai/api/v1",
-        openai_embedding_model="google/gemini-embedding-001",
-        google_ai_model="gemini-2.5-flash",
+        embedding_api_key="test-key",
+        embedding_base_url="https://openrouter.ai/api/v1",
+        embedding_model="google/gemini-embedding-001",
+        llm_model="gemini-2.5-flash",
+        llm_api_key="",
+        llm_api_keys="",
     )
 
 

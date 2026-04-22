@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional
 import asyncio
 
-from app.utils.api_key_manager import with_gemini_retry_async, get_genai_client, get_default_model_name
+from app.utils.api_key_manager import with_llm_retry_async, get_llm_client, get_default_llm_model_name
 from app.utils.openai_response import extract_chat_completion_text
 from app.config import get_settings
 from app.logger import get_logger
@@ -20,8 +20,8 @@ async def generate_structured_json(
     async def _generate(api_key: str) -> Dict[str, Any]:
         import json
 
-        client = get_genai_client(api_key)
-        model_name = get_default_model_name()
+        client = get_llm_client(api_key)
+        model_name = get_default_llm_model_name()
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -47,7 +47,7 @@ async def generate_structured_json(
             raise RuntimeError(f"{operation_name} returned empty content")
         return json.loads(text)
 
-    return await with_gemini_retry_async(
+    return await with_llm_retry_async(
         operation_name,
         _generate,
         error_type=RuntimeError,
@@ -62,8 +62,8 @@ async def generate_text_completion(
     temperature: float = 0.0,
 ) -> str:
     async def _generate(api_key: str) -> str:
-        client = get_genai_client(api_key)
-        model_name = get_default_model_name()
+        client = get_llm_client(api_key)
+        model_name = get_default_llm_model_name()
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -80,7 +80,7 @@ async def generate_text_completion(
             raise RuntimeError(f"{operation_name} returned empty content")
         return text.strip()
 
-    return await with_gemini_retry_async(
+    return await with_llm_retry_async(
         operation_name,
         _generate,
         error_type=RuntimeError,
@@ -171,8 +171,8 @@ async def generate_answer_with_langchain(context: str, question: str, context_wi
         """生成回答（用於重試機制）"""
         import json
         
-        client = get_genai_client(api_key)
-        model_name = get_default_model_name()
+        client = get_llm_client(api_key)
+        model_name = get_default_llm_model_name()
         
         # 使用 OpenAI SDK 的 json_schema 模式
         response = await asyncio.to_thread(
@@ -198,7 +198,7 @@ async def generate_answer_with_langchain(context: str, question: str, context_wi
         logger.debug(f"AI response generated: {result}")
         return result
     
-    response = await with_gemini_retry_async(
+    response = await with_llm_retry_async(
         "生成回答",
         _generate_answer,
         schema,
@@ -220,10 +220,10 @@ async def generate_quiz_feedback_text(
     operation_name: str = "AI 測驗回饋生成"
 ) -> str:
     """
-    生成 AI 測驗回饋的自由文本，統一使用 with_gemini_retry_async 管理 key 輪替與重試。
+    生成 AI 測驗回饋的自由文本，統一使用 with_llm_retry_async 管理 key 輪替與重試。
     """
     settings = get_settings()
-    model_name = settings.google_ai_model or "gemini-2.5-flash"
+    model_name = settings.llm_model or "gemini-2.5-flash"
 
     # 將 Bloom 標籤轉為更易懂的描述，避免直接暴露術語
     bloom_friendly = {
@@ -267,7 +267,7 @@ async def generate_quiz_feedback_text(
     )
 
     async def _generate_feedback(api_key: str, prompt: str, model_name: str) -> str:
-        client = get_genai_client(api_key)
+        client = get_llm_client(api_key)
         response = await asyncio.to_thread(
             client.chat.completions.create,
             model=model_name,
@@ -278,7 +278,7 @@ async def generate_quiz_feedback_text(
             raise RuntimeError("Empty feedback response from model")
         return text
 
-    return await with_gemini_retry_async(
+    return await with_llm_retry_async(
         operation_name,
         _generate_feedback,
         prompt,
@@ -398,8 +398,8 @@ You MUST respond with valid JSON using this schema:
         """Grade answer using OpenRouter (OpenAI-compatible API)"""
         import json
         
-        client = get_genai_client(api_key)
-        model_name = get_default_model_name()
+        client = get_llm_client(api_key)
+        model_name = get_default_llm_model_name()
         
         logger.info(f"[AI Grading] Calling Gemini model via OpenRouter: {model_name}")
         
@@ -470,7 +470,7 @@ The JSON must match this schema: {json.dumps(schema)}"""
         return result
     
     try:
-        response = await with_gemini_retry_async(
+        response = await with_llm_retry_async(
             operation_name,
             _grade_answer,
             schema,
@@ -518,8 +518,8 @@ Question Performance Summary:
 Write the comment now."""
 
     async def _generate_comment(api_key: str, prompt: str) -> str:
-        client = get_genai_client(api_key)
-        model_name = get_default_model_name()
+        client = get_llm_client(api_key)
+        model_name = get_default_llm_model_name()
         
         response = await asyncio.to_thread(
             lambda: client.chat.completions.create(
@@ -538,7 +538,7 @@ Write the comment now."""
         return text
 
     try:
-        return await with_gemini_retry_async(
+        return await with_llm_retry_async(
             operation_name,
             _generate_comment,
             prompt,

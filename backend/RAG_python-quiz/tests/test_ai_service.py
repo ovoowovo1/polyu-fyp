@@ -18,14 +18,14 @@ class AiServiceTests(unittest.IsolatedAsyncioTestCase):
         async def fake_retry(_name, func, *args, error_type=RuntimeError):
             return await func("api-key", *args)
 
-        with patch("app.services.ai_service.get_genai_client", return_value=client), patch(
-            "app.services.ai_service.get_default_model_name",
+        with patch("app.services.ai_service.get_llm_client", return_value=client), patch(
+            "app.services.ai_service.get_default_llm_model_name",
             return_value="model",
         ), patch(
             "app.services.ai_service.extract_chat_completion_text",
             return_value='{"ok": true}',
         ), patch(
-            "app.services.ai_service.with_gemini_retry_async",
+            "app.services.ai_service.with_llm_retry_async",
             side_effect=fake_retry,
         ):
             result = await ai_service.generate_structured_json(
@@ -40,14 +40,14 @@ class AiServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(create_kwargs["messages"][0], {"role": "system", "content": "system"})
         self.assertEqual(create_kwargs["temperature"], 0.2)
 
-        with patch("app.services.ai_service.get_genai_client", return_value=client), patch(
-            "app.services.ai_service.get_default_model_name",
+        with patch("app.services.ai_service.get_llm_client", return_value=client), patch(
+            "app.services.ai_service.get_default_llm_model_name",
             return_value="model",
         ), patch(
             "app.services.ai_service.extract_chat_completion_text",
             return_value="  hello world  ",
         ), patch(
-            "app.services.ai_service.with_gemini_retry_async",
+            "app.services.ai_service.with_llm_retry_async",
             side_effect=fake_retry,
         ):
             text = await ai_service.generate_text_completion(
@@ -56,14 +56,14 @@ class AiServiceTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(text, "hello world")
 
-        with patch("app.services.ai_service.get_genai_client", return_value=client), patch(
-            "app.services.ai_service.get_default_model_name",
+        with patch("app.services.ai_service.get_llm_client", return_value=client), patch(
+            "app.services.ai_service.get_default_llm_model_name",
             return_value="model",
         ), patch(
             "app.services.ai_service.extract_chat_completion_text",
             return_value="",
         ), patch(
-            "app.services.ai_service.with_gemini_retry_async",
+            "app.services.ai_service.with_llm_retry_async",
             side_effect=fake_retry,
         ):
             with self.assertRaises(RuntimeError):
@@ -73,14 +73,14 @@ class AiServiceTests(unittest.IsolatedAsyncioTestCase):
                     operation_name="structured",
                 )
 
-        with patch("app.services.ai_service.get_genai_client", return_value=client), patch(
-            "app.services.ai_service.get_default_model_name",
+        with patch("app.services.ai_service.get_llm_client", return_value=client), patch(
+            "app.services.ai_service.get_default_llm_model_name",
             return_value="model",
         ), patch(
             "app.services.ai_service.extract_chat_completion_text",
             return_value="",
         ), patch(
-            "app.services.ai_service.with_gemini_retry_async",
+            "app.services.ai_service.with_llm_retry_async",
             side_effect=fake_retry,
         ):
             with self.assertRaises(RuntimeError):
@@ -97,14 +97,14 @@ class AiServiceTests(unittest.IsolatedAsyncioTestCase):
         async def fake_retry(_name, func, *args, error_type=RuntimeError):
             return await func("api-key", *args)
 
-        with patch("app.services.ai_service.get_genai_client", return_value=client), patch(
-            "app.services.ai_service.get_default_model_name",
+        with patch("app.services.ai_service.get_llm_client", return_value=client), patch(
+            "app.services.ai_service.get_default_llm_model_name",
             return_value="model",
         ), patch(
             "app.services.ai_service.extract_chat_completion_text",
             return_value=json.dumps({"answer_with_citations": []}),
         ), patch(
-            "app.services.ai_service.with_gemini_retry_async",
+            "app.services.ai_service.with_llm_retry_async",
             side_effect=fake_retry,
         ):
             result = await ai_service.generate_answer_with_langchain("context", "question", ["file-1"], ["chunk-1"])
@@ -119,14 +119,14 @@ class AiServiceTests(unittest.IsolatedAsyncioTestCase):
         async def fake_retry(_name, func, *args, error_type=RuntimeError):
             return await func("api-key", *args)
 
-        with patch("app.services.ai_service.get_genai_client", return_value=client), patch(
-            "app.services.ai_service.get_default_model_name",
+        with patch("app.services.ai_service.get_llm_client", return_value=client), patch(
+            "app.services.ai_service.get_default_llm_model_name",
             return_value="model",
         ), patch(
             "app.services.ai_service.extract_chat_completion_text",
             return_value="",
         ), patch(
-            "app.services.ai_service.with_gemini_retry_async",
+            "app.services.ai_service.with_llm_retry_async",
             side_effect=fake_retry,
         ):
             with self.assertRaises(RuntimeError):
@@ -139,14 +139,14 @@ class AiServiceTests(unittest.IsolatedAsyncioTestCase):
         async def fake_retry(_name, func, *args, error_type=RuntimeError):
             return await func("api-key", *args)
 
-        with patch("app.services.ai_service.get_settings", return_value=SimpleNamespace(google_ai_model="model")), patch(
-            "app.services.ai_service.get_genai_client",
+        with patch("app.services.ai_service.get_settings", return_value=SimpleNamespace(llm_model="model")), patch(
+            "app.services.ai_service.get_llm_client",
             return_value=client,
         ), patch(
             "app.services.ai_service.extract_chat_completion_text",
             return_value="Nice work",
         ), patch(
-            "app.services.ai_service.with_gemini_retry_async",
+            "app.services.ai_service.with_llm_retry_async",
             side_effect=fake_retry,
         ):
             feedback = await ai_service.generate_quiz_feedback_text(
@@ -159,14 +159,14 @@ class AiServiceTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(feedback, "Nice work")
 
-        with patch("app.services.ai_service.get_settings", return_value=SimpleNamespace(google_ai_model="model")), patch(
-            "app.services.ai_service.get_genai_client",
+        with patch("app.services.ai_service.get_settings", return_value=SimpleNamespace(llm_model="model")), patch(
+            "app.services.ai_service.get_llm_client",
             return_value=client,
         ), patch(
             "app.services.ai_service.extract_chat_completion_text",
             return_value="",
         ), patch(
-            "app.services.ai_service.with_gemini_retry_async",
+            "app.services.ai_service.with_llm_retry_async",
             side_effect=fake_retry,
         ):
             with self.assertRaises(RuntimeError):
@@ -180,14 +180,14 @@ class AiServiceTests(unittest.IsolatedAsyncioTestCase):
             return await func("api-key", *args)
 
         wrapped_json = """```json\n{"marks_earned": 99, "feedback": "Good", "is_correct": true, "analysis": "ok"}\n```"""
-        with patch("app.services.ai_service.get_genai_client", return_value=client), patch(
-            "app.services.ai_service.get_default_model_name",
+        with patch("app.services.ai_service.get_llm_client", return_value=client), patch(
+            "app.services.ai_service.get_default_llm_model_name",
             return_value="model",
         ), patch(
             "app.services.ai_service.extract_chat_completion_text",
             return_value=wrapped_json,
         ), patch(
-            "app.services.ai_service.with_gemini_retry_async",
+            "app.services.ai_service.with_llm_retry_async",
             side_effect=fake_retry,
         ):
             result = await ai_service.ai_grade_answer(
@@ -209,14 +209,14 @@ class AiServiceTests(unittest.IsolatedAsyncioTestCase):
         async def fake_retry(_name, func, *args, error_type=RuntimeError):
             return await func("api-key", *args)
 
-        with patch("app.services.ai_service.get_genai_client", return_value=client), patch(
-            "app.services.ai_service.get_default_model_name",
+        with patch("app.services.ai_service.get_llm_client", return_value=client), patch(
+            "app.services.ai_service.get_default_llm_model_name",
             return_value="model",
         ), patch(
             "app.services.ai_service.extract_chat_completion_text",
             return_value="",
         ), patch(
-            "app.services.ai_service.with_gemini_retry_async",
+            "app.services.ai_service.with_llm_retry_async",
             side_effect=fake_retry,
         ):
             result = await ai_service.ai_grade_answer(
@@ -230,14 +230,14 @@ class AiServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Please grade manually", result["feedback"])
 
         wrapped_raw = 'noise {"marks_earned": -1, "feedback": "Too low", "is_correct": false, "analysis": "ok"}'
-        with patch("app.services.ai_service.get_genai_client", return_value=make_chat_client(SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop")]))), patch(
-            "app.services.ai_service.get_default_model_name",
+        with patch("app.services.ai_service.get_llm_client", return_value=make_chat_client(SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop")]))), patch(
+            "app.services.ai_service.get_default_llm_model_name",
             return_value="model",
         ), patch(
             "app.services.ai_service.extract_chat_completion_text",
             return_value=wrapped_raw,
         ), patch(
-            "app.services.ai_service.with_gemini_retry_async",
+            "app.services.ai_service.with_llm_retry_async",
             side_effect=fake_retry,
         ):
             result = await ai_service.ai_grade_answer(
@@ -250,14 +250,14 @@ class AiServiceTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(result["marks_earned"], 0)
 
-        with patch("app.services.ai_service.get_genai_client", return_value=make_chat_client(SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop")]))), patch(
-            "app.services.ai_service.get_default_model_name",
+        with patch("app.services.ai_service.get_llm_client", return_value=make_chat_client(SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop")]))), patch(
+            "app.services.ai_service.get_default_llm_model_name",
             return_value="model",
         ), patch(
             "app.services.ai_service.extract_chat_completion_text",
             return_value="not-json",
         ), patch(
-            "app.services.ai_service.with_gemini_retry_async",
+            "app.services.ai_service.with_llm_retry_async",
             side_effect=fake_retry,
         ):
             result = await ai_service.ai_grade_answer(
@@ -271,7 +271,7 @@ class AiServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Please grade manually", result["feedback"])
 
     async def test_ai_grade_answer_returns_manual_fallback_on_failure(self):
-        with patch("app.services.ai_service.with_gemini_retry_async", side_effect=RuntimeError("provider down")):
+        with patch("app.services.ai_service.with_llm_retry_async", side_effect=RuntimeError("provider down")):
             result = await ai_service.ai_grade_answer(
                 question_text="Explain 2PC",
                 question_type="short_answer",
@@ -291,32 +291,34 @@ class AiServiceTests(unittest.IsolatedAsyncioTestCase):
         async def fake_retry(_name, func, *args, error_type=RuntimeError):
             return await func("api-key", *args)
 
-        with patch("app.services.ai_service.get_genai_client", return_value=client), patch(
-            "app.services.ai_service.get_default_model_name",
+        with patch("app.services.ai_service.get_llm_client", return_value=client), patch(
+            "app.services.ai_service.get_default_llm_model_name",
             return_value="model",
         ), patch(
             "app.services.ai_service.extract_chat_completion_text",
             return_value="Great effort",
         ), patch(
-            "app.services.ai_service.with_gemini_retry_async",
+            "app.services.ai_service.with_llm_retry_async",
             side_effect=fake_retry,
         ):
             comment = await ai_service.ai_generate_exam_overall_comment("summary", 8, 10)
         self.assertEqual(comment, "Great effort")
 
-        with patch("app.services.ai_service.get_genai_client", return_value=client), patch(
-            "app.services.ai_service.get_default_model_name",
+        with patch("app.services.ai_service.get_llm_client", return_value=client), patch(
+            "app.services.ai_service.get_default_llm_model_name",
             return_value="model",
         ), patch(
             "app.services.ai_service.extract_chat_completion_text",
             return_value="",
         ), patch(
-            "app.services.ai_service.with_gemini_retry_async",
+            "app.services.ai_service.with_llm_retry_async",
             side_effect=fake_retry,
         ):
             comment = await ai_service.ai_generate_exam_overall_comment("summary", 8, 10)
         self.assertEqual(comment, "AI comment generation failed.")
 
-        with patch("app.services.ai_service.with_gemini_retry_async", side_effect=RuntimeError("provider down")):
+        with patch("app.services.ai_service.with_llm_retry_async", side_effect=RuntimeError("provider down")):
             fallback = await ai_service.ai_generate_exam_overall_comment("summary", 8, 10)
         self.assertEqual(fallback, "AI comment generation failed.")
+
+

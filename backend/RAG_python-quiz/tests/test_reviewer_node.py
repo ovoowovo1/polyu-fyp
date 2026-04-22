@@ -68,35 +68,35 @@ class ReviewerNodeTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(mime_type, "image/jpeg")
             self.assertTrue(encoded)
 
-            with patch("app.agents.nodes.reviewer.get_genai_client", return_value=_FakeClient()), patch(
+            with patch("app.agents.nodes.reviewer.get_llm_client", return_value=_FakeClient()), patch(
                 "app.agents.nodes.reviewer.extract_chat_completion_text",
                 return_value='prefix {"overall_score": 90, "is_valid": true, "decision": "PASS", "summary": "ok", "issues": []} suffix',
             ):
                 result = await reviewer._run_review("key", "prompt", "model")
             self.assertEqual(result["decision"], "PASS")
 
-            with patch("app.agents.nodes.reviewer.get_genai_client", return_value=_FakeClient()), patch(
+            with patch("app.agents.nodes.reviewer.get_llm_client", return_value=_FakeClient()), patch(
                 "app.agents.nodes.reviewer.extract_chat_completion_text",
                 return_value="   ",
             ):
                 with self.assertRaises(RuntimeError):
                     await reviewer._run_review("key", "prompt", "model")
 
-            with patch("app.agents.nodes.reviewer.get_genai_client", return_value=_FakeClient()), patch(
+            with patch("app.agents.nodes.reviewer.get_llm_client", return_value=_FakeClient()), patch(
                 "app.agents.nodes.reviewer.extract_chat_completion_text",
                 return_value="not-json",
             ):
                 with self.assertRaises(RuntimeError):
                     await reviewer._run_review("key", "prompt", "model")
 
-            with patch("app.agents.nodes.reviewer.get_genai_client", return_value=_FakeClient()), patch(
+            with patch("app.agents.nodes.reviewer.get_llm_client", return_value=_FakeClient()), patch(
                 "app.agents.nodes.reviewer.extract_chat_completion_text",
                 return_value="[]",
             ):
                 with self.assertRaises(RuntimeError):
                     await reviewer._run_review("key", "prompt", "model")
 
-            with patch("app.agents.nodes.reviewer.get_genai_client", return_value=_FakeClient()), patch(
+            with patch("app.agents.nodes.reviewer.get_llm_client", return_value=_FakeClient()), patch(
                 "app.agents.nodes.reviewer.extract_chat_completion_text",
                 return_value='prefix {"bad": } suffix',
             ):
@@ -104,7 +104,7 @@ class ReviewerNodeTests(unittest.IsolatedAsyncioTestCase):
                     await reviewer._run_review("key", "prompt", "model")
 
     async def test_run_review_handles_missing_and_failed_images(self):
-        with patch("app.agents.nodes.reviewer.get_genai_client", return_value=_FakeClient()), patch(
+        with patch("app.agents.nodes.reviewer.get_llm_client", return_value=_FakeClient()), patch(
             "app.agents.nodes.reviewer.extract_chat_completion_text",
             return_value='{"overall_score": 88, "is_valid": true, "decision": "PASS", "summary": "ok", "issues": []}',
         ), patch(
@@ -131,7 +131,7 @@ class ReviewerNodeTests(unittest.IsolatedAsyncioTestCase):
             return make_response()
 
         client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
-        with patch("app.agents.nodes.reviewer.get_genai_client", return_value=client), patch(
+        with patch("app.agents.nodes.reviewer.get_llm_client", return_value=client), patch(
             "app.agents.nodes.reviewer.extract_chat_completion_text",
             return_value='{"overall_score": 88, "is_valid": true, "decision": "PASS", "summary": "ok", "issues": []}',
         ), patch(
@@ -151,8 +151,8 @@ class ReviewerNodeTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["review_result"].is_valid)
         self.assertTrue(result["is_complete"])
 
-        with patch("app.agents.nodes.reviewer.get_default_model_name", return_value="model"), patch(
-            "app.agents.nodes.reviewer.with_gemini_retry_async",
+        with patch("app.agents.nodes.reviewer.get_default_llm_model_name", return_value="model"), patch(
+            "app.agents.nodes.reviewer.with_llm_retry_async",
             AsyncMock(side_effect=RuntimeError("review failed")),
         ):
             failed = await reviewer.reviewer_node({"questions": [make_question()], "warnings": []})
@@ -164,8 +164,8 @@ class ReviewerNodeTests(unittest.IsolatedAsyncioTestCase):
         question = make_question()
         base_state = {"context": "Context", "questions": [question], "warnings": [], "retry_count": 0, "max_retries": 2}
 
-        with patch("app.agents.nodes.reviewer.get_default_model_name", return_value="model"), patch(
-            "app.agents.nodes.reviewer.with_gemini_retry_async",
+        with patch("app.agents.nodes.reviewer.get_default_llm_model_name", return_value="model"), patch(
+            "app.agents.nodes.reviewer.with_llm_retry_async",
             AsyncMock(return_value={"overall_score": 95, "is_valid": True, "decision": "PASS", "summary": "Great", "issues": []}),
         ):
             passed = await reviewer.reviewer_node({**base_state, "questions": [make_question(image_path="/static/images/q-1.png")]})
@@ -179,16 +179,16 @@ class ReviewerNodeTests(unittest.IsolatedAsyncioTestCase):
             "summary": "Need more source material",
             "issues": [],
         }
-        with patch("app.agents.nodes.reviewer.get_default_model_name", return_value="model"), patch(
-            "app.agents.nodes.reviewer.with_gemini_retry_async",
+        with patch("app.agents.nodes.reviewer.get_default_llm_model_name", return_value="model"), patch(
+            "app.agents.nodes.reviewer.with_llm_retry_async",
             AsyncMock(return_value=research_payload),
         ):
             research = await reviewer.reviewer_node({**base_state, "search_iterations": 0, "max_search_iterations": 2})
         self.assertFalse(research["is_complete"])
         self.assertEqual(research["research_goal"], "Need more CAP theorem context")
 
-        with patch("app.agents.nodes.reviewer.get_default_model_name", return_value="model"), patch(
-            "app.agents.nodes.reviewer.with_gemini_retry_async",
+        with patch("app.agents.nodes.reviewer.get_default_llm_model_name", return_value="model"), patch(
+            "app.agents.nodes.reviewer.with_llm_retry_async",
             AsyncMock(return_value={**research_payload, "overall_score": 80}),
         ):
             limit_pass = await reviewer.reviewer_node({**base_state, "search_iterations": 2, "max_search_iterations": 2})
@@ -201,8 +201,8 @@ class ReviewerNodeTests(unittest.IsolatedAsyncioTestCase):
             "summary": "Needs fixes",
             "issues": [{"question_id": "q-1", "issue_type": "marking_unclear", "description": "Rubric weak", "suggestion": "Add clearer rubric"}],
         }
-        with patch("app.agents.nodes.reviewer.get_default_model_name", return_value="model"), patch(
-            "app.agents.nodes.reviewer.with_gemini_retry_async",
+        with patch("app.agents.nodes.reviewer.get_default_llm_model_name", return_value="model"), patch(
+            "app.agents.nodes.reviewer.with_llm_retry_async",
             AsyncMock(return_value=rewrite_payload),
         ):
             rewrite = await reviewer.reviewer_node(dict(base_state))
@@ -210,10 +210,12 @@ class ReviewerNodeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rewrite["retry_count"], 1)
         self.assertIn("Rubric weak", rewrite["feedback"])
 
-        with patch("app.agents.nodes.reviewer.get_default_model_name", return_value="model"), patch(
-            "app.agents.nodes.reviewer.with_gemini_retry_async",
+        with patch("app.agents.nodes.reviewer.get_default_llm_model_name", return_value="model"), patch(
+            "app.agents.nodes.reviewer.with_llm_retry_async",
             AsyncMock(return_value=rewrite_payload),
         ):
             exhausted = await reviewer.reviewer_node({**base_state, "retry_count": 2, "max_retries": 2})
         self.assertTrue(exhausted["is_complete"])
         self.assertIn("maximum number of retries", exhausted["warnings"][0])
+
+

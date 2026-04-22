@@ -27,7 +27,7 @@ If backend tests pass but coverage drops below 100%, you must add or update test
 
 ### Frontend Changes
 
-If you modify frontend files under `fontend/vite-project`, you must run the relevant frontend tests from `fontend/vite-project`:
+If you modify frontend files under `frontend/vite-project`, you must run the relevant frontend tests from `frontend/vite-project`:
 
 ```powershell
 node --test

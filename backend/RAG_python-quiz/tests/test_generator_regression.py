@@ -107,8 +107,8 @@ class GeneratorRegressionTests(unittest.IsolatedAsyncioTestCase):
                 return _section_payload("short_answer", [_sa_item()])
             return _section_payload("essay", [_essay_item()])
 
-        with patch("app.agents.nodes.generator.with_gemini_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_model_name", return_value="test-model"
+        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
+            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
         ):
             result = await generator_module.generator_node(_build_state())
 
@@ -133,8 +133,8 @@ class GeneratorRegressionTests(unittest.IsolatedAsyncioTestCase):
                 return _section_payload("short_answer", [_sa_item()])
             return _section_payload("essay", [_essay_item()])
 
-        with patch("app.agents.nodes.generator.with_gemini_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_model_name", return_value="test-model"
+        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
+            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
         ):
             result = await generator_module.generator_node(_build_state())
 
@@ -161,8 +161,8 @@ class GeneratorRegressionTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("Previous essay generation returned an unusable payload.", prompt)
             return _section_payload("essay", [_essay_item()])
 
-        with patch("app.agents.nodes.generator.with_gemini_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_model_name", return_value="test-model"
+        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
+            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
         ):
             result = await generator_module.generator_node(_build_state())
 
@@ -180,8 +180,8 @@ class GeneratorRegressionTests(unittest.IsolatedAsyncioTestCase):
                 return _section_payload("short_answer", [_sa_item()])
             return '{"essay_questions":[{"question_type":"essay"'
 
-        with patch("app.agents.nodes.generator.with_gemini_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_model_name", return_value="test-model"
+        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
+            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
         ), self.assertLogs("app.agents.nodes.generator", level="ERROR") as log_context:
             with self.assertRaises(RuntimeError) as ctx:
                 await generator_module.generator_node(_build_state())
@@ -203,8 +203,8 @@ class GeneratorRegressionTests(unittest.IsolatedAsyncioTestCase):
                 return _section_payload("short_answer", [_sa_item()])
             return _section_payload("essay", [_essay_item()])
 
-        with patch("app.agents.nodes.generator.with_gemini_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_model_name", return_value="test-model"
+        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
+            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
         ):
             result = await generator_module.generator_node(
                 _build_state(topic="Topic Name", exam_name="Teacher Provided Exam Name")
@@ -217,8 +217,8 @@ class GeneratorRegressionTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(section_name, operation_name)
             return _section_payload("multiple_choice", [_mc_item()])
 
-        with patch("app.agents.nodes.generator.with_gemini_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_model_name", return_value="test-model"
+        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
+            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
         ):
             result = await generator_module.generator_node(
                 _build_state(
@@ -263,8 +263,8 @@ class GeneratorRegressionTests(unittest.IsolatedAsyncioTestCase):
                 return _section_payload("short_answer", [short_answer_item])
             return _section_payload("essay", [essay_item])
 
-        with patch("app.agents.nodes.generator.with_gemini_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_model_name", return_value="test-model"
+        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
+            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
         ):
             result = await generator_module.generator_node(_build_state())
 
@@ -295,8 +295,8 @@ class GeneratorRegressionTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(section_name, operation_name)
             return _section_payload("multiple_choice", [mc_item])
 
-        with patch("app.agents.nodes.generator.with_gemini_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_model_name", return_value="test-model"
+        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
+            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
         ):
             result = await generator_module.generator_node(
                 _build_state(
@@ -320,8 +320,8 @@ class GeneratorRegressionTests(unittest.IsolatedAsyncioTestCase):
                 return _section_payload("short_answer", [_sa_item()])
             return _section_payload("essay", [_essay_item()])
 
-        with patch("app.agents.nodes.generator.with_gemini_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_model_name", return_value="test-model"
+        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
+            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
         ):
             result = await generator_module.generator_node(_build_state())
 
@@ -338,3 +338,5 @@ class GeneratorRegressionTests(unittest.IsolatedAsyncioTestCase):
                 ("Connects the behavior to availability trade-offs in distributed systems.", "Connects the behavior to availability trade-offs in distributed systems."),
             ],
         )
+
+

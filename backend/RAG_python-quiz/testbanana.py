@@ -4,7 +4,7 @@ import warnings
 from google import genai
 from google.genai import types
 
-from app.utils.dev_credentials import MissingCredentialError, get_genai_credentials
+from app.utils.dev_credentials import MissingCredentialError, get_llm_credentials
 
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 
@@ -13,7 +13,7 @@ __test__ = False
 
 def main() -> int:
     try:
-        credentials = get_genai_credentials()
+        credentials = get_llm_credentials()
     except MissingCredentialError as exc:
         print(f"[SKIP] {exc}")
         return 1
@@ -53,3 +53,4 @@ Clean, flat vector art style.
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

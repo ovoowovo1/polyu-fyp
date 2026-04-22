@@ -61,7 +61,7 @@ class TtsApiTests(unittest.TestCase):
         self.assertIsNone(tts._find_inline_audio_part(response))
 
     def test_make_client_delegates_to_genai_client_factory(self):
-        with patch("app.routers.tts.get_genai_client", return_value="client") as get_client:
+        with patch("app.routers.tts.get_llm_client", return_value="client") as get_client:
             client = tts._make_client("api-key")
 
         self.assertEqual(client, "client")
@@ -73,7 +73,7 @@ class TtsApiTests(unittest.TestCase):
         client = SimpleNamespace(audio=audio)
 
         with patch("app.routers.tts.get_settings", return_value=SimpleNamespace()), patch(
-            "app.routers.tts.get_genai_client",
+            "app.routers.tts.get_llm_client",
             return_value=client,
         ):
             data, mime_type = tts._synthesize_once("api-key", "hello", "Kore", None)
@@ -88,9 +88,10 @@ class TtsApiTests(unittest.TestCase):
         self.assertEqual(response.json()["detail"], "Text must not be empty.")
 
     def test_tts_route_returns_audio_bytes(self):
-        with patch("app.routers.tts.with_gemini_retry_sync", return_value=(b"audio", "audio/mpeg")):
+        with patch("app.routers.tts.with_llm_retry_sync", return_value=(b"audio", "audio/mpeg")):
             response = self.client.post("/tts", json={"text": "Hello"})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b"audio")
         self.assertEqual(response.headers["content-type"], "audio/mpeg")
+

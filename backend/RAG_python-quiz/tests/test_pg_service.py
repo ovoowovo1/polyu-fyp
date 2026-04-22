@@ -24,7 +24,7 @@ class PgServiceVectorAndFileTests(PgServiceBase):
     def test_get_embedding_column_uses_settings_and_rejects_invalid_values(self):
         with patch(
             "app.services.pg_service.get_settings",
-            return_value=type("Settings", (), {"openai_embedding_active_column": "embedding_v2"})(),
+            return_value=type("Settings", (), {"embedding_active_column": "embedding_v2"})(),
         ):
             self.assertEqual(pg_service._get_embedding_column(), "embedding_v2")
 
@@ -72,7 +72,7 @@ class PgServiceVectorAndFileTests(PgServiceBase):
 
         with self.patch_conn(cursor), patch(
             "app.services.pg_service.get_settings",
-            return_value=type("Settings", (), {"openai_embedding_active_column": "embedding"})(),
+            return_value=type("Settings", (), {"embedding_active_column": "embedding"})(),
         ), patch("app.services.pg_service.psycopg2.extras.execute_values") as execute_values:
             pg_service.create_graph_from_document(document, chunks)
 
@@ -84,7 +84,7 @@ class PgServiceVectorAndFileTests(PgServiceBase):
         cursor = FakeCursor(fetchall_results=[rows])
         with self.patch_conn(cursor), patch(
             "app.services.pg_service.get_settings",
-            return_value=type("Settings", (), {"openai_embedding_active_column": "embedding"})(),
+            return_value=type("Settings", (), {"embedding_active_column": "embedding"})(),
         ):
             result = pg_service.retrieve_graph_context([0.1], selected_file_ids=["file-1"])
 

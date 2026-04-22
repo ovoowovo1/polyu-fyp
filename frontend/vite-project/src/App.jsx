@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import zhTW from 'antd/locale/zh_TW';
 
-// 導入組件
 import DocumentsPage from './pages/DocumentsPage';
 import LoginPage from './pages/LoginPage';
 import ClassListPage from './pages/ClassListPage';
@@ -15,7 +14,6 @@ import ExamViewPage from './pages/ExamViewPage';
 import ExamEdit from './components/Studio/Exam/Exam.jsx';
 import ProtectedRoute from './components/ProtectedRoute';
 
-// 主應用程式組件
 export default function App() {
   return (
     <ConfigProvider locale={zhTW}>

@@ -24,7 +24,7 @@ def _to_pgvector(vec: Sequence[float]) -> str:
 
 
 def _get_embedding_column(column: Optional[str] = None) -> EmbeddingColumn:
-    resolved = column or get_settings().openai_embedding_active_column
+    resolved = column or get_settings().embedding_active_column
     if resolved not in VALID_EMBEDDING_COLUMNS:
         raise ValueError(f"Unsupported embedding column: {resolved}")
     return resolved  # type: ignore[return-value]

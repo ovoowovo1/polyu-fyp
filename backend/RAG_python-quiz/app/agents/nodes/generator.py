@@ -11,9 +11,9 @@ import uuid
 from app.agents.schemas import BloomLevel, ExamQuestion, MarkingCriterion
 from app.logger import get_logger
 from app.utils.api_key_manager import (
-    get_default_model_name,
-    get_genai_client,
-    with_gemini_retry_async,
+    get_default_llm_model_name,
+    get_llm_client,
+    with_llm_retry_async,
 )
 from app.utils.openai_response import extract_chat_completion_text
 
@@ -538,7 +538,7 @@ async def _create_section_response(
     section_name: str,
     strict: bool,
 ):
-    client = get_genai_client(api_key)
+    client = get_llm_client(api_key)
     return await asyncio.to_thread(
         client.chat.completions.create,
         model=model_name,
@@ -625,7 +625,7 @@ async def _generate_question_section(
     )
 
     for attempt in range(max_generation_attempts):
-        raw_text = await with_gemini_retry_async(
+        raw_text = await with_llm_retry_async(
             f"題目生成:{section_name}",
             _request_section_generator_output,
             prompt,
@@ -842,7 +842,7 @@ async def generator_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "essay": 0,
         }
 
-    model_name = get_default_model_name()
+    model_name = get_default_llm_model_name()
     section_results: Dict[str, List[Dict[str, Any]]] = {
         "multiple_choice": [],
         "short_answer": [],

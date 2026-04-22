@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
-import { API_BASE_URL } from '../config';
-import { dedupe } from '../utils/requestDeduper';
+import { API_BASE_URL } from '../config.js';
+import { dedupe } from '../utils/requestDeduper.js';
 
 // 異步 Thunk 用於從 API 獲取文件
 export const fetchDocuments = createAsyncThunk(
@@ -20,7 +20,7 @@ export const fetchDocuments = createAsyncThunk(
 
 
             // use dedupe utility; return an array of files (not axios response)
-            return dedupe(key, () => axios.get(`${API_BASE_URL}/neo4j/files`, { params }).then(r => r.data.files || []), { ttl: 500 });
+            return dedupe(key, () => axios.get(`${API_BASE_URL}/files`, { params }).then(r => r.data.files || []), { ttl: 500 });
         } catch (error) {
             console.error('Fetch documents error:', error);
             return rejectWithValue('載入文件列表失敗');
@@ -33,7 +33,7 @@ export const deleteDocument = createAsyncThunk(
     'documents/deleteDocument',
     async (docId, { rejectWithValue }) => {
         try {
-            await axios.delete(`${API_BASE_URL}/neo4j/files/${docId}`);
+            await axios.delete(`${API_BASE_URL}/files/${docId}`);
             return docId;
         } catch (error) {
             console.error('Delete document error:', error);
@@ -46,7 +46,7 @@ export const renameDocument = createAsyncThunk(
     'documents/renameDocument',
     async ({ docId, newName }, { rejectWithValue }) => {
         try {
-            await axios.put(`${API_BASE_URL}/neo4j/files/${docId}`, null, {
+            await axios.put(`${API_BASE_URL}/files/${docId}`, null, {
                 params: { new_name: newName }
             });
             return { docId, newName };
@@ -64,7 +64,7 @@ export const fetchDocumentContent = createAsyncThunk(
             return null;
         }
         try {
-            const response = await axios.get(`${API_BASE_URL}/neo4j/files/${docId}`);
+            const response = await axios.get(`${API_BASE_URL}/files/${docId}`);
             return response.data;
         } catch (error) {
             return rejectWithValue(error.response.data);

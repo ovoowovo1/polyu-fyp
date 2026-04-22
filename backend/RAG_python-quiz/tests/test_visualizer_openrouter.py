@@ -29,7 +29,7 @@ class VisualizerOpenRouterTests(unittest.IsolatedAsyncioTestCase):
 
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "generated.png"
-            with patch("app.agents.nodes.visualizer.get_genai_client", return_value=_FakeClient(response)):
+            with patch("app.agents.nodes.visualizer.get_llm_client", return_value=_FakeClient(response)):
                 with patch(
                     "app.agents.nodes.visualizer._transform_to_image_prompt",
                     new=AsyncMock(return_value="optimized prompt"),
@@ -45,7 +45,7 @@ class VisualizerOpenRouterTests(unittest.IsolatedAsyncioTestCase):
 
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "generated.png"
-            with patch("app.agents.nodes.visualizer.get_genai_client", return_value=_FakeClient(response)):
+            with patch("app.agents.nodes.visualizer.get_llm_client", return_value=_FakeClient(response)):
                 with patch(
                     "app.agents.nodes.visualizer._transform_to_image_prompt",
                     new=AsyncMock(return_value="optimized prompt"),
@@ -60,7 +60,7 @@ class VisualizerOpenRouterTests(unittest.IsolatedAsyncioTestCase):
 
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "generated.png"
-            with patch("app.agents.nodes.visualizer.get_genai_client", return_value=_FakeClient(response)):
+            with patch("app.agents.nodes.visualizer.get_llm_client", return_value=_FakeClient(response)):
                 with patch(
                     "app.agents.nodes.visualizer._transform_to_image_prompt",
                     new=AsyncMock(return_value="optimized prompt"),
@@ -75,7 +75,7 @@ class VisualizerOpenRouterTests(unittest.IsolatedAsyncioTestCase):
 
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "generated.png"
-            with patch("app.agents.nodes.visualizer.get_genai_client", return_value=_FakeClient(response)):
+            with patch("app.agents.nodes.visualizer.get_llm_client", return_value=_FakeClient(response)):
                 with patch(
                     "app.agents.nodes.visualizer._transform_to_image_prompt",
                     new=AsyncMock(return_value="optimized prompt"),
@@ -84,3 +84,4 @@ class VisualizerOpenRouterTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertFalse(success)
             self.assertFalse(output_path.exists())
+

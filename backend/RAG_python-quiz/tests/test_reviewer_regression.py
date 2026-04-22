@@ -34,7 +34,7 @@ class ReviewerRegressionTests(unittest.IsolatedAsyncioTestCase):
             ]
         )
 
-        with patch("app.agents.nodes.reviewer.get_genai_client", return_value=_FakeClient(response)):
+        with patch("app.agents.nodes.reviewer.get_llm_client", return_value=_FakeClient(response)):
             result = await _run_review("test-key", "prompt", "model-name")
 
         self.assertEqual(result["overall_score"], 88)
@@ -45,12 +45,12 @@ class ReviewerRegressionTests(unittest.IsolatedAsyncioTestCase):
     async def test_run_review_raises_descriptive_runtime_error_for_malformed_response(self):
         response = make_response(choices=None)
 
-        with patch("app.agents.nodes.reviewer.get_genai_client", return_value=_FakeClient(response)):
+        with patch("app.agents.nodes.reviewer.get_llm_client", return_value=_FakeClient(response)):
             with self.assertRaises(RuntimeError) as ctx:
                 await _run_review("test-key", "prompt", "model-name")
 
         message = str(ctx.exception)
-        self.assertIn("憿撖拇 returned malformed chat completion", message)
+        self.assertIn("returned malformed chat completion", message)
         self.assertNotIn("'NoneType' object is not subscriptable", message)
 
     def test_build_review_prompt_includes_open_response_context_and_rubric(self):
@@ -80,3 +80,5 @@ class ReviewerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Reference Answer / Model Answer: 2PC blocks participants", prompt)
         self.assertIn("Marking Scheme / Rubric: Mentions blocking behavior [1 mark(s)]", prompt)
         self.assertIn("`short_answer` and `essay` are valid open-response formats", prompt)
+
+

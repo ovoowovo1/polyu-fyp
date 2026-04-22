@@ -24,8 +24,8 @@ async def retrieve_vector_context(
     log_prefix: str = "vector retrieval",
 ) -> tuple[List[dict], str]:
     settings = get_settings()
-    primary_column = settings.openai_embedding_active_column
-    fallback_column = settings.openai_embedding_fallback_column
+    primary_column = settings.embedding_active_column
+    fallback_column = settings.embedding_fallback_column
     primary_embeddings = get_embedding_model()
 
     if primary_embeddings is None:

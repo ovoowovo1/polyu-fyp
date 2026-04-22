@@ -87,11 +87,9 @@ These results support the design choice to use retrieval strategies selectively 
 |-- docs/
 |   |-- images/
 |       |-- readme/
-|-- fontend/
+|-- frontend/
 |   |-- vite-project/
 ```
-
-Note: the frontend directory is named `fontend` in this repository and the commands below use that exact path.
 
 ## Tech Stack
 
@@ -141,7 +139,7 @@ Important notes:
 From the repository root:
 
 ```powershell
-cd fontend\vite-project
+cd frontend\vite-project
 npm install
 Copy-Item .env.example .env
 npm run dev
@@ -162,7 +160,7 @@ uvicorn main:app --host 0.0.0.0 --port 3000 --reload
 Then start the frontend in a separate terminal:
 
 ```powershell
-cd fontend\vite-project
+cd frontend\vite-project
 npm run dev
 ```
 
@@ -175,7 +173,7 @@ Default local URLs:
 
 ### Frontend
 
-The frontend example file is located at `fontend/vite-project/.env.example`.
+The frontend example file is located at `frontend/vite-project/.env.example`.
 
 | Variable | Required | Description |
 | --- | --- | --- |
@@ -191,37 +189,38 @@ Required runtime variables:
 | --- | --- |
 | `PG_DSN` | PostgreSQL connection string used by the backend services. |
 | `JWT_SECRET_KEY` | Secret used to sign and verify auth tokens. |
-| `GOOGLE_API_KEY_LIST` | Comma-separated list of Google API keys used by Gemini-related flows. |
-| `OPENAI_EMBEDDING_API_KEY` | API key for the OpenAI-compatible embeddings provider. |
+| `LLM_API_KEYS` | Comma-separated list of runtime LLM API keys used for generation and retry rotation. |
 
 Optional variables with documented defaults:
 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `PORT` | `3000` | Backend port used by the local server. |
-| `GOOGLE_AI_MODEL` | `google/gemini-3-flash-preview` | Main generation model. |
-| `GOOGLE_AI_EMBEDDINGS` | `gemini-embedding-001` | Configured Google embeddings model setting. |
+| `LLM_MODEL` | `google/gemini-3-flash-preview` | Main generation model. |
 | `GOOGLE_TTS_MODEL` | `gemini-2.5-flash-preview-tts` | Text-to-speech model. |
-| `OPENAI_EMBEDDING_BASE_URL` | `https://openrouter.ai/api/v1` | Base URL for the embeddings provider. |
-| `OPENAI_EMBEDDING_MODEL` | `google/gemini-embedding-001` | Primary embeddings model. |
-| `OPENAI_EMBEDDING_ACTIVE_COLUMN` | `embedding` | Primary PostgreSQL embedding column. |
-| `OPENAI_EMBEDDING_FALLBACK_MODEL` | `google/gemini-embedding-2-preview` | Fallback embeddings model. |
-| `OPENAI_EMBEDDING_FALLBACK_COLUMN` | `embedding_v2` | Fallback PostgreSQL embedding column. |
+| `LLM_API_KEY` | empty | Optional single-key override for LLM calls when you do not want to use the pool in `LLM_API_KEYS`. |
+| `LLM_BASE_URL` | `https://openrouter.ai/api/v1` | Optional custom base URL for LLM calls. |
+| `EMBEDDING_API_KEY` | falls back to `LLM_API_KEY` or the first item in `LLM_API_KEYS` | Optional dedicated embeddings key. |
+| `EMBEDDING_BASE_URL` | `https://openrouter.ai/api/v1` | Base URL for the embeddings provider. |
+| `EMBEDDING_MODEL` | `google/gemini-embedding-001` | Primary embeddings model. |
+| `EMBEDDING_ACTIVE_COLUMN` | `embedding` | Primary PostgreSQL embedding column. |
+| `EMBEDDING_FALLBACK_MODEL` | `google/gemini-embedding-2-preview` | Fallback embeddings model. |
+| `EMBEDDING_FALLBACK_COLUMN` | `embedding_v2` | Fallback PostgreSQL embedding column. |
 
-The minimal `.env.example` intentionally omits unused legacy `NEO4J_*` settings and the unused `JINA_API_KEY`.
+The minimal `.env.example` intentionally omits unused legacy `NEO4J_*`, `AURA_*`, `JINA_API_KEY`, and deprecated provider-specific configuration names.
 
 Optional manual smoke and evaluation variables:
 
 | Variable | Description |
 | --- | --- |
-| `GENAI_API_KEY` | Optional override for manual Google GenAI smoke scripts. |
-| `GENAI_BASE_URL` | Optional custom base URL for GenAI smoke scripts when using a proxy or gateway. |
 | `EVAL_LLM_API_KEY` | Credential for manual evaluation utilities that call an OpenAI-compatible chat endpoint. |
 | `EVAL_LLM_BASE_URL` | Base URL for the evaluation LLM provider. |
 | `EVAL_LLM_MODEL` | Model name used by the evaluation LLM utilities. |
 | `EVAL_EMBEDDING_API_KEY` | Credential for evaluation embedding utilities. |
 | `EVAL_EMBEDDING_BASE_URL` | Base URL for the evaluation embedding provider. |
 | `EVAL_EMBEDDING_MODEL` | Model name used by evaluation embedding utilities. |
+
+Embedding calls reuse the shared LLM credential by default. Set `EMBEDDING_API_KEY` only when embeddings must use a separate provider or quota.
 
 ## Testing and Verification
 
@@ -237,7 +236,7 @@ Manual backend smoke and evaluation scripts must load provider credentials from 
 ### Frontend
 
 ```powershell
-cd fontend\vite-project
+cd frontend\vite-project
 npm install
 npm run build
 ```
@@ -254,11 +253,12 @@ The current backend exposes these main API areas:
 - `/tts`
 - `/upload-multiple`
 - `/upload-link`
+- `/files`
+- `/chunks/{chunk_id}/source-details`
 
-There are also compatibility and document-related routes such as:
+There are also additional routes such as:
 
 - `/query-stream`
-- `/neo4j/files`
 
 ## Smoke Check
 

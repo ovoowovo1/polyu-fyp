@@ -166,15 +166,15 @@ async def _embed_chunks_for_storage(
     primary_vectors = await embed_texts_with_retry(texts, embeddings_model=primary_model)
 
     settings = get_settings()
-    fallback_model_name = settings.openai_embedding_fallback_model
-    fallback_column = settings.openai_embedding_fallback_column
+    fallback_model_name = settings.embedding_fallback_model
+    fallback_column = settings.embedding_fallback_column
     if not fallback_model_name or fallback_column == "embedding":
         return primary_vectors, None
 
     try:
         fallback_model = create_embedding_model(
             model_name=fallback_model_name,
-            base_url=settings.openai_embedding_base_url,
+            base_url=settings.embedding_base_url,
         )
         fallback_vectors = await embed_texts_with_retry(texts, embeddings_model=fallback_model)
         return primary_vectors, fallback_vectors
@@ -282,7 +282,7 @@ async def ingest_document(
         chunks,
         primary_vectors,
         fallback_vectors,
-        fallback_column=get_settings().openai_embedding_fallback_column,
+        fallback_column=get_settings().embedding_fallback_column,
     )
     document_data = {
         "name": filename,
@@ -358,7 +358,7 @@ async def ingest_website(
         chunks,
         primary_vectors,
         fallback_vectors,
-        fallback_column=get_settings().openai_embedding_fallback_column,
+        fallback_column=get_settings().embedding_fallback_column,
     )
     document_data = {
         "name": url,

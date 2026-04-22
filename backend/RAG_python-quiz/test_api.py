@@ -9,14 +9,14 @@ from openai import OpenAI
 from app.utils.dev_credentials import (
     MissingCredentialError,
     get_eval_embedding_credentials,
-    get_genai_credentials,
+    get_llm_credentials,
 )
 
 __test__ = False
 
 
 def _build_genai_client():
-    credentials = get_genai_credentials()
+    credentials = get_llm_credentials()
     client_kwargs = {"api_key": credentials.api_key}
     if credentials.base_url:
         client_kwargs["http_options"] = types.HttpOptions(base_url=credentials.base_url)
@@ -213,3 +213,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

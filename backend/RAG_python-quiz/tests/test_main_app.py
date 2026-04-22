@@ -26,6 +26,8 @@ class MainAppTests(unittest.TestCase):
             app = main.create_app(settings=settings, static_dir=tmpdir)
 
         routes = {route.path for route in app.routes}
+        self.assertIn("/files", routes)
+        self.assertNotIn("/neo4j/files", routes)
         self.assertIn("/static", routes)
         self.assertTrue(any(handler.__name__ == "on_startup" for handler in app.router.on_startup))
 

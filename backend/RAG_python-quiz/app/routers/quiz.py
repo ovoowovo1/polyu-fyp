@@ -9,7 +9,7 @@ from app.config import get_settings
 from app.logger import get_logger
 from app.services import pg_service
 from app.services.ai_service import generate_quiz_feedback_text
-from app.utils.api_key_manager import get_genai_client, with_gemini_retry_async
+from app.utils.api_key_manager import get_llm_client, with_llm_retry_async
 from app.utils.aqg import (
     DIFFICULTY_TO_BLOOM,
     BloomLevel,
@@ -95,22 +95,22 @@ async def generate_quiz(file_ids: List[str] = Form(...), bloom_levels: Optional[
         class_id = await _resolve_class_id(file_ids)
 
         settings = get_settings()
-        model_name = settings.google_ai_model or "gemini-2.5-flash"
+        model_name = settings.llm_model or "gemini-2.5-flash"
         processed_text = source_text
         was_summarized = False
 
         if len(source_text) > 12000:
             async def _summarize_text(api_key: str, raw_source_text: str, raw_model_name: str):
-                client = get_genai_client(api_key)
+                client = get_llm_client(api_key)
                 return await asyncio.to_thread(maybe_truncate_or_summarize, client, raw_model_name, raw_source_text)
 
-            processed_text = await with_gemini_retry_async("quiz_summary", _summarize_text, source_text, model_name, error_type=HTTPException)
+            processed_text = await with_llm_retry_async("quiz_summary", _summarize_text, source_text, model_name, error_type=HTTPException)
             was_summarized = True
 
         prompt = build_prompt(processed_text, distribute_counts(num_questions, selected_levels))
 
         async def _generate_quiz_with_model(api_key: str, quiz_prompt: str, raw_model_name: str):
-            client = get_genai_client(api_key)
+            client = get_llm_client(api_key)
             logger.info("[Quiz] generating quiz content")
             response = await asyncio.to_thread(
                 client.chat.completions.create,
@@ -135,7 +135,7 @@ async def generate_quiz(file_ids: List[str] = Form(...), bloom_levels: Optional[
             return {"quiz_name": quiz_name, "questions": questions}
 
         try:
-            generated = await with_gemini_retry_async("quiz_generation", _generate_quiz_with_model, prompt, model_name, error_type=HTTPException)
+            generated = await with_llm_retry_async("quiz_generation", _generate_quiz_with_model, prompt, model_name, error_type=HTTPException)
         except json.JSONDecodeError as error:
             raise HTTPException(status_code=500, detail=f"Invalid Gemini JSON response: {error}") from error
 
