@@ -5,11 +5,8 @@ from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Sequence, TypedDict
 
 from app.logger import get_logger
-from app.services import adaptive_retrieval_service
-from app.services.ai_service import (
-    generate_answer_with_langchain,
-    generate_structured_json,
-)
+from app.services import adaptive_retrieval_service, citation_evidence_service
+from app.services.ai_service import generate_structured_json
 
 logger = get_logger(__name__)
 
@@ -18,6 +15,7 @@ OUT_OF_SCOPE_ANSWER = "Sorry, this question cannot be answered reliably from the
 UNSUPPORTED_RESULT_REASON = "unsupported_question"
 NO_DOCUMENTS_RESULT_REASON = "no_relevant_documents"
 UNRELIABLE_RESULT_REASON = "unreliable_generation"
+PARTIAL_COVERAGE_RESULT_REASON = "partial_coverage"
 MAX_DOCS_TO_GRADE = 8
 MAX_REWRITE_ATTEMPTS = adaptive_retrieval_service.MAX_REWRITE_ATTEMPTS
 MAX_GENERATION_RETRIES = 1
@@ -36,9 +34,14 @@ class AdaptiveRAGState(TypedDict, total=False):
     generation_retry_count: int
     candidate_documents: List[Dict[str, Any]]
     filtered_documents: List[Dict[str, Any]]
+    query_intent: Dict[str, Any]
+    covered_concepts: List[str]
+    missing_concepts: List[str]
     answer: str
+    citations: List[Dict[str, Any]]
     answer_with_citations: List[Dict[str, Any]]
     raw_sources: List[Dict[str, Any]]
+    evidence_nodes: List[Dict[str, Any]]
     result_reason: str
 
 
@@ -181,17 +184,7 @@ def _build_result_payload(
     answer_with_citations: List[Dict[str, Any]],
     raw_sources: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    sources = [
-        {
-            "content": (doc.get("content") or doc.get("text")),
-            "source": doc.get("source") or "Unknown source",
-            "pageNumber": doc.get("page") or "Unknown page",
-            "score": doc.get("score") or doc.get("relevance_score") or doc.get("rrf_score"),
-            "fileId": doc.get("fileId"),
-            "chunkId": doc.get("chunkId"),
-        }
-        for doc in raw_sources
-    ]
+    sources = citation_evidence_service.build_raw_sources(raw_sources)
 
     return {
         "type": "result",
@@ -287,11 +280,9 @@ async def rewrite_query_node(state: AdaptiveRAGState, emit: EventCallback) -> Ad
 
 async def generate_answer_node(state: AdaptiveRAGState, emit: EventCallback) -> AdaptiveRAGState:
     documents = state.get("filtered_documents", [])
-    context, file_ids, chunk_ids = _format_docs_for_answer(documents)
     logger.info(
-        "[AdaptiveRAG] generate_answer start grounded_chunks=%s chunk_ids=%s",
+        "[AdaptiveRAG] generate_answer start grounded_chunks=%s",
         len(documents),
-        chunk_ids,
     )
 
     await _safe_emit(
@@ -301,32 +292,36 @@ async def generate_answer_node(state: AdaptiveRAGState, emit: EventCallback) -> 
         "generation",
     )
 
-    ai_response = await generate_answer_with_langchain(
-        context,
+    evidence_result = await citation_evidence_service.generate_citation_evidence(
         state["question"],
-        file_ids,
-        chunk_ids,
+        documents,
+        required_concepts=state.get("query_intent", {}).get("required_concepts", []),
+        covered_concepts=state.get("covered_concepts", []),
+        intent_type=state.get("query_intent", {}).get("intent_type", "single"),
     )
-
-    answer_with_citations = _sanitize_answer_with_citations(
-        ai_response.get("answer_with_citations"),
-        chunk_ids,
-    )
-    answer = (ai_response.get("answer") or "").strip() or _extract_answer_text(answer_with_citations)
+    answer_with_citations = evidence_result["answer_with_citations"]
+    answer = evidence_result["answer_text"]
 
     state["answer"] = answer
+    state["citations"] = evidence_result["citations"]
     state["answer_with_citations"] = answer_with_citations
-    state["raw_sources"] = documents
+    state["raw_sources"] = evidence_result["raw_sources"]
+    state["evidence_nodes"] = evidence_result["evidence_nodes"]
+    state["covered_concepts"] = evidence_result["covered_concepts"]
+    state["missing_concepts"] = evidence_result["missing_concepts"]
+    state["result_reason"] = (
+        PARTIAL_COVERAGE_RESULT_REASON
+        if evidence_result["coverage_status"] == "partial"
+        else None
+    )
     logger.info(
-        "[AdaptiveRAG] generate_answer completed answer_len=%s citation_blocks=%s cited_chunk_ids=%s",
+        "[AdaptiveRAG] generate_answer completed answer_len=%s citation_blocks=%s cited_chunk_ids=%s covered_concepts=%s missing_concepts=%s coverage_status=%s",
         len(answer),
         len(answer_with_citations),
-        [
-            ref.get("file_chunk_id")
-            for block in answer_with_citations
-            for segment in block.get("content_segments", [])
-            for ref in segment.get("source_references", [])
-        ],
+        [citation.get("chunk_id") for citation in state.get("citations", [])],
+        state.get("covered_concepts", []),
+        state.get("missing_concepts", []),
+        evidence_result["coverage_status"],
     )
     return state
 
@@ -346,8 +341,11 @@ async def grade_generation_node(state: AdaptiveRAGState, emit: EventCallback) ->
     documents = state.get("filtered_documents", [])
     answer = (state.get("answer") or "").strip()
     answer_with_citations = state.get("answer_with_citations", [])
+    required_concepts = state.get("query_intent", {}).get("required_concepts", [])
+    covered_concepts = state.get("covered_concepts", [])
+    missing_concepts = state.get("missing_concepts", [])
 
-    if not answer or not answer_with_citations:
+    if not answer or (not answer_with_citations and not state.get("citations")):
         state["result_reason"] = UNRELIABLE_RESULT_REASON
         logger.warning(
             "[AdaptiveRAG] grade_generation rejected due to missing answer_or_citations answer_len=%s citation_blocks=%s",
@@ -366,18 +364,29 @@ async def grade_generation_node(state: AdaptiveRAGState, emit: EventCallback) ->
         "type": "object",
         "properties": {
             "grounded": {"type": "string", "enum": ["yes", "no"]},
-            "answers_question": {"type": "string", "enum": ["yes", "no"]},
+            "coverage_status": {"type": "string", "enum": ["full", "partial", "insufficient"]},
             "reason": {"type": "string"},
         },
-        "required": ["grounded", "answers_question", "reason"],
+        "required": ["grounded", "coverage_status", "reason"],
     }
     prompt = f"""
 You are verifying a RAG answer.
 Return grounded=yes only if the answer is supported by the provided documents.
-Return answers_question=yes only if the answer actually addresses the user's question.
+Return coverage_status=full only if the answer addresses all required concepts.
+Return coverage_status=partial only if the answer correctly covers the supported concepts, explicitly names the missing concepts, and does not invent unsupported details.
+Return coverage_status=insufficient if the answer misses supported content or overclaims beyond the documents.
 
 Question:
 {state["question"]}
+
+Required concepts:
+{required_concepts}
+
+Covered concepts from retrieval:
+{covered_concepts}
+
+Missing concepts from retrieval:
+{missing_concepts}
 
 Answer:
 {answer}
@@ -397,20 +406,24 @@ Documents:
         logger.warning("[AdaptiveRAG] generation grading failed; accepting answer: %s", err)
         return state
 
-    if result.get("grounded") == "yes" and result.get("answers_question") == "yes":
+    coverage_status = result.get("coverage_status")
+    if result.get("grounded") == "yes" and coverage_status in {"full", "partial"}:
+        state["result_reason"] = (
+            PARTIAL_COVERAGE_RESULT_REASON if missing_concepts or coverage_status == "partial" else None
+        )
         logger.info(
-            "[AdaptiveRAG] grade_generation accepted grounded=%s answers_question=%s reason=%r",
+            "[AdaptiveRAG] grade_generation accepted grounded=%s coverage_status=%s reason=%r",
             result.get("grounded"),
-            result.get("answers_question"),
+            coverage_status,
             (result.get("reason") or "")[:200],
         )
         return state
 
     state["result_reason"] = UNRELIABLE_RESULT_REASON
     logger.warning(
-        "[AdaptiveRAG] grade_generation rejected grounded=%s answers_question=%s reason=%r",
+        "[AdaptiveRAG] grade_generation rejected grounded=%s coverage_status=%s reason=%r",
         result.get("grounded"),
-        result.get("answers_question"),
+        result.get("coverage_status"),
         (result.get("reason") or "")[:200],
     )
     return state
@@ -443,9 +456,14 @@ async def run_adaptive_rag_stream(question: str, selected_file_ids: List[str]) -
         "generation_retry_count": 0,
         "candidate_documents": [],
         "filtered_documents": [],
+        "query_intent": adaptive_retrieval_service.analyze_query_intent(question.strip()),
+        "covered_concepts": [],
+        "missing_concepts": [],
         "answer": "",
+        "citations": [],
         "answer_with_citations": [],
         "raw_sources": [],
+        "evidence_nodes": [],
         "result_reason": None,
     }
 

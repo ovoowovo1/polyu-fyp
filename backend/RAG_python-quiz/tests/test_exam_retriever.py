@@ -77,6 +77,8 @@ class ExamRetrieverTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["context_chunks"], [chunk])
         self.assertIn("primary chunk", result["context"])
         self.assertEqual(result["warnings"], [])
+        self.assertEqual(result["retrieval_evidence"]["raw_sources"][0]["chunkId"], "chunk-1")
+        self.assertEqual(result["retrieval_evidence"]["evidence_nodes"][0]["node_id"], "chunk-1")
 
     async def test_research_goal_query_merges_unique_chunks_with_existing_context(self):
         existing_chunk = make_chunk("existing chunk", page=2)
@@ -149,6 +151,16 @@ class ExamRetrieverTests(unittest.IsolatedAsyncioTestCase):
         get_files_text_content.assert_called_once_with(["file-1"])
         self.assertEqual(result["context"], "FULL TEXT")
         self.assertEqual(result["context_chunks"], [])
+        self.assertEqual(
+            result["retrieval_evidence"],
+            {
+                "raw_sources": [],
+                "evidence_nodes": [],
+                "required_concepts": [],
+                "covered_concepts": [],
+                "missing_concepts": [],
+            },
+        )
         self.assertEqual(result["search_iterations"], 0)
         self.assertIsNone(result["research_goal"])
 

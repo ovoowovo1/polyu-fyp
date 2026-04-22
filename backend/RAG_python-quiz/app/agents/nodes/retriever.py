@@ -8,7 +8,7 @@ import asyncio
 from typing import Any, Dict, List
 
 from app.logger import get_logger
-from app.services import pg_service
+from app.services import citation_evidence_service, pg_service
 from app.services.adaptive_retrieval_service import (
     NO_RELEVANT_DOCUMENTS_FALLBACK_REASON,
     run_adaptive_retrieval,
@@ -111,6 +111,7 @@ async def retriever_node(state: Dict[str, Any]) -> Dict[str, Any]:
             **state,
             "context": full_text,
             "context_chunks": [],
+            "retrieval_evidence": citation_evidence_service.build_retrieval_evidence([]),
             "warnings": warnings_out,
             "search_iterations": _next_search_iteration(search_iterations, research_goal),
             "research_goal": None,
@@ -138,6 +139,7 @@ async def retriever_node(state: Dict[str, Any]) -> Dict[str, Any]:
         **state,
         "context": _build_context_from_chunks(final_chunks),
         "context_chunks": final_chunks,
+        "retrieval_evidence": citation_evidence_service.build_retrieval_evidence(final_chunks),
         "warnings": warnings_out,
         "search_iterations": _next_search_iteration(search_iterations, research_goal),
         "research_goal": None,

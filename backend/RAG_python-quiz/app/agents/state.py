@@ -22,6 +22,7 @@ class ExamGenerationState(TypedDict):
     # RAG 檢索結果
     context: str
     context_chunks: List[Dict[str, Any]]
+    retrieval_evidence: Dict[str, Any]
     
     # 生成的題目
     questions: List[ExamQuestion]
@@ -48,4 +49,3 @@ class ExamGenerationState(TypedDict):
     pdf_path: Optional[str]
     warnings: List[str]
     is_complete: bool
-
