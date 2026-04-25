@@ -19,8 +19,8 @@ logger = get_logger(__name__)
 
 DEFAULT_CITATION_CHUNK_SIZE = 8192
 DEFAULT_NUM_OUTPUT = 1024
-_CITATION_PATTERN = re.compile(r"\[(\d+)\]")
-_PUNCTUATION_CHARS = ".,;:!?)]"
+_INLINE_CITATION_PATTERN = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
+_SENTENCE_SPAN_PATTERN = re.compile(r".*?(?:\n+|[.!?][\"')\]]*\s*|$)", re.S)
 
 
 class EvidenceCitation(TypedDict):
@@ -264,6 +264,26 @@ def _citation_reference(source_nodes: Sequence[NodeWithScore], citation_number: 
     }
 
 
+def _split_inline_citation_numbers(raw_numbers: str) -> List[int]:
+    seen: set[int] = set()
+    ordered: List[int] = []
+    for value in raw_numbers.split(","):
+        citation_number = int(value.strip())
+        if citation_number in seen:
+            continue
+        seen.add(citation_number)
+        ordered.append(citation_number)
+    return ordered
+
+
+def _strip_inline_citations(text: str) -> str:
+    return _normalize_text_spacing(_INLINE_CITATION_PATTERN.sub("", text))
+
+
+def _sentence_spans(answer_text: str) -> List[str]:
+    return [match.group(0) for match in _SENTENCE_SPAN_PATTERN.finditer(answer_text) if match.group(0)]
+
+
 def build_answer_with_citations(
     answer_text: str,
     source_nodes: Sequence[NodeWithScore],
@@ -271,52 +291,30 @@ def build_answer_with_citations(
     if not answer_text:
         return "", [], []
 
-    clean_parts: List[str] = []
     content_segments: List[Dict[str, Any]] = []
     citations: List[EvidenceCitation] = []
     seen_chunks: set[str] = set()
-    cursor = 0
 
-    while True:
-        match = _CITATION_PATTERN.search(answer_text, cursor)
-        if match is None:
-            clean_parts.append(answer_text[cursor:])
-            break
-
-        text_part = answer_text[cursor : match.start()]
-        refs = [int(match.group(1))]
-        scan_index = match.end()
-
-        while True:
-            whitespace_index = scan_index
-            while whitespace_index < len(answer_text) and answer_text[whitespace_index].isspace():
-                whitespace_index += 1
-
-            next_match = _CITATION_PATTERN.match(answer_text, whitespace_index)
-            if next_match is None:
-                break
-
-            refs.append(int(next_match.group(1)))
-            scan_index = next_match.end()
-
-        punctuation_end = scan_index
-        while punctuation_end < len(answer_text) and answer_text[punctuation_end] in _PUNCTUATION_CHARS:
-            punctuation_end += 1
-
-        raw_segment = f"{text_part}{answer_text[scan_index:punctuation_end]}"
-        clean_parts.append(raw_segment)
-
+    for raw_segment in _sentence_spans(answer_text):
+        segment_text = _strip_inline_citations(raw_segment)
         source_references = []
-        for ref_number in refs:
-            citation = _citation_reference(source_nodes, ref_number)
-            if citation is None:
-                continue
-            source_references.append({"file_chunk_id": citation["chunk_id"]})
-            if citation["chunk_id"] not in seen_chunks:
-                citations.append(citation)
-                seen_chunks.add(citation["chunk_id"])
+        seen_segment_chunks: set[str] = set()
 
-        segment_text = _normalize_text_spacing(raw_segment)
+        for match in _INLINE_CITATION_PATTERN.finditer(raw_segment):
+            for ref_number in _split_inline_citation_numbers(match.group(1)):
+                citation = _citation_reference(source_nodes, ref_number)
+                if citation is None:
+                    continue
+
+                chunk_id = citation["chunk_id"]
+                if chunk_id not in seen_segment_chunks:
+                    source_references.append({"file_chunk_id": chunk_id})
+                    seen_segment_chunks.add(chunk_id)
+
+                if chunk_id not in seen_chunks:
+                    citations.append(citation)
+                    seen_chunks.add(chunk_id)
+
         if segment_text and source_references:
             content_segments.append(
                 {
@@ -325,9 +323,7 @@ def build_answer_with_citations(
                 }
             )
 
-        cursor = punctuation_end
-
-    clean_answer = _normalize_text_spacing("".join(clean_parts))
+    clean_answer = _strip_inline_citations(answer_text)
     answer_with_citations = [{"content_segments": content_segments}] if content_segments else []
     return clean_answer, citations, answer_with_citations
 

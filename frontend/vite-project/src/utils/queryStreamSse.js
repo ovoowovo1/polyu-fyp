@@ -1,4 +1,86 @@
 const NEWLINE = /\r\n/g;
+const BRACKETED_CITATION = /\[([\d,\s]+)\]/g;
+
+const pushTextPart = (parts, value) => {
+  if (!value) {
+    return;
+  }
+
+  const lastPart = parts[parts.length - 1];
+  if (lastPart?.type === 'text') {
+    lastPart.value += value;
+    return;
+  }
+
+  parts.push({ type: 'text', value });
+};
+
+const buildCitationPartFromSource = (number, source) => ({
+  type: 'citation',
+  number,
+  details: {
+    fileId: source?.fileId,
+    chunkId: source?.chunkId,
+    source: source?.source,
+    page: source?.pageNumber,
+  },
+});
+
+const stripBracketedTextCitations = (value) => value
+  .replace(BRACKETED_CITATION, '')
+  .replace(/\s+([.,;:!?])/g, '$1');
+
+const resolveInlineCitationSources = (value, rawSources) => {
+  const resolvedSources = [];
+  const seenChunkIds = new Set();
+
+  for (const match of value.matchAll(BRACKETED_CITATION)) {
+    const parsedNumbers = match[1]
+      .split(',')
+      .map((item) => item.trim())
+      .filter((item) => /^\d+$/.test(item));
+
+    parsedNumbers.forEach((item) => {
+      const source = rawSources[Number(item) - 1];
+      const chunkId = String(source?.chunkId ?? '');
+      if (!chunkId || seenChunkIds.has(chunkId)) {
+        return;
+      }
+
+      seenChunkIds.add(chunkId);
+      resolvedSources.push(source);
+    });
+  }
+
+  return resolvedSources;
+};
+
+const resolveStructuredSegment = (segment, rawSources, sourceByChunkId) => {
+  const resolvedSources = [];
+  const seenChunkIds = new Set();
+  const sourceRefs = segment?.source_references
+    || (segment?.source_reference ? [segment.source_reference] : []);
+
+  const pushSource = (source) => {
+    const chunkId = String(source?.chunkId ?? '');
+    if (!chunkId || seenChunkIds.has(chunkId)) {
+      return;
+    }
+
+    seenChunkIds.add(chunkId);
+    resolvedSources.push(source);
+  };
+
+  resolveInlineCitationSources(segment?.segment_text || '', rawSources).forEach(pushSource);
+  sourceRefs.forEach((sourceRef) => {
+    pushSource(sourceByChunkId.get(String(sourceRef.file_chunk_id)));
+  });
+
+  return {
+    text: stripBracketedTextCitations(segment?.segment_text || ''),
+    sources: resolvedSources,
+  };
+};
 
 export const splitSseFrames = (buffer) => {
   const normalized = buffer.replace(NEWLINE, '\n');
@@ -105,20 +187,75 @@ export const readSseStream = async (stream, { onEvent } = {}) => {
   return events;
 };
 
-export const buildStructuredContentFromResult = (finalResult) => {
-  const answerWithCitations = finalResult?.answer_with_citations;
+export const buildStructuredContentFromTextCitations = (answer, rawSources = []) => {
+  const fallbackAnswer = answer || 'Sorry, no answer was returned.';
   const structuredContent = [];
-  const rawSources = Array.isArray(finalResult?.raw_sources) ? finalResult.raw_sources : [];
-  const sourceByChunkId = new Map(rawSources.map((source) => [String(source.chunkId), source]));
+  let cursor = 0;
+  let foundValidCitation = false;
 
-  if (!answerWithCitations || answerWithCitations.length === 0) {
-    structuredContent.push({
-      type: 'text',
-      value: finalResult?.answer || 'Sorry, no answer was returned.',
+  for (const match of fallbackAnswer.matchAll(BRACKETED_CITATION)) {
+    const fullMatch = match[0];
+    const rawNumbers = match[1];
+    const start = match.index ?? -1;
+
+    if (start < 0) {
+      continue;
+    }
+
+    const parsedNumbers = rawNumbers
+      .split(',')
+      .map((value) => value.trim());
+
+    const seenNumbers = new Set();
+    const uniqueNumbers = [];
+    let isValidCitation = parsedNumbers.length > 0;
+
+    for (const value of parsedNumbers) {
+      if (!/^\d+$/.test(value)) {
+        isValidCitation = false;
+        break;
+      }
+
+      const citationNumber = Number(value);
+      const source = rawSources[citationNumber - 1];
+      if (!source) {
+        isValidCitation = false;
+        break;
+      }
+
+      if (!seenNumbers.has(citationNumber)) {
+        seenNumbers.add(citationNumber);
+        uniqueNumbers.push(citationNumber);
+      }
+    }
+
+    if (!isValidCitation) {
+      continue;
+    }
+
+    pushTextPart(structuredContent, fallbackAnswer.slice(cursor, start));
+    uniqueNumbers.forEach((citationNumber) => {
+      structuredContent.push(
+        buildCitationPartFromSource(citationNumber, rawSources[citationNumber - 1]),
+      );
     });
-    return structuredContent;
+    cursor = start + fullMatch.length;
+    foundValidCitation = true;
   }
 
+  if (!foundValidCitation) {
+    return [{ type: 'text', value: fallbackAnswer }];
+  }
+
+  pushTextPart(structuredContent, fallbackAnswer.slice(cursor));
+  return structuredContent.length > 0
+    ? structuredContent
+    : [{ type: 'text', value: fallbackAnswer }];
+};
+
+const buildStructuredContentFromAnswerWithCitations = (answerWithCitations, rawSources) => {
+  const structuredContent = [];
+  const sourceByChunkId = new Map(rawSources.map((source) => [String(source.chunkId), source]));
   const citationRefs = new Map();
   let citationCounter = 1;
 
@@ -129,27 +266,26 @@ export const buildStructuredContentFromResult = (finalResult) => {
     for (let index = 0; index < contentSegments.length; index += 1) {
       const current = contentSegments[index];
       const next = contentSegments[index + 1];
+      const currentResolved = resolveStructuredSegment(current, rawSources, sourceByChunkId);
+      const nextResolved = next ? resolveStructuredSegment(next, rawSources, sourceByChunkId) : null;
 
-      accumulatedText += `${current.segment_text}\n`;
+      accumulatedText += `${currentResolved.text}\n`;
 
-      const sourceRefs = current.source_references
-        || (current.source_reference ? [current.source_reference] : []);
-      const nextSourceRefs = next?.source_references
-        || (next?.source_reference ? [next.source_reference] : []);
-
-      const currentIds = sourceRefs.map((source) => source.file_chunk_id).sort();
-      const nextIds = nextSourceRefs.map((source) => source.file_chunk_id).sort();
+      const currentIds = currentResolved.sources.map((source) => String(source.chunkId)).sort();
+      const nextIds = nextResolved
+        ? nextResolved.sources.map((source) => String(source.chunkId)).sort()
+        : [];
       const sourcesChanged = !next || JSON.stringify(currentIds) !== JSON.stringify(nextIds);
 
       if (!sourcesChanged) {
         continue;
       }
 
-      structuredContent.push({ type: 'text', value: accumulatedText.trim() });
+      pushTextPart(structuredContent, accumulatedText.trim());
       accumulatedText = '';
 
-      sourceRefs.forEach((sourceRef) => {
-        const citationId = sourceRef.file_chunk_id;
+      const citationParts = currentResolved.sources.map((sourceEntry) => {
+        const citationId = String(sourceEntry.chunkId);
         let citationNumber = citationRefs.get(citationId);
 
         if (!citationNumber) {
@@ -158,20 +294,25 @@ export const buildStructuredContentFromResult = (finalResult) => {
           citationCounter += 1;
         }
 
-        const sourceEntry = sourceByChunkId.get(String(citationId));
-        structuredContent.push({
-          type: 'citation',
-          number: citationNumber,
-          details: {
-            fileId: sourceEntry?.fileId,
-            chunkId: citationId,
-            source: sourceEntry?.source,
-            page: sourceEntry?.pageNumber,
-          },
-        });
+        return buildCitationPartFromSource(citationNumber, sourceEntry);
       });
+
+      citationParts
+        .sort((left, right) => left.number - right.number)
+        .forEach((part) => structuredContent.push(part));
     }
   }
 
   return structuredContent;
+};
+
+export const buildStructuredContentFromResult = (finalResult) => {
+  const answerWithCitations = finalResult?.answer_with_citations;
+  const rawSources = Array.isArray(finalResult?.raw_sources) ? finalResult.raw_sources : [];
+
+  if (answerWithCitations && answerWithCitations.length > 0) {
+    return buildStructuredContentFromAnswerWithCitations(answerWithCitations, rawSources);
+  }
+
+  return buildStructuredContentFromTextCitations(finalResult?.answer, rawSources);
 };

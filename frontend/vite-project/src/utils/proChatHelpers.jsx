@@ -6,6 +6,7 @@ import MarkdownIt from 'markdown-it';
 import { API_BASE_URL } from '../config.js';
 import Citation from '../components/Citation.jsx';
 import i18n from '../i18n/config.js';
+import { buildStructuredContentFromResult } from './queryStreamSse.js';
 
 
 // 初始化 markdown-it，並啟用 HTML 解析
@@ -251,7 +252,7 @@ export const handleProChatRequestWithProgress = async (messages, options = {}) =
             }
 
             return {
-                text: () => Promise.resolve(JSON.stringify(structuredContent))
+                text: () => Promise.resolve(JSON.stringify(buildStructuredContentFromResult(finalResult)))
             };
         }
 
@@ -374,7 +375,7 @@ export const handleProChatRequest = async (messages, options = {}) => {
             }
         }
 
-        return new Response(JSON.stringify(structuredContent), {
+        return new Response(JSON.stringify(buildStructuredContentFromResult(response.data)), {
             headers: { 'Content-Type': 'application/json' }
         });
 

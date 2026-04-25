@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildStructuredContentFromResult,
+  buildStructuredContentFromTextCitations,
   parseSseFrame,
   readSseStream,
   splitSseFrames,
@@ -90,5 +91,208 @@ test('buildStructuredContentFromResult produces text and citation parts', () => 
         page: 7,
       },
     },
+  ]);
+});
+
+test('buildStructuredContentFromTextCitations parses a single bracket citation', () => {
+  const structured = buildStructuredContentFromTextCitations(
+    'Known fact [1] and more text.',
+    [
+      {
+        fileId: 'file-1',
+        chunkId: 'chunk-1',
+        source: 'notes.pdf',
+        pageNumber: 2,
+      },
+    ],
+  );
+
+  assert.deepEqual(structured, [
+    { type: 'text', value: 'Known fact ' },
+    {
+      type: 'citation',
+      number: 1,
+      details: {
+        fileId: 'file-1',
+        chunkId: 'chunk-1',
+        source: 'notes.pdf',
+        page: 2,
+      },
+    },
+    { type: 'text', value: ' and more text.' },
+  ]);
+});
+
+test('buildStructuredContentFromTextCitations parses multiple citations in one bracket', () => {
+  const structured = buildStructuredContentFromTextCitations(
+    'Line one [1, 2, 2]\nLine two.',
+    [
+      {
+        fileId: 'file-1',
+        chunkId: 'chunk-1',
+        source: 'notes.pdf',
+        pageNumber: 2,
+      },
+      {
+        fileId: 'file-2',
+        chunkId: 'chunk-2',
+        source: 'slides.pdf',
+        pageNumber: 5,
+      },
+    ],
+  );
+
+  assert.deepEqual(structured, [
+    { type: 'text', value: 'Line one ' },
+    {
+      type: 'citation',
+      number: 1,
+      details: {
+        fileId: 'file-1',
+        chunkId: 'chunk-1',
+        source: 'notes.pdf',
+        page: 2,
+      },
+    },
+    {
+      type: 'citation',
+      number: 2,
+      details: {
+        fileId: 'file-2',
+        chunkId: 'chunk-2',
+        source: 'slides.pdf',
+        page: 5,
+      },
+    },
+    { type: 'text', value: '\nLine two.' },
+  ]);
+});
+
+test('buildStructuredContentFromResult keeps answer_with_citations as the priority path', () => {
+  const structured = buildStructuredContentFromResult({
+    answer: 'Plain fallback [1]',
+    answer_with_citations: [
+      {
+        content_segments: [
+          {
+            segment_text: 'Structured answer.',
+            source_references: [{ file_chunk_id: 'chunk-9' }],
+          },
+        ],
+      },
+    ],
+    raw_sources: [
+      {
+        fileId: 'file-9',
+        chunkId: 'chunk-9',
+        source: 'handbook.pdf',
+        pageNumber: 11,
+      },
+    ],
+  });
+
+  assert.deepEqual(structured, [
+    { type: 'text', value: 'Structured answer.' },
+    {
+      type: 'citation',
+      number: 1,
+      details: {
+        fileId: 'file-9',
+        chunkId: 'chunk-9',
+        source: 'handbook.pdf',
+        page: 11,
+      },
+    },
+  ]);
+});
+
+test('buildStructuredContentFromResult merges inline citations with incomplete structured references', () => {
+  const structured = buildStructuredContentFromResult({
+    answer: 'Fallback [1, 2]',
+    answer_with_citations: [
+      {
+        content_segments: [
+          {
+            segment_text: 'Task explanation.',
+            source_references: [
+              { file_chunk_id: 'chunk-1' },
+            ],
+          },
+          {
+            segment_text: 'Released later [1, 2], and additional hours will be provided.',
+            source_references: [
+              { file_chunk_id: 'chunk-2' },
+            ],
+          },
+        ],
+      },
+    ],
+    raw_sources: [
+      {
+        fileId: 'file-2',
+        chunkId: 'chunk-2',
+        source: 'slides.pdf',
+        pageNumber: 4,
+      },
+      {
+        fileId: 'file-1',
+        chunkId: 'chunk-1',
+        source: 'notes.pdf',
+        pageNumber: 3,
+      },
+    ],
+  });
+
+  assert.deepEqual(structured, [
+    { type: 'text', value: 'Task explanation.' },
+    {
+      type: 'citation',
+      number: 1,
+      details: {
+        fileId: 'file-1',
+        chunkId: 'chunk-1',
+        source: 'notes.pdf',
+        page: 3,
+      },
+    },
+    { type: 'text', value: 'Released later, and additional hours will be provided.' },
+    {
+      type: 'citation',
+      number: 1,
+      details: {
+        fileId: 'file-1',
+        chunkId: 'chunk-1',
+        source: 'notes.pdf',
+        page: 3,
+      },
+    },
+    {
+      type: 'citation',
+      number: 2,
+      details: {
+        fileId: 'file-2',
+        chunkId: 'chunk-2',
+        source: 'slides.pdf',
+        page: 4,
+      },
+    },
+  ]);
+});
+
+test('buildStructuredContentFromTextCitations leaves invalid citations as plain text', () => {
+  const structured = buildStructuredContentFromTextCitations(
+    'Example [1, 3] should stay plain text.',
+    [
+      {
+        fileId: 'file-1',
+        chunkId: 'chunk-1',
+        source: 'notes.pdf',
+        pageNumber: 2,
+      },
+    ],
+  );
+
+  assert.deepEqual(structured, [
+    { type: 'text', value: 'Example [1, 3] should stay plain text.' },
   ]);
 });

@@ -131,6 +131,43 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
 
+    def test_build_answer_with_citations_supports_bracket_lists_without_truncating_sentence_tails(self):
+        answer_text = "Announcement later [1, 2, 2], and additional hours will be provided."
+        source_nodes = [_source_node("chunk-1"), _source_node("chunk-2", file_id="file-2", page=8)]
+
+        clean_answer, citations, answer_with_citations = service.build_answer_with_citations(
+            answer_text,
+            source_nodes,
+        )
+
+        self.assertEqual(
+            clean_answer,
+            "Announcement later, and additional hours will be provided.",
+        )
+        self.assertEqual(
+            citations,
+            [
+                {"chunk_id": "chunk-1", "file_id": "file-1", "source": "notes.pdf", "page": 5},
+                {"chunk_id": "chunk-2", "file_id": "file-2", "source": "notes.pdf", "page": 8},
+            ],
+        )
+        self.assertEqual(
+            answer_with_citations,
+            [
+                {
+                    "content_segments": [
+                        {
+                            "segment_text": "Announcement later, and additional hours will be provided.",
+                            "source_references": [
+                                {"file_chunk_id": "chunk-1"},
+                                {"file_chunk_id": "chunk-2"},
+                            ],
+                        }
+                    ]
+                }
+            ],
+        )
+
     def test_build_answer_with_citations_handles_empty_and_invalid_references(self):
         self.assertEqual(service.build_answer_with_citations("", []), ("", [], []))
 
