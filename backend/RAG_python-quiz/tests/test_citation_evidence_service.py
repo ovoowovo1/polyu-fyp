@@ -96,16 +96,16 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
             ),
         )
 
-    def test_build_answer_with_citations_extracts_segments_and_unique_citations(self):
+    def test_build_answer_with_citations_extracts_block_segments_and_unique_citations(self):
         answer_text = "Alpha [1]. Beta [2] [1]!"
         source_nodes = [_source_node("chunk-1"), _source_node("chunk-2", file_id="file-2", page=8)]
 
-        clean_answer, citations, answer_with_citations = service.build_answer_with_citations(
+        cited_answer, citations, answer_with_citations = service.build_answer_with_citations(
             answer_text,
             source_nodes,
         )
 
-        self.assertEqual(clean_answer, "Alpha. Beta!")
+        self.assertEqual(cited_answer, "Alpha [1]. Beta [2] [1]!")
         self.assertEqual(
             citations,
             [
@@ -118,12 +118,11 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
             [
                 {
                     "content_segments": [
-                        {"segment_text": "Alpha.", "source_references": [{"file_chunk_id": "chunk-1"}]},
                         {
-                            "segment_text": "Beta!",
+                            "segment_text": "Alpha. Beta!",
                             "source_references": [
-                                {"file_chunk_id": "chunk-2"},
                                 {"file_chunk_id": "chunk-1"},
+                                {"file_chunk_id": "chunk-2"},
                             ],
                         },
                     ]
@@ -135,14 +134,14 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
         answer_text = "Announcement later [1, 2, 2], and additional hours will be provided."
         source_nodes = [_source_node("chunk-1"), _source_node("chunk-2", file_id="file-2", page=8)]
 
-        clean_answer, citations, answer_with_citations = service.build_answer_with_citations(
+        cited_answer, citations, answer_with_citations = service.build_answer_with_citations(
             answer_text,
             source_nodes,
         )
 
         self.assertEqual(
-            clean_answer,
-            "Announcement later, and additional hours will be provided.",
+            cited_answer,
+            "Announcement later [1, 2, 2], and additional hours will be provided.",
         )
         self.assertEqual(
             citations,
@@ -168,15 +167,55 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
 
+    def test_build_answer_with_citations_preserves_markdown_paragraphs_and_list_items(self):
+        answer_text = (
+            "## Summary\n"
+            "CAP theorem balances consistency and availability under partitions [1].\n\n"
+            "- Partition tolerance is mandatory in distributed systems [2]\n"
+            "- Trade-offs depend on failure conditions [1, 2]"
+        )
+
+        cited_answer, citations, answer_with_citations = service.build_answer_with_citations(
+            answer_text,
+            [_source_node("chunk-1"), _source_node("chunk-2", file_id="file-2", page=8)],
+        )
+
+        self.assertEqual(cited_answer, answer_text)
+        self.assertEqual([citation["chunk_id"] for citation in citations], ["chunk-1", "chunk-2"])
+        self.assertEqual(
+            answer_with_citations,
+            [
+                {
+                    "content_segments": [
+                        {
+                            "segment_text": "## Summary\nCAP theorem balances consistency and availability under partitions.",
+                            "source_references": [{"file_chunk_id": "chunk-1"}],
+                        },
+                        {
+                            "segment_text": "- Partition tolerance is mandatory in distributed systems",
+                            "source_references": [{"file_chunk_id": "chunk-2"}],
+                        },
+                        {
+                            "segment_text": "- Trade-offs depend on failure conditions",
+                            "source_references": [
+                                {"file_chunk_id": "chunk-1"},
+                                {"file_chunk_id": "chunk-2"},
+                            ],
+                        },
+                    ]
+                }
+            ],
+        )
+
     def test_build_answer_with_citations_handles_empty_and_invalid_references(self):
         self.assertEqual(service.build_answer_with_citations("", []), ("", [], []))
 
-        clean_answer, citations, answer_with_citations = service.build_answer_with_citations(
+        cited_answer, citations, answer_with_citations = service.build_answer_with_citations(
             "Loose text [3]",
             [_source_node("chunk-1")],
         )
 
-        self.assertEqual(clean_answer, "Loose text")
+        self.assertEqual(cited_answer, "Loose text [3]")
         self.assertEqual(citations, [])
         self.assertEqual(answer_with_citations, [])
 
@@ -206,6 +245,58 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(service._fallback_citation_payload("", [_source_node("chunk-1")]), ([], []))
         orphan_node = NodeWithScore(node=TextNode(text="orphan text", id_="", metadata={}), score=0.1)
         self.assertEqual(service._fallback_citation_payload("Fallback answer", [orphan_node]), ([], []))
+
+    def test_helper_coverage_for_empty_markdown_heading_merges_and_limits_sections(self):
+        self.assertEqual(service._normalize_markdown_answer(""), "")
+        self.assertEqual(
+            service._split_list_items(["", "Plain intro", "continued detail"]),
+            ["Plain intro\ncontinued detail"],
+        )
+        self.assertEqual(service._split_markdown_blocks(""), [])
+        self.assertEqual(
+            service._split_markdown_blocks("## Heading\n\n\n- First point [1]\n- Second point [2]"),
+            ["## Heading\n- First point [1]", "- Second point [2]"],
+        )
+        self.assertEqual(service._format_sources_for_prompt([]), "[No grounded sources available]")
+        self.assertTrue(service._format_source_excerpt("x" * 900).endswith("..."))
+        self.assertEqual(service._build_default_citation_suffix([]), "")
+        self.assertEqual(
+            service._ensure_missing_concept_section(
+                "## Limits\nThe selected documents do not provide enough reliable information about SQL. [1]",
+                ["SQL"],
+                [_source_node("chunk-1")],
+            ),
+            "## Limits\nThe selected documents do not provide enough reliable information about SQL. [1]",
+        )
+        self.assertEqual(
+            service._ensure_missing_concept_section("", ["SQL"], []),
+            "## Limits\nThe selected documents do not provide enough reliable information about SQL.",
+        )
+
+    async def test_synthesize_markdown_answer_uses_grounded_prompt_and_normalizes_output(self):
+        with patch(
+            "app.services.citation_evidence_service.generate_text_completion",
+            AsyncMock(return_value="## Answer\n\nGrounded explanation [1]\n"),
+        ) as generate_text_completion:
+            result = await service.synthesize_markdown_answer(
+                "What is CAP theorem?",
+                "Draft answer [1].",
+                [_source_node("chunk-1")],
+                required_concepts=["CAP theorem"],
+                covered_concepts=["CAP theorem"],
+                missing_concepts=[],
+                intent_type="single",
+            )
+
+        self.assertEqual(result, "## Answer\n\nGrounded explanation [1]")
+        prompt = generate_text_completion.await_args.args[0]
+        self.assertIn("Rewrite the grounded answer into a fuller English Markdown response.", prompt)
+        self.assertIn("Every factual paragraph or bullet item must end with one or more bracket citations", prompt)
+        self.assertIn("[1] notes.pdf | page 5 | chunk_id=chunk-1", prompt)
+        self.assertEqual(
+            await service.synthesize_markdown_answer("What is CAP theorem?", "   ", [_source_node("chunk-1")]),
+            "",
+        )
 
     def test_static_retriever_and_custom_llm_cover_core_methods(self):
         nodes = [_source_node("chunk-1")]
@@ -290,7 +381,10 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
         with patch(
             "app.services.citation_evidence_service._run_citation_query",
             return_value=response,
-        ) as run_query:
+        ) as run_query, patch(
+            "app.services.citation_evidence_service.generate_text_completion",
+            AsyncMock(return_value="## Answer\nGrounded answer in Markdown [1]."),
+        ) as generate_text_completion:
             result = await service.generate_citation_evidence(
                 "question",
                 [
@@ -306,7 +400,8 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
             )
 
         run_query.assert_called_once()
-        self.assertEqual(result["answer_text"], "Grounded answer.")
+        generate_text_completion.assert_awaited_once()
+        self.assertEqual(result["answer_text"], "## Answer\nGrounded answer in Markdown [1].")
         self.assertEqual(result["citations"][0]["chunk_id"], "chunk-1")
         self.assertEqual(result["raw_sources"][0]["chunkId"], "chunk-1")
         self.assertEqual(result["evidence_nodes"][0]["node_id"], "chunk-1")
@@ -320,7 +415,7 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
                 {
                     "content_segments": [
                         {
-                            "segment_text": "Grounded answer.",
+                            "segment_text": "## Answer\nGrounded answer in Markdown.",
                             "source_references": [{"file_chunk_id": "chunk-1"}],
                         }
                     ]
@@ -334,7 +429,10 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
         with patch(
             "app.services.citation_evidence_service._run_citation_query",
             return_value=response,
-        ) as run_query:
+        ) as run_query, patch(
+            "app.services.citation_evidence_service.generate_text_completion",
+            AsyncMock(return_value="## NoSQL\nNoSQL uses flexible schemas [1]."),
+        ):
             result = await service.generate_citation_evidence(
                 "what is SQL and NoSQL",
                 [
@@ -357,7 +455,15 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["covered_concepts"], ["NoSQL"])
         self.assertEqual(result["missing_concepts"], ["SQL"])
         self.assertEqual(result["coverage_status"], "partial")
+        self.assertIn("## Limits", result["answer_text"])
         self.assertIn("do not provide enough reliable information about SQL", result["answer_text"])
+        self.assertEqual(
+            result["answer_with_citations"][0]["content_segments"][-1],
+            {
+                "segment_text": "## Limits\nThe selected documents do not provide enough reliable information about SQL.",
+                "source_references": [{"file_chunk_id": "chunk-1"}],
+            },
+        )
 
     async def test_generate_citation_evidence_adds_fallback_citation_when_inline_citations_missing(self):
         response = Response(response="Grounded answer without inline citations.", source_nodes=[_source_node("chunk-1")])
@@ -365,6 +471,9 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
         with patch(
             "app.services.citation_evidence_service._run_citation_query",
             return_value=response,
+        ), patch(
+            "app.services.citation_evidence_service.generate_text_completion",
+            AsyncMock(return_value="## Answer\nGrounded answer without inline citations."),
         ):
             result = await service.generate_citation_evidence(
                 "question",
@@ -383,4 +492,46 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             result["answer_with_citations"][0]["content_segments"][0]["source_references"],
             [{"file_chunk_id": "chunk-1"}],
+        )
+        self.assertEqual(
+            result["answer_with_citations"][0]["content_segments"][0]["segment_text"],
+            "## Answer\nGrounded answer without inline citations.",
+        )
+
+    async def test_generate_citation_evidence_falls_back_to_citation_query_draft_when_markdown_synthesis_fails(self):
+        response = Response(response="Grounded answer [1].", source_nodes=[_source_node("chunk-1")])
+
+        with patch(
+            "app.services.citation_evidence_service._run_citation_query",
+            return_value=response,
+        ), patch(
+            "app.services.citation_evidence_service.generate_text_completion",
+            AsyncMock(side_effect=RuntimeError("llm failed")),
+        ):
+            result = await service.generate_citation_evidence(
+                "question",
+                [
+                    {
+                        "text": "Grounded answer",
+                        "source": "doc.pdf",
+                        "page": 1,
+                        "fileId": "file-1",
+                        "chunkId": "chunk-1",
+                    }
+                ],
+            )
+
+        self.assertEqual(result["answer_text"], "Grounded answer [1].")
+        self.assertEqual(
+            result["answer_with_citations"],
+            [
+                {
+                    "content_segments": [
+                        {
+                            "segment_text": "Grounded answer.",
+                            "source_references": [{"file_chunk_id": "chunk-1"}],
+                        }
+                    ]
+                }
+            ],
         )

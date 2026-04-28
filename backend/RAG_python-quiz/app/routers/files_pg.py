@@ -1,58 +1,119 @@
-from fastapi import APIRouter, HTTPException
-import asyncio
-
 from typing import Optional
+
+from fastapi import APIRouter
+
+from app.routers.service_helpers import message_contains, run_service
 from app.services import pg_service
 
 router = APIRouter(prefix="", tags=["files"])
 
+_MISSING_FILE_ZH = "".join(map(chr, [0x6A94, 0x6848, 0x4E0D, 0x5B58, 0x5728]))
+_MISSING_CHUNK_ZH_1 = "".join(map(chr, [0x5340, 0x584A, 0x4E0D, 0x5B58, 0x5728]))
+_MISSING_CHUNK_ZH_2 = "".join(map(chr, [0x7247, 0x6BB5, 0x4E0D, 0x5B58, 0x5728]))
+
+_FILE_MISSING_SNIPPETS = ("not found", "file does not exist", "missing file", _MISSING_FILE_ZH)
+_CHUNK_MISSING_SNIPPETS = (
+    "chunk not found",
+    "source details not found",
+    "missing chunk",
+    "chunk",
+    "chunk does not exist",
+    "missing source details",
+    _MISSING_CHUNK_ZH_1,
+    _MISSING_CHUNK_ZH_2,
+)
+
+
+def _is_missing_file(error: Exception) -> bool:
+    return message_contains(*_FILE_MISSING_SNIPPETS)(error)
+
+
+def _is_missing_chunk(error: Exception) -> bool:
+    return message_contains(*_CHUNK_MISSING_SNIPPETS)(error)
+
 
 @router.get("/files")
 async def get_files(class_id: Optional[str] = None):
-    """取得文件清單，若提供 class_id 則只回傳該班級的文件。"""
-    try:
-        files = await asyncio.to_thread(pg_service.get_files_list, class_id)
-        return {"message": "檔案清單獲取成功", "files": files, "total": len(files)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail={"error": "獲取檔案清單失敗", "details": str(e)})
+    files = await run_service(
+        pg_service.get_files_list,
+        class_id,
+        fallback_detail=lambda error: {
+            "error": "Failed to fetch files",
+            "details": str(error),
+        },
+    )
+    return {"message": "Files fetched", "files": files, "total": len(files)}
 
 
 @router.delete("/files/{file_id}")
 async def delete_file(file_id: str):
-    try:
-        result = await asyncio.to_thread(pg_service.delete_file, file_id)
-        return {"message": result["message"], "success": True, "deletedFile": result["deletedFile"]}
-    except Exception as e:
-        if str(e) == "檔案不存在":
-            raise HTTPException(status_code=404, detail={"error": "檔案不存在", "details": str(e)})
-        raise HTTPException(status_code=500, detail={"error": "刪除檔案失敗", "details": str(e)})
+    result = await run_service(
+        pg_service.delete_file,
+        file_id,
+        error_rules=[
+            (_is_missing_file, 404, lambda error: {"error": "File not found", "details": str(error)}),
+        ],
+        fallback_detail=lambda error: {
+            "error": "Failed to delete file",
+            "details": str(error),
+        },
+    )
+    return {
+        "message": result["message"],
+        "success": True,
+        "deletedFile": result["deletedFile"],
+    }
 
 
 @router.get("/files/{file_id}")
 async def get_file_details(file_id: str):
-    try:
-        details = await asyncio.to_thread(pg_service.get_specific_file, file_id)
-        return {"message": "檔案詳細資訊獲取成功", "file": details["file"], "chunks": details["chunks"]}
-    except Exception as e:
-        if str(e) == "檔案不存在":
-            raise HTTPException(status_code=404, detail={"error": "檔案不存在", "details": str(e)})
-        raise HTTPException(status_code=500, detail={"error": "獲取檔案詳細資訊失敗", "details": str(e)})
-    
+    details = await run_service(
+        pg_service.get_specific_file,
+        file_id,
+        error_rules=[
+            (_is_missing_file, 404, lambda error: {"error": "File not found", "details": str(error)}),
+        ],
+        fallback_detail=lambda error: {
+            "error": "Failed to fetch file details",
+            "details": str(error),
+        },
+    )
+    return {
+        "message": "File details fetched",
+        "file": details["file"],
+        "chunks": details["chunks"],
+    }
+
+
 @router.put("/files/{file_id}")
 async def rename_file(file_id: str, new_name: str):
-    try:
-        result = await asyncio.to_thread(pg_service.rename_file, file_id, new_name)
-        return {"message": result["message"], "success": True, "renamedFile": result["renamedFile"]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail={"error": "重新命名檔案失敗", "details": str(e)})
+    result = await run_service(
+        pg_service.rename_file,
+        file_id,
+        new_name,
+        fallback_detail=lambda error: {
+            "error": "Failed to rename file",
+            "details": str(error),
+        },
+    )
+    return {
+        "message": result["message"],
+        "success": True,
+        "renamedFile": result["renamedFile"],
+    }
 
 
 @router.get("/chunks/{chunk_id}/source-details")
 async def get_chunk_source_details(chunk_id: str):
-    try:
-        details = await asyncio.to_thread(pg_service.get_source_details_by_chunk_id, chunk_id)
-        return {"message": "來源資訊獲取成功", "details": details}
-    except Exception as e:
-        if str(e) == "找不到 chunk":
-            raise HTTPException(status_code=404, detail={"error": "找不到對應的 chunk", "details": str(e)})
-        raise HTTPException(status_code=500, detail={"error": "獲取來源資訊失敗", "details": str(e)})
+    details = await run_service(
+        pg_service.get_source_details_by_chunk_id,
+        chunk_id,
+        error_rules=[
+            (_is_missing_chunk, 404, lambda error: {"error": "Chunk not found", "details": str(error)}),
+        ],
+        fallback_detail=lambda error: {
+            "error": "Failed to fetch chunk source details",
+            "details": str(error),
+        },
+    )
+    return {"message": "Source details fetched", "details": details}

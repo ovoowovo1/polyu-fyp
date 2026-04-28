@@ -7,6 +7,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence, Typ
 from app.logger import get_logger
 from app.services import pg_service
 from app.services.ai_service import generate_structured_json
+from app.services.rag_shared import normalize_concepts, normalize_doc, safe_emit
 from app.services.vector_query_service import is_retryable_embedding_error, retrieve_vector_context
 
 logger = get_logger(__name__)
@@ -100,7 +101,7 @@ EventCallback = Callable[[str, Any, str], Awaitable[None]]
 
 
 async def _safe_emit(callback: EventCallback, message: str, data: Any = None, event_type: str = "retrieval") -> None:
-    await callback(message, data, event_type)
+    await safe_emit(callback, message, data, event_type)
 
 
 def _canonicalize_known_concept(concept: str) -> str:
@@ -124,31 +125,11 @@ def _clean_concept_fragment(fragment: str) -> str:
 
 
 def _normalize_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
-    page = (
-        doc.get("page")
-        or doc.get("pageNumber")
-        or doc.get("page_start")
-        or doc.get("pageStart")
-        or "Unknown page"
+    return normalize_doc(
+        doc,
+        normalize_concept_fields=("retrieved_for_concepts", "covered_concepts"),
+        concept_normalizer=_normalize_concept_label,
     )
-    source = doc.get("source") or doc.get("document_name") or "Unknown source"
-    text = doc.get("content") or doc.get("text") or ""
-    file_id = doc.get("fileId") or doc.get("fileid")
-    chunk_id = doc.get("chunkId") or doc.get("chunkid")
-    normalized = {
-        **doc,
-        "text": text,
-        "content": text,
-        "source": source,
-        "page": page,
-        "fileId": file_id,
-        "chunkId": chunk_id,
-    }
-    if "retrieved_for_concepts" in doc:
-        normalized["retrieved_for_concepts"] = _unique_in_order(doc.get("retrieved_for_concepts", []))
-    if "covered_concepts" in doc:
-        normalized["covered_concepts"] = _unique_in_order(doc.get("covered_concepts", []))
-    return normalized
 
 
 def _normalize_concept_label(concept: str) -> str:
@@ -156,18 +137,7 @@ def _normalize_concept_label(concept: str) -> str:
 
 
 def _unique_in_order(values: Sequence[str]) -> List[str]:
-    seen: set[str] = set()
-    unique: List[str] = []
-    for value in values:
-        normalized = _normalize_concept_label(value)
-        if not normalized:
-            continue
-        key = normalized.casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(normalized)
-    return unique
+    return normalize_concepts(values, normalizer=_normalize_concept_label)
 
 
 def _extract_comparison_tail(question: str) -> str:

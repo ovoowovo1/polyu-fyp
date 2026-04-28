@@ -115,13 +115,13 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             "app.services.adaptive_rag_service.citation_evidence_service.generate_citation_evidence",
             AsyncMock(
                 return_value={
-                    "answer_text": "CAP theorem is a trade-off.",
+                    "answer_text": "## CAP Theorem\nCAP theorem is a trade-off [1].",
                     "citations": [{"chunk_id": "chunk-1", "file_id": "file-1", "source": "notes.pdf", "page": 1}],
                     "answer_with_citations": [
                         {
                             "content_segments": [
                                 {
-                                    "segment_text": "CAP theorem is a trade-off.",
+                                    "segment_text": "## CAP Theorem\nCAP theorem is a trade-off.",
                                     "source_references": [{"file_chunk_id": "chunk-1"}],
                                 }
                             ]
@@ -164,9 +164,12 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             covered_concepts=[],
             intent_type="single",
         )
-        self.assertEqual(result["answer"], "CAP theorem is a trade-off.")
+        self.assertEqual(result["answer"], "## CAP Theorem\nCAP theorem is a trade-off [1].")
         self.assertEqual(result["citations"][0]["chunk_id"], "chunk-1")
-        self.assertEqual(result["answer_with_citations"][0]["content_segments"][0]["segment_text"], "CAP theorem is a trade-off.")
+        self.assertEqual(
+            result["answer_with_citations"][0]["content_segments"][0]["segment_text"],
+            "## CAP Theorem\nCAP theorem is a trade-off.",
+        )
         self.assertEqual(result["raw_sources"][0]["chunkId"], "chunk-1")
         self.assertEqual(result["evidence_nodes"][0]["node_id"], "chunk-1")
         self.assertEqual(result["result_reason"], None)
@@ -350,13 +353,13 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
 
         async def fake_generate(state, emit):
             await emit("generated", 1, "generation")
-            state["answer"] = "Grounded answer."
+            state["answer"] = "## Answer\nGrounded answer [1]."
             state["citations"] = [{"chunk_id": "chunk-1", "file_id": "file-1", "source": "doc.pdf", "page": 2}]
             state["answer_with_citations"] = [
                 {
                     "content_segments": [
                         {
-                            "segment_text": "Grounded answer.",
+                            "segment_text": "## Answer\nGrounded answer.",
                             "source_references": [{"file_chunk_id": "chunk-1"}],
                         }
                     ]
@@ -398,8 +401,11 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
 
         result_event = events[-1]
         self.assertEqual(result_event["type"], "result")
-        self.assertEqual(result_event["answer"], "Grounded answer.")
-        self.assertEqual(result_event["answer_with_citations"][0]["content_segments"][0]["segment_text"], "Grounded answer.")
+        self.assertEqual(result_event["answer"], "## Answer\nGrounded answer [1].")
+        self.assertEqual(
+            result_event["answer_with_citations"][0]["content_segments"][0]["segment_text"],
+            "## Answer\nGrounded answer.",
+        )
         self.assertEqual(result_event["raw_sources"][0]["chunkId"], "chunk-1")
         self.assertEqual(events[1]["type"], "router")
 

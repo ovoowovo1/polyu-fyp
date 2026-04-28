@@ -11,6 +11,13 @@ from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import MetadataMode, NodeWithScore, QueryBundle, TextNode
 
 from app.logger import get_logger
+from app.services.ai_service import generate_text_completion
+from app.services.rag_shared import (
+    build_evidence_nodes as shared_build_evidence_nodes,
+    build_raw_sources as shared_build_raw_sources,
+    build_retrieval_evidence as shared_build_retrieval_evidence,
+    normalize_concepts as shared_normalize_concepts,
+)
 from app.utils.api_key_manager import get_default_llm_model_name, get_llm_client
 from app.utils.openai_response import extract_chat_completion_text
 
@@ -20,7 +27,10 @@ logger = get_logger(__name__)
 DEFAULT_CITATION_CHUNK_SIZE = 8192
 DEFAULT_NUM_OUTPUT = 1024
 _INLINE_CITATION_PATTERN = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
-_SENTENCE_SPAN_PATTERN = re.compile(r".*?(?:\n+|[.!?][\"')\]]*\s*|$)", re.S)
+_BLOCK_SEPARATOR_PATTERN = re.compile(r"\n\s*\n+")
+_HEADER_PATTERN = re.compile(r"^\s*#{1,6}\s+")
+_LIST_ITEM_PATTERN = re.compile(r"^\s*(?:[-*+]\s+|\d+\.\s+)")
+MAX_SOURCE_EXCERPT_CHARS = 800
 
 
 class EvidenceCitation(TypedDict):
@@ -61,73 +71,24 @@ class CitationEvidenceResult(TypedDict):
     coverage_status: str
 
 
-def _float_or_none(value: Any) -> Optional[float]:
-    if value is None:
-        return None
-    return float(value)
-
-
 def _normalize_text_spacing(text: str) -> str:
     return re.sub(r"\s+([.,;:!?])", r"\1", text).strip()
 
 
 def _normalize_concepts(concepts: Sequence[str]) -> List[str]:
-    seen: set[str] = set()
-    unique: List[str] = []
-    for concept in concepts:
-        normalized = re.sub(r"\s+", " ", (concept or "").strip().strip("?.!,:;")).strip()
-        if not normalized:
-            continue
-        key = normalized.casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(normalized)
-    return unique
+    return shared_normalize_concepts(concepts)
 
 
 def normalize_retrieved_documents(documents: Sequence[Dict[str, Any]]) -> List[EvidenceSource]:
-    normalized: List[EvidenceSource] = []
-    for doc in documents:
-        normalized.append(
-            {
-                "content": (doc.get("content") or doc.get("text") or "").strip(),
-                "source": doc.get("source") or doc.get("document_name") or "Unknown source",
-                "pageNumber": (
-                    doc.get("pageNumber")
-                    or doc.get("page")
-                    or doc.get("page_start")
-                    or doc.get("pageStart")
-                    or "Unknown page"
-                ),
-                "score": _float_or_none(
-                    doc.get("score") or doc.get("relevance_score") or doc.get("rrf_score")
-                ),
-                "fileId": doc.get("fileId") or doc.get("fileid"),
-                "chunkId": doc.get("chunkId") or doc.get("chunkid"),
-            }
-        )
-    return normalized
+    return shared_build_raw_sources(documents)
 
 
 def build_raw_sources(documents: Sequence[Dict[str, Any]]) -> List[EvidenceSource]:
-    return normalize_retrieved_documents(documents)
+    return shared_build_raw_sources(documents)
 
 
 def build_evidence_nodes(documents: Sequence[Dict[str, Any]]) -> List[EvidenceNode]:
-    normalized_docs = normalize_retrieved_documents(documents)
-    return [
-        {
-            "node_id": doc.get("chunkId") or f"evidence-node-{index}",
-            "file_id": doc.get("fileId"),
-            "chunk_id": doc.get("chunkId"),
-            "source": doc.get("source") or "Unknown source",
-            "page": doc.get("pageNumber") or "Unknown page",
-            "text": doc.get("content") or "",
-            "score": doc.get("score"),
-        }
-        for index, doc in enumerate(normalized_docs, start=1)
-    ]
+    return shared_build_evidence_nodes(documents)
 
 
 def _derive_covered_concepts(
@@ -149,23 +110,18 @@ def build_retrieval_evidence(
     required_concepts: Sequence[str] = (),
     covered_concepts: Sequence[str] = (),
 ) -> Dict[str, Any]:
-    required = _normalize_concepts(required_concepts)
-    covered = _derive_covered_concepts(documents, covered_concepts)
-    missing = [concept for concept in required if concept not in covered]
-    return {
-        "raw_sources": build_raw_sources(documents),
-        "evidence_nodes": build_evidence_nodes(documents),
-        "required_concepts": required,
-        "covered_concepts": covered,
-        "missing_concepts": missing,
-    }
+    return shared_build_retrieval_evidence(
+        documents,
+        required_concepts=required_concepts,
+        covered_concepts=_derive_covered_concepts(documents, covered_concepts),
+    )
 
 
 def _fallback_citation_payload(
     answer_text: str,
     source_nodes: Sequence[NodeWithScore],
 ) -> tuple[List[EvidenceCitation], List[Dict[str, Any]]]:
-    normalized_answer = _normalize_text_spacing(answer_text)
+    normalized_answer = _strip_inline_citations(answer_text)
     if not normalized_answer:
         return [], []
 
@@ -277,11 +233,230 @@ def _split_inline_citation_numbers(raw_numbers: str) -> List[int]:
 
 
 def _strip_inline_citations(text: str) -> str:
-    return _normalize_text_spacing(_INLINE_CITATION_PATTERN.sub("", text))
+    cleaned = _INLINE_CITATION_PATTERN.sub("", text.replace("\r\n", "\n"))
+    normalized_lines = [_normalize_text_spacing(line).rstrip() for line in cleaned.splitlines()]
+    return "\n".join(normalized_lines).strip()
 
 
-def _sentence_spans(answer_text: str) -> List[str]:
-    return [match.group(0) for match in _SENTENCE_SPAN_PATTERN.finditer(answer_text) if match.group(0)]
+def _normalize_markdown_answer(text: str) -> str:
+    if not text:
+        return ""
+
+    normalized_lines: List[str] = []
+    previous_blank = False
+    for raw_line in text.replace("\r\n", "\n").splitlines():
+        line = raw_line.rstrip()
+        if not line.strip():
+            if not previous_blank:
+                normalized_lines.append("")
+            previous_blank = True
+            continue
+        normalized_lines.append(line.strip())
+        previous_blank = False
+
+    return "\n".join(normalized_lines).strip()
+
+
+def _split_list_items(lines: Sequence[str]) -> List[str]:
+    items: List[List[str]] = []
+    current: List[str] = []
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            continue
+        if _LIST_ITEM_PATTERN.match(line):
+            if current:
+                items.append(current)
+            current = [line]
+            continue
+        if current:
+            current.append(line)
+            continue
+        current = [line]
+
+    if current:
+        items.append(current)
+
+    return ["\n".join(item).strip() for item in items if item]
+
+
+def _split_markdown_blocks(answer_text: str) -> List[str]:
+    normalized = _normalize_markdown_answer(answer_text)
+    if not normalized:
+        return []
+
+    blocks: List[str] = []
+    pending_headers: List[str] = []
+
+    for raw_block in _BLOCK_SEPARATOR_PATTERN.split(normalized):
+        block = raw_block.strip()
+        lines = [line.strip() for line in block.splitlines() if line.strip()]
+        header_lines: List[str] = []
+        while lines and _HEADER_PATTERN.match(lines[0]):
+            header_lines.append(lines.pop(0))
+
+        if header_lines and not lines:
+            pending_headers.extend(header_lines)
+            continue
+
+        if pending_headers:
+            header_lines = [*pending_headers, *header_lines]
+            pending_headers = []
+
+        if lines and all(_LIST_ITEM_PATTERN.match(line) for line in lines):
+            list_items = _split_list_items(lines)
+            for index, item in enumerate(list_items):
+                prefix = "\n".join(header_lines) if index == 0 and header_lines else ""
+                blocks.append(f"{prefix}\n{item}".strip() if prefix else item)
+            continue
+
+        combined_lines = [*header_lines, *lines]
+        if combined_lines:
+            blocks.append("\n".join(combined_lines).strip())
+
+    return blocks
+
+
+def _format_source_excerpt(text: str) -> str:
+    flattened = re.sub(r"\s+", " ", (text or "").strip())
+    if len(flattened) <= MAX_SOURCE_EXCERPT_CHARS:
+        return flattened or "[No excerpt available]"
+    return f"{flattened[:MAX_SOURCE_EXCERPT_CHARS].rstrip()}..."
+
+
+def _format_sources_for_prompt(source_nodes: Sequence[NodeWithScore]) -> str:
+    if not source_nodes:
+        return "[No grounded sources available]"
+
+    formatted_sources: List[str] = []
+    for index, source_node in enumerate(source_nodes, start=1):
+        metadata = source_node.node.metadata or {}
+        formatted_sources.append(
+            "\n".join(
+                [
+                    f"[{index}] {metadata.get('source') or 'Unknown source'} | page {metadata.get('page') or 'Unknown page'} | chunk_id={metadata.get('chunk_id') or source_node.node.node_id or 'unknown'}",
+                    _format_source_excerpt(getattr(source_node.node, "text", "") or ""),
+                ]
+            )
+        )
+
+    return "\n\n".join(formatted_sources)
+
+
+def _build_markdown_synthesis_prompt(
+    question: str,
+    draft_answer: str,
+    source_nodes: Sequence[NodeWithScore],
+    *,
+    required_concepts: Sequence[str],
+    covered_concepts: Sequence[str],
+    missing_concepts: Sequence[str],
+    intent_type: str,
+) -> str:
+    coverage_summary = [
+        f"Required concepts: {', '.join(required_concepts) if required_concepts else '(none)'}",
+        f"Covered concepts: {', '.join(covered_concepts) if covered_concepts else '(none)'}",
+        f"Missing concepts: {', '.join(missing_concepts) if missing_concepts else '(none)'}",
+    ]
+    comparison_instruction = (
+        "If this is a comparison question, organize the answer around grounded similarities and differences."
+        if intent_type == "comparison"
+        else "Use the structure that best explains the grounded answer."
+    )
+    limitation_instruction = (
+        "Include a short `## Limits` section that explicitly names the missing concepts and says the selected documents do not provide enough reliable information about them."
+        if missing_concepts
+        else "Do not add a limitations section unless the sources are genuinely incomplete."
+    )
+
+    return "\n".join(
+        [
+            "Rewrite the grounded answer into a fuller English Markdown response.",
+            "",
+            "Rules:",
+            "- Use only the grounded draft answer and source excerpts below.",
+            "- Do not use external knowledge, guesses, or unsupported conclusions.",
+            "- Use Markdown headings and bullet lists when they improve clarity.",
+            "- Every factual paragraph or bullet item must end with one or more bracket citations like [1] or [1, 2].",
+            "- Only use citation numbers that appear in the provided source list.",
+            "- Keep citations inline. Do not add a references section or code fences.",
+            f"- {comparison_instruction}",
+            f"- {limitation_instruction}",
+            "",
+            "Question:",
+            question.strip(),
+            "",
+            "Grounded draft answer:",
+            draft_answer.strip() or "(empty grounded draft answer)",
+            "",
+            "Coverage context:",
+            *coverage_summary,
+            "",
+            "Available citation sources:",
+            _format_sources_for_prompt(source_nodes),
+        ]
+    )
+
+
+async def synthesize_markdown_answer(
+    question: str,
+    draft_answer: str,
+    source_nodes: Sequence[NodeWithScore],
+    *,
+    required_concepts: Sequence[str] = (),
+    covered_concepts: Sequence[str] = (),
+    missing_concepts: Sequence[str] = (),
+    intent_type: str = "single",
+) -> str:
+    if not draft_answer.strip():
+        return ""
+
+    prompt = _build_markdown_synthesis_prompt(
+        question,
+        draft_answer,
+        source_nodes,
+        required_concepts=required_concepts,
+        covered_concepts=covered_concepts,
+        missing_concepts=missing_concepts,
+        intent_type=intent_type,
+    )
+    answer = await generate_text_completion(
+        prompt,
+        operation_name="Citation evidence markdown synthesis",
+        system_prompt=(
+            "You are a grounded RAG answer writer. "
+            "Return English Markdown only, with inline bracket citations that match the provided source numbers."
+        ),
+        temperature=0.0,
+    )
+    return _normalize_markdown_answer(answer)
+
+
+def _build_default_citation_suffix(source_nodes: Sequence[NodeWithScore], *, limit: int = 2) -> str:
+    if not source_nodes:
+        return ""
+    count = min(len(source_nodes), max(1, limit))
+    joined_numbers = ", ".join(str(index) for index in range(1, count + 1))
+    return f" [{joined_numbers}]"
+
+
+def _ensure_missing_concept_section(
+    answer_text: str,
+    missing_concepts: Sequence[str],
+    source_nodes: Sequence[NodeWithScore],
+) -> str:
+    disclaimer = _build_missing_concept_disclaimer(missing_concepts)
+    if not disclaimer:
+        return answer_text
+
+    if disclaimer.casefold() in _strip_inline_citations(answer_text).casefold():
+        return answer_text
+
+    cited_disclaimer = f"{disclaimer}{_build_default_citation_suffix(source_nodes)}".rstrip()
+    if not answer_text.strip():
+        return f"## Limits\n{cited_disclaimer}".strip()
+    return f"{answer_text.rstrip()}\n\n## Limits\n{cited_disclaimer}".strip()
 
 
 def build_answer_with_citations(
@@ -291,11 +466,12 @@ def build_answer_with_citations(
     if not answer_text:
         return "", [], []
 
+    normalized_answer = _normalize_markdown_answer(answer_text)
     content_segments: List[Dict[str, Any]] = []
     citations: List[EvidenceCitation] = []
     seen_chunks: set[str] = set()
 
-    for raw_segment in _sentence_spans(answer_text):
+    for raw_segment in _split_markdown_blocks(normalized_answer):
         segment_text = _strip_inline_citations(raw_segment)
         source_references = []
         seen_segment_chunks: set[str] = set()
@@ -323,9 +499,8 @@ def build_answer_with_citations(
                 }
             )
 
-    clean_answer = _strip_inline_citations(answer_text)
     answer_with_citations = [{"content_segments": content_segments}] if content_segments else []
-    return clean_answer, citations, answer_with_citations
+    return normalized_answer, citations, answer_with_citations
 
 
 def _build_synthesis_question(
@@ -424,17 +599,27 @@ async def generate_citation_evidence(
 
     synthesis_question = _build_synthesis_question(question, intent_type, required, covered, missing)
     response = await asyncio.to_thread(_run_citation_query, synthesis_question, normalized_docs)
+    grounded_draft = _normalize_markdown_answer(response.response or "")
+    try:
+        synthesized_answer = await synthesize_markdown_answer(
+            question,
+            grounded_draft,
+            response.source_nodes,
+            required_concepts=required,
+            covered_concepts=covered,
+            missing_concepts=missing,
+            intent_type=intent_type,
+        )
+    except Exception as err:
+        logger.warning("[CitationEvidence] markdown synthesis fallback to citation query draft: %s", err)
+        synthesized_answer = grounded_draft
+
     answer_text, citations, answer_with_citations = build_answer_with_citations(
-        response.response or "",
+        _ensure_missing_concept_section(synthesized_answer or grounded_draft, missing, response.source_nodes),
         response.source_nodes,
     )
     if answer_text and not answer_with_citations:
         citations, answer_with_citations = _fallback_citation_payload(answer_text, response.source_nodes)
-
-    if missing:
-        disclaimer = _build_missing_concept_disclaimer(missing)
-        if disclaimer and disclaimer.casefold() not in answer_text.casefold():
-            answer_text = f"{answer_text}\n\n{disclaimer}".strip()
 
     coverage_status = "partial" if missing else "complete"
     logger.info(

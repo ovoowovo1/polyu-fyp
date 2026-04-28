@@ -44,6 +44,7 @@ class JwtUtilsTests(unittest.TestCase):
             jwt_utils.get_current_user(None)
 
         self.assertEqual(ctx.exception.status_code, 401)
+        self.assertEqual(ctx.exception.detail["error"], "Authorization header missing")
 
     def test_get_current_user_rejects_invalid_token(self):
         creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="bad")
@@ -52,6 +53,7 @@ class JwtUtilsTests(unittest.TestCase):
                 jwt_utils.get_current_user(creds)
 
         self.assertEqual(ctx.exception.status_code, 401)
+        self.assertEqual(ctx.exception.detail["error"], "Invalid or expired token")
 
     def test_get_current_user_rejects_missing_subject(self):
         creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="good")
@@ -60,6 +62,7 @@ class JwtUtilsTests(unittest.TestCase):
                 jwt_utils.get_current_user(creds)
 
         self.assertEqual(ctx.exception.status_code, 401)
+        self.assertEqual(ctx.exception.detail["error"], "Invalid token payload")
 
     def test_get_current_user_returns_normalized_payload(self):
         creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="good")

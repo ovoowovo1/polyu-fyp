@@ -21,6 +21,7 @@ class SseApiTests(unittest.IsolatedAsyncioTestCase):
             await sse.sse_progress(_FakeRequest([False]), "")
 
         self.assertEqual(ctx.exception.status_code, 400)
+        self.assertEqual(ctx.exception.detail["error"], "clientId is required")
 
     async def test_progress_streams_queue_data_and_cleans_up(self):
         queue = asyncio.Queue()

@@ -16,9 +16,11 @@ class QueryStreamRouteTests(unittest.TestCase):
     def test_query_stream_route_validates_payload(self):
         missing_question = self.client.post("/query-stream", json={"question": "   ", "selectedFileIds": ["file-1"]})
         self.assertEqual(missing_question.status_code, 400)
+        self.assertEqual(missing_question.json()["detail"]["error"], "Please provide a query question")
 
         missing_files = self.client.post("/query-stream", json={"question": "hello", "selectedFileIds": []})
         self.assertEqual(missing_files.status_code, 400)
+        self.assertEqual(missing_files.json()["detail"]["error"], "Please select at least one document for retrieval")
 
     def test_query_stream_route_returns_streaming_response(self):
         async def fake_stream(question, selected_file_ids):

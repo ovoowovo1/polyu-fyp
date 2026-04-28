@@ -85,7 +85,7 @@ class TtsApiTests(unittest.TestCase):
     def test_tts_route_rejects_empty_text(self):
         response = self.client.post("/tts", json={"text": "  "})
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["detail"], "Text must not be empty.")
+        self.assertEqual(response.json()["detail"]["error"], "Text must not be empty.")
 
     def test_tts_route_returns_audio_bytes(self):
         with patch("app.routers.tts.with_llm_retry_sync", return_value=(b"audio", "audio/mpeg")):
@@ -94,4 +94,21 @@ class TtsApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b"audio")
         self.assertEqual(response.headers["content-type"], "audio/mpeg")
+
+    def test_tts_route_wraps_unexpected_failure(self):
+        with patch("app.routers.tts.with_llm_retry_sync", side_effect=RuntimeError("boom")):
+            response = self.client.post("/tts", json={"text": "Hello"})
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json()["detail"]["error"], "TTS generation failed.")
+
+    def test_tts_route_passes_through_http_exception(self):
+        with patch(
+            "app.routers.tts.with_llm_retry_sync",
+            side_effect=tts.HTTPException(status_code=429, detail={"error": "rate limited"}),
+        ):
+            response = self.client.post("/tts", json={"text": "Hello"})
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.json()["detail"]["error"], "rate limited")
 

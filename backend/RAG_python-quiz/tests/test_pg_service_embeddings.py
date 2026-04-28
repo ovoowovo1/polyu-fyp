@@ -60,10 +60,10 @@ class PgServiceEmbeddingColumnTests(unittest.TestCase):
             captured["rows"] = rows
             captured["template"] = template
 
-        with patch("app.services.pg_service.get_settings", return_value=make_settings("embedding_v2")), patch(
-            "app.services.pg_service._get_conn",
+        with patch("app.services.pg_shared.get_settings", return_value=make_settings("embedding_v2")), patch(
+            "app.services.pg_retrieval_service._get_conn",
             return_value=conn,
-        ), patch("app.services.pg_service.psycopg2.extras.execute_values", side_effect=fake_execute_values):
+        ), patch("app.services.pg_retrieval_service.psycopg2.extras.execute_values", side_effect=fake_execute_values):
             result = pg_service.create_graph_from_document(
                 {"hash": "hash", "name": "doc.pdf", "size": 12, "mimetype": "application/pdf"},
                 [{"text": "chunk text", "metadata": {"pageNumber": 2}, "embedding": [0.1, 0.2]}],
@@ -89,8 +89,8 @@ class PgServiceEmbeddingColumnTests(unittest.TestCase):
         )
         conn = FakeConnection(cursor)
 
-        with patch("app.services.pg_service.get_settings", return_value=make_settings("embedding_v2")), patch(
-            "app.services.pg_service._get_conn",
+        with patch("app.services.pg_shared.get_settings", return_value=make_settings("embedding_v2")), patch(
+            "app.services.pg_retrieval_service._get_conn",
             return_value=conn,
         ):
             rows = pg_service.retrieve_graph_context([0.1, 0.2], k=5, selected_file_ids=["file-1"])
@@ -104,7 +104,7 @@ class PgServiceEmbeddingColumnTests(unittest.TestCase):
         cursor = FakeCursor(fetchall_result=[])
         conn = FakeConnection(cursor)
 
-        with patch("app.services.pg_service._get_conn", return_value=conn):
+        with patch("app.services.pg_retrieval_service._get_conn", return_value=conn):
             pg_service.retrieve_graph_context([0.1], embedding_column="embedding")
 
         sql = cursor.executed[0][0]
@@ -121,8 +121,8 @@ class PgServiceEmbeddingColumnTests(unittest.TestCase):
             captured["rows"] = rows
             captured["template"] = template
 
-        with patch("app.services.pg_service._get_conn", return_value=conn), patch(
-            "app.services.pg_service.psycopg2.extras.execute_values",
+        with patch("app.services.pg_retrieval_service._get_conn", return_value=conn), patch(
+            "app.services.pg_retrieval_service.psycopg2.extras.execute_values",
             side_effect=fake_execute_values,
         ):
             pg_service.create_graph_from_document(
@@ -150,8 +150,8 @@ class PgServiceEmbeddingColumnTests(unittest.TestCase):
             captured["sql"] = sql
             captured["rows"] = rows
 
-        with patch("app.services.pg_service._get_conn", return_value=conn), patch(
-            "app.services.pg_service.psycopg2.extras.execute_values",
+        with patch("app.services.pg_retrieval_service._get_conn", return_value=conn), patch(
+            "app.services.pg_retrieval_service.psycopg2.extras.execute_values",
             side_effect=fake_execute_values,
         ):
             updated = pg_service.update_chunk_embeddings(

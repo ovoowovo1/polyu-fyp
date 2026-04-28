@@ -65,6 +65,7 @@ class UploadApiTests(unittest.TestCase):
         self.assertEqual(payload["status"], "success")
         self.assertEqual(payload["summary"], {"total": 2, "succeeded": 2, "failed": 0})
         self.assertFalse(payload["results"][1]["isNew"])
+        self.assertEqual(payload["data"]["status"], "success")
         finished_event = mock_progress.await_args_list[-1].args[1]
         self.assertEqual(finished_event["type"], "finished")
         self.assertEqual(finished_event["status"], "success")
@@ -131,19 +132,20 @@ class UploadApiTests(unittest.TestCase):
     def test_upload_multiple_rejects_missing_files(self):
         response = self.client.post("/upload-multiple")
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["detail"]["error"], "Please provide at least one file.")
+        self.assertEqual(response.json()["error"], "Please provide at least one file.")
 
     def test_upload_link_success_and_error_paths(self):
         with patch("app.routers.upload.ingest_website", AsyncMock(return_value={"fileId": "site-1"})):
             response = self.client.post("/upload-link", json={"url": " https://example.com "})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["result"]["fileId"], "site-1")
+        self.assertEqual(response.json()["data"]["fileId"], "site-1")
 
         missing = self.client.post("/upload-link", json={"url": "   "})
         self.assertEqual(missing.status_code, 400)
-        self.assertEqual(missing.json()["detail"]["error"], "url is required")
+        self.assertEqual(missing.json()["error"], "url is required")
 
         with patch("app.routers.upload.ingest_website", AsyncMock(side_effect=RuntimeError("crawl failed"))):
             failed = self.client.post("/upload-link", json={"url": "https://example.com"})
         self.assertEqual(failed.status_code, 500)
-        self.assertEqual(failed.json()["detail"]["error"], "Failed to upload link.")
+        self.assertEqual(failed.json()["error"], "Failed to upload link.")

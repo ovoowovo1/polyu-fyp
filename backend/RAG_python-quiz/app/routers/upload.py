@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.logger import get_logger
+from app.routers.service_helpers import error_detail, run_async_service, success_payload
 from app.services.document_service import ingest_document, ingest_website
 from app.services.progress_bus import publish_progress
 from app.utils.ingest_errors import DocumentIngestError, EmbeddingProviderError
@@ -37,12 +38,11 @@ def _build_failure_result(filename: str, error: Exception) -> Dict[str, Any]:
     elif isinstance(error, DocumentIngestError):
         error_payload = error.to_dict()
     else:
-        wrapped = DocumentIngestError(
+        error_payload = DocumentIngestError(
             code="INGEST_FAILED",
             message="Unexpected ingest failure.",
             details=str(error),
-        )
-        error_payload = wrapped.to_dict()
+        ).to_dict()
 
     return {
         "filename": filename,
@@ -52,14 +52,10 @@ def _build_failure_result(filename: str, error: Exception) -> Dict[str, Any]:
     }
 
 
-def _summarize_results(results: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _summarize_results(results: List[Dict[str, Any]]) -> Dict[str, int]:
     succeeded = sum(1 for result in results if result["status"] == "success")
     failed = len(results) - succeeded
-    return {
-        "total": len(results),
-        "succeeded": succeeded,
-        "failed": failed,
-    }
+    return {"total": len(results), "succeeded": succeeded, "failed": failed}
 
 
 def _batch_status(summary: Dict[str, int]) -> str:
@@ -78,6 +74,41 @@ def _http_status_for_batch(batch_status: str) -> int:
     return 502
 
 
+def _progress_payload(
+    *,
+    event_type: str,
+    done: int | None = None,
+    total: int | None = None,
+    current_file: str | None = None,
+    last_file_status: str | None = None,
+    extra: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    payload = {
+        "type": event_type,
+        "done": done,
+        "total": total,
+        "currentFile": current_file,
+        "lastFileStatus": last_file_status,
+    }
+    if extra:
+        payload.update(extra)
+    return payload
+
+
+def _upload_batch_payload(results: List[Dict[str, Any]]) -> dict[str, Any]:
+    summary = _summarize_results(results)
+    status = _batch_status(summary)
+    return success_payload(
+        f"Upload batch {status}",
+        {
+            "status": status,
+            "summary": summary,
+            "results": results,
+        },
+        include_root_fields=True,
+    )
+
+
 @router.post("/upload-multiple")
 async def upload_multiple(
     files: Optional[List[UploadFile]] = File(default=None),
@@ -85,57 +116,64 @@ async def upload_multiple(
     class_id: Optional[str] = Query(default=None),
 ):
     if not files:
-        raise HTTPException(status_code=400, detail={"error": "Please provide at least one file."})
+        return JSONResponse(
+            status_code=400,
+            content=error_detail("Please provide at least one file."),
+        )
 
     results: List[Dict[str, Any]] = []
     total_files = len(files)
     await publish_progress(
         clientId,
-        {
-            "type": "progress",
-            "done": 0,
-            "total": total_files,
-            "currentFile": None,
-            "lastFileStatus": None,
-        },
+        _progress_payload(event_type="progress", done=0, total=total_files),
     )
 
     for index, upload_file in enumerate(files, start=1):
+        filename = upload_file.filename or f"file-{index}"
         try:
             data = await upload_file.read()
             payload = await ingest_document(
-                filename=upload_file.filename or f"file-{index}",
+                filename=filename,
                 content=data,
                 size=upload_file.size or len(data),
                 mimetype=upload_file.content_type or "application/octet-stream",
                 class_id=class_id,
             )
-            result = _build_success_result(upload_file.filename or f"file-{index}", payload)
-        except Exception as err:
-            logger.warning("[Upload] File failed: %s - %s", upload_file.filename, err)
-            result = _build_failure_result(upload_file.filename or f"file-{index}", err)
+            result = _build_success_result(filename, payload)
+        except Exception as error:
+            logger.warning("[Upload] File failed filename=%s error=%s", filename, error)
+            result = _build_failure_result(filename, error)
 
         results.append(result)
         await publish_progress(
             clientId,
-            {
-                "type": "progress",
-                "done": index,
-                "total": total_files,
-                "currentFile": result["filename"],
-                "lastFileStatus": result["status"],
-            },
+            _progress_payload(
+                event_type="progress",
+                done=index,
+                total=total_files,
+                current_file=result["filename"],
+                last_file_status=result["status"],
+            ),
         )
 
-    summary = _summarize_results(results)
-    status = _batch_status(summary)
-    payload = {
-        "status": status,
-        "summary": summary,
-        "results": results,
-    }
-    await publish_progress(clientId, {"type": "finished", **payload})
-    return JSONResponse(status_code=_http_status_for_batch(status), content=payload)
+    payload = _upload_batch_payload(results)
+    await publish_progress(
+        clientId,
+        _progress_payload(
+            event_type="finished",
+            extra={
+                "message": payload["message"],
+                "status": payload["status"],
+                "summary": payload["summary"],
+                "results": payload["results"],
+                "data": payload["data"],
+            },
+        ),
+    )
+    return JSONResponse(
+        status_code=_http_status_for_batch(payload["status"]),
+        content=payload,
+    )
 
 
 class UploadLinkBody(BaseModel):
@@ -148,18 +186,31 @@ async def upload_link(
     clientId: Optional[str] = Query(default=None),
     class_id: Optional[str] = Query(default=None),
 ):
-    try:
-        if not body or not body.url or not body.url.strip():
-            raise HTTPException(status_code=400, detail={"error": "url is required"})
-
-        url = body.url.strip()
-        result = await ingest_website(url=url, client_id=clientId, class_id=class_id)
-        return {"message": "Link upload completed.", "result": result}
-    except HTTPException:
-        raise
-    except Exception as err:
-        logger.error("Upload link error: %s", err, exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail={"error": "Failed to upload link.", "details": str(err)},
+    if not body.url or not body.url.strip():
+        return JSONResponse(
+            status_code=400,
+            content=error_detail("url is required"),
         )
+
+    try:
+        result = await run_async_service(
+            ingest_website,
+            url=body.url.strip(),
+            client_id=clientId,
+            class_id=class_id,
+            logger=logger,
+            log_message="Upload link error: %s",
+            fallback_detail=lambda error: error_detail(
+                "Failed to upload link.",
+                details=str(error),
+            ),
+        )
+    except HTTPException as error:
+        return JSONResponse(status_code=error.status_code, content=error.detail)
+
+    return success_payload(
+        "Link upload completed.",
+        result,
+        include_root_fields=False,
+        result=result,
+    )

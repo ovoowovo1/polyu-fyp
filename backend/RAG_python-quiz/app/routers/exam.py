@@ -9,6 +9,7 @@ from pydantic import BaseModel, model_validator
 from app.agents.graph import run_exam_generation, run_exam_generation_with_pdf
 from app.agents.schemas import ExamGenerationRequest, ExamGenerationResponse, ExamQuestion
 from app.logger import get_logger
+from app.routers.service_helpers import message_contains, require_teacher, run_service
 from app.services import pg_service
 from app.services.ai_service import ai_generate_exam_overall_comment, ai_grade_answer
 from app.utils.jwt_utils import get_current_user
@@ -60,16 +61,16 @@ class GradeSubmissionRequest(BaseModel):
 
 PDF_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static", "pdfs")
 IMAGES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static", "images")
-
+_MISSING_ZH = "".join(map(chr, [0x4E0D, 0x5B58, 0x5728]))
+_NOT_RELEASED_ZH_TRAD = "".join(map(chr, [0x5C1A, 0x672A, 0x767C, 0x5E03]))
+_NOT_RELEASED_ZH_SIMP = "".join(map(chr, [0x5C1A, 0x672A, 0x53D1, 0x5E03]))
+_ALREADY_SUBMITTED_ZH = "".join(map(chr, [0x5DF2, 0x63D0, 0x4EA4]))
+_ALREADY_COMPLETED_ZH = "".join(map(chr, [0x5DF2, 0x5B8C, 0x6210]))
 
 def _looks_like_missing(error: Exception) -> bool:
     message = str(error)
     lowered = message.lower()
-    return "not found" in lowered or "\u4e0d\u5b58\u5728" in message
-
-def _require_teacher(user: dict, detail: str):
-    if not pg_service.is_user_teacher(user["user_id"]):
-        raise HTTPException(status_code=403, detail=detail)
+    return "not found" in lowered or "does not exist" in lowered or _MISSING_ZH in message
 
 
 @router.post("/generate", response_model=ExamGenerationResponse)
@@ -176,155 +177,178 @@ async def get_question_types():
 @router.get("/list")
 async def get_exams_list(class_id: str = Query(..., description="Class ID"), user: dict = Depends(get_current_user)):
     del user
-    try:
-        exams = await asyncio.to_thread(pg_service.get_exams_by_class, class_id)
-        return {"message": "Fetched exams", "exams": exams, "total": len(exams)}
-    except Exception as error:
-        logger.error("[ExamAPI] get exams failed: %s", error)
-        raise HTTPException(status_code=500, detail=f"Get exams failed: {error}") from error
+    exams = await run_service(
+        pg_service.get_exams_by_class,
+        class_id,
+        logger=logger,
+        log_message="[ExamAPI] get exams failed: %s",
+        fallback_detail=lambda error: f"Get exams failed: {error}",
+    )
+    return {"message": "Fetched exams", "exams": exams, "total": len(exams)}
 
 
 @router.get("/{exam_id}")
 async def get_exam(exam_id: str, include_answers: bool = Query(True, description="Include answers for teachers"), user: dict = Depends(get_current_user)):
-    try:
-        is_teacher = pg_service.is_user_teacher(user["user_id"])
-        if not is_teacher:
-            include_answers = False
-        exam_payload = await asyncio.to_thread(pg_service.get_exam_by_id, exam_id, user["user_id"], include_answers)
-        return {"message": "Fetched exam", "exam": exam_payload}
-    except PermissionError as error:
-        raise HTTPException(status_code=403, detail=str(error)) from error
-    except Exception as error:
-        if isinstance(error, RuntimeError) and _looks_like_missing(error):
-            raise HTTPException(status_code=404, detail="Exam not found") from error
-        logger.error("[ExamAPI] get exam failed: %s", error)
-        raise HTTPException(status_code=500, detail=f"Get exam failed: {error}") from error
+    is_teacher = pg_service.is_user_teacher(user["user_id"])
+    if not is_teacher:
+        include_answers = False
+    exam_payload = await run_service(
+        pg_service.get_exam_by_id,
+        exam_id,
+        user["user_id"],
+        include_answers,
+        error_rules=[
+            (lambda error: isinstance(error, PermissionError), 403, lambda error: str(error)),
+            (_looks_like_missing, 404, "Exam not found"),
+        ],
+        logger=logger,
+        log_message="[ExamAPI] get exam failed: %s",
+        fallback_detail=lambda error: f"Get exam failed: {error}",
+    )
+    return {"message": "Fetched exam", "exam": exam_payload}
 
 
 @router.put("/{exam_id}")
 async def update_exam(exam_id: str, request: ExamUpdateRequest = Body(...), user: dict = Depends(get_current_user)):
-    _require_teacher(user, "Only teachers can update exams")
-    try:
-        result = await asyncio.to_thread(
-            pg_service.update_exam,
-            exam_id,
-            request.title,
-            request.description,
-            request.questions,
-            request.difficulty,
-            request.duration_minutes,
-            request.file_ids,
-            request.start_at,
-            request.end_at,
-        )
-        return {"message": "Exam updated", "exam": result}
-    except Exception as error:
-        if isinstance(error, RuntimeError) and _looks_like_missing(error):
-            raise HTTPException(status_code=404, detail="Exam not found") from error
-        logger.error("[ExamAPI] update exam failed: %s", error)
-        raise HTTPException(status_code=500, detail=f"Update exam failed: {error}") from error
+    require_teacher(user, "Only teachers can update exams", pg_service.is_user_teacher)
+    result = await run_service(
+        pg_service.update_exam,
+        exam_id,
+        request.title,
+        request.description,
+        request.questions,
+        request.difficulty,
+        request.duration_minutes,
+        request.file_ids,
+        request.start_at,
+        request.end_at,
+        error_rules=[(_looks_like_missing, 404, "Exam not found")],
+        logger=logger,
+        log_message="[ExamAPI] update exam failed: %s",
+        fallback_detail=lambda error: f"Update exam failed: {error}",
+    )
+    return {"message": "Exam updated", "exam": result}
 
 
 @router.delete("/{exam_id}")
 async def delete_exam(exam_id: str, user: dict = Depends(get_current_user)):
-    _require_teacher(user, "Only teachers can delete exams")
-    try:
-        return await asyncio.to_thread(pg_service.delete_exam, exam_id)
-    except Exception as error:
-        if isinstance(error, RuntimeError) and _looks_like_missing(error):
-            raise HTTPException(status_code=404, detail="Exam not found") from error
-        logger.error("[ExamAPI] delete exam failed: %s", error)
-        raise HTTPException(status_code=500, detail=f"Delete exam failed: {error}") from error
+    require_teacher(user, "Only teachers can delete exams", pg_service.is_user_teacher)
+    return await run_service(
+        pg_service.delete_exam,
+        exam_id,
+        error_rules=[(_looks_like_missing, 404, "Exam not found")],
+        logger=logger,
+        log_message="[ExamAPI] delete exam failed: %s",
+        fallback_detail=lambda error: f"Delete exam failed: {error}",
+    )
 
 
 @router.post("/{exam_id}/publish")
 async def publish_exam(exam_id: str, is_published: bool = Body(True, embed=True), user: dict = Depends(get_current_user)):
-    _require_teacher(user, "Only teachers can publish exams")
-    try:
-        result = await asyncio.to_thread(pg_service.publish_exam, exam_id, is_published)
-        action = "published" if is_published else "unpublished"
-        return {"message": f"Exam {action}", "exam": result}
-    except Exception as error:
-        if isinstance(error, RuntimeError) and _looks_like_missing(error):
-            raise HTTPException(status_code=404, detail="Exam not found") from error
-        logger.error("[ExamAPI] publish exam failed: %s", error)
-        raise HTTPException(status_code=500, detail=f"Publish exam failed: {error}") from error
+    require_teacher(user, "Only teachers can publish exams", pg_service.is_user_teacher)
+    result = await run_service(
+        pg_service.publish_exam,
+        exam_id,
+        is_published,
+        error_rules=[(_looks_like_missing, 404, "Exam not found")],
+        logger=logger,
+        log_message="[ExamAPI] publish exam failed: %s",
+        fallback_detail=lambda error: f"Publish exam failed: {error}",
+    )
+    action = "published" if is_published else "unpublished"
+    return {"message": f"Exam {action}", "exam": result}
 
 
 @router.post("/{exam_id}/start", response_model=ExamStartResponse)
 async def start_exam(exam_id: str, user: dict = Depends(get_current_user)):
-    try:
-        return await asyncio.to_thread(pg_service.start_exam_submission, exam_id, user["user_id"])
-    except Exception as error:
-        message = str(error)
-        if "not yet been released" in message.lower() or "\u5c1a\u672a\u767c\u5e03" in message:
-            raise HTTPException(status_code=403, detail="The exam has not yet been released.") from error
-        if isinstance(error, RuntimeError) and _looks_like_missing(error):
-            raise HTTPException(status_code=404, detail="Exam not found") from error
-        logger.error("[ExamAPI] start exam failed: %s", error)
-        raise HTTPException(status_code=500, detail=f"Start exam failed: {error}") from error
+    return await run_service(
+        pg_service.start_exam_submission,
+        exam_id,
+        user["user_id"],
+        error_rules=[
+            (
+                message_contains("not yet been released", "not released", _NOT_RELEASED_ZH_TRAD, _NOT_RELEASED_ZH_SIMP),
+                403,
+                "The exam has not yet been released.",
+            ),
+            (_looks_like_missing, 404, "Exam not found"),
+        ],
+        logger=logger,
+        log_message="[ExamAPI] start exam failed: %s",
+        fallback_detail=lambda error: f"Start exam failed: {error}",
+    )
 
 
 @router.post("/submission/{submission_id}/submit")
 async def submit_exam(submission_id: str, request: ExamSubmitRequest = Body(...), user: dict = Depends(get_current_user)):
     del user
-    try:
-        result = await asyncio.to_thread(pg_service.submit_exam, submission_id, request.answers, request.time_spent_seconds)
-        return {"message": "Exam submitted", "submission": result}
-    except Exception as error:
-        message = str(error)
-        if "already submitted" in message.lower() or "\u5df2\u63d0\u4ea4" in message or "\u5df2\u5b8c\u6210" in message:
-            raise HTTPException(status_code=400, detail="The submission has already been submitted.") from error
-        if isinstance(error, RuntimeError) and _looks_like_missing(error):
-            raise HTTPException(status_code=404, detail="Submission not found") from error
-        logger.error("[ExamAPI] submit exam failed: %s", error)
-        raise HTTPException(status_code=500, detail=f"Submit exam failed: {error}") from error
+    result = await run_service(
+        pg_service.submit_exam,
+        submission_id,
+        request.answers,
+        request.time_spent_seconds,
+        error_rules=[
+            (
+                message_contains("already submitted", "already completed", _ALREADY_SUBMITTED_ZH, _ALREADY_COMPLETED_ZH),
+                400,
+                "The submission has already been submitted.",
+            ),
+            (_looks_like_missing, 404, "Submission not found"),
+        ],
+        logger=logger,
+        log_message="[ExamAPI] submit exam failed: %s",
+        fallback_detail=lambda error: f"Submit exam failed: {error}",
+    )
+    return {"message": "Exam submitted", "submission": result}
 
 
 @router.get("/{exam_id}/my-submissions")
 async def get_my_exam_submissions(exam_id: str, user: dict = Depends(get_current_user)):
-    try:
-        submissions = await asyncio.to_thread(pg_service.get_student_exam_submissions, exam_id, user["user_id"])
-        return {"submissions": submissions, "total": len(submissions)}
-    except Exception as error:
-        logger.error("[ExamAPI] get my submissions failed: %s", error)
-        raise HTTPException(status_code=500, detail=f"Get submissions failed: {error}") from error
+    submissions = await run_service(
+        pg_service.get_student_exam_submissions,
+        exam_id,
+        user["user_id"],
+        logger=logger,
+        log_message="[ExamAPI] get my submissions failed: %s",
+        fallback_detail=lambda error: f"Get submissions failed: {error}",
+    )
+    return {"submissions": submissions, "total": len(submissions)}
 
 
 @router.get("/{exam_id}/submissions")
 async def get_exam_submissions(exam_id: str, user: dict = Depends(get_current_user)):
-    _require_teacher(user, "Only teachers can view all submissions")
-    try:
-        submissions = await asyncio.to_thread(pg_service.get_exam_submissions, exam_id)
-        return {"submissions": submissions, "total": len(submissions)}
-    except Exception as error:
-        logger.error("[ExamAPI] get submissions failed: %s", error)
-        raise HTTPException(status_code=500, detail=f"Get submissions failed: {error}") from error
+    require_teacher(user, "Only teachers can view all submissions", pg_service.is_user_teacher)
+    submissions = await run_service(
+        pg_service.get_exam_submissions,
+        exam_id,
+        logger=logger,
+        log_message="[ExamAPI] get submissions failed: %s",
+        fallback_detail=lambda error: f"Get submissions failed: {error}",
+    )
+    return {"submissions": submissions, "total": len(submissions)}
 
 
 @router.put("/submission/{submission_id}/grade")
 async def grade_submission(submission_id: str, request: GradeSubmissionRequest = Body(...), user: dict = Depends(get_current_user)):
-    _require_teacher(user, "Only teachers can grade exams")
-    try:
-        answers_grades = [grade.model_dump() for grade in request.answers_grades] if request.answers_grades else None
-        result = await asyncio.to_thread(
-            pg_service.grade_exam_submission,
-            submission_id,
-            user["user_id"],
-            answers_grades,
-            request.teacher_comment,
-        )
-        return {"message": "Submission graded", "submission": result}
-    except Exception as error:
-        if isinstance(error, RuntimeError) and _looks_like_missing(error):
-            raise HTTPException(status_code=404, detail="Submission not found") from error
-        logger.error("[ExamAPI] grade submission failed: %s", error)
-        raise HTTPException(status_code=500, detail=f"Grade submission failed: {error}") from error
+    require_teacher(user, "Only teachers can grade exams", pg_service.is_user_teacher)
+    answers_grades = [grade.model_dump() for grade in request.answers_grades] if request.answers_grades else None
+    result = await run_service(
+        pg_service.grade_exam_submission,
+        submission_id,
+        user["user_id"],
+        answers_grades,
+        request.teacher_comment,
+        error_rules=[(_looks_like_missing, 404, "Submission not found")],
+        logger=logger,
+        log_message="[ExamAPI] grade submission failed: %s",
+        fallback_detail=lambda error: f"Grade submission failed: {error}",
+    )
+    return {"message": "Submission graded", "submission": result}
 
 
 @router.post("/submission/{submission_id}/ai-grade")
 async def ai_grade_submission(submission_id: str, user: dict = Depends(get_current_user)):
-    _require_teacher(user, "Only teachers can trigger AI grading")
+    require_teacher(user, "Only teachers can trigger AI grading", pg_service.is_user_teacher)
     try:
         submission = await asyncio.to_thread(pg_service.get_submission_with_answers, submission_id)
         if not submission:

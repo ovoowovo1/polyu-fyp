@@ -1,58 +1,42 @@
-﻿# -*- coding: utf-8 -*-
-"""
-Visualizer Node - ?”??蝭暺?The Coder嚗?雿輻 Python 隞?Ⅳ嚗atplotlib嚗??絞閮?銵?撠??銵券?????嚗蝙??Gemini ???? API
-"""
+# -*- coding: utf-8 -*-
+"""Visualizer node for generating chart and illustration assets for exam questions."""
 
-from typing import Dict, Any, List, Optional, Literal
-import os
-import uuid
-import json
 import asyncio
 import base64
+import json
+import os
+import uuid
+from typing import Any, Dict, List, Literal, Optional
 
 from app.agents.schemas import ExamQuestion
 from app.config import get_settings
-from app.utils.api_key_manager import (
-    with_llm_retry_async,
-    get_llm_client,
-    get_default_llm_model_name
-)
-from app.utils.openai_response import extract_chat_completion_text
 from app.logger import get_logger
+from app.utils.api_key_manager import get_default_llm_model_name, get_llm_client, with_llm_retry_async
+from app.utils.openai_response import extract_chat_completion_text
 
 logger = get_logger(__name__)
 
-# 璅∪??蔭
-CLASSIFICATION_MODEL = "google/gemini-2.5-flash-lite"  # ??隞餃?雿輻頛?璅∪?
-IMAGE_GENERATION_MODEL = "google/gemini-3.1-flash-image-preview"  # ????璅∪?
+# Model configuration
+CLASSIFICATION_MODEL = "google/gemini-2.5-flash-lite"
+IMAGE_GENERATION_MODEL = "google/gemini-3.1-flash-image-preview"
 
-# ??摮?桅?
-IMAGES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "static", "images")
-
-# 蝣箔??桅?摮
+# Generated image directory
+IMAGES_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+    "static",
+    "images",
+)
 os.makedirs(IMAGES_DIR, exist_ok=True)
 
 
 # ============================================================================
-# ??憿???
+# Image type classification
 # ============================================================================
 
-async def _classify_image_type(
-    api_key: str,
-    description: str
-) -> Literal["chart", "illustration"]:
-    """
-    雿輻 AI ?????膩?舐絞閮?銵券??舫??”??
-    
-    Args:
-        api_key: Gemini API key
-        description: ???膩
-    
-    Returns:
-        "chart" - 蝯梯??”嚗???蝺?????嚗?        "illustration" - ??銵剁?蝷箸???敹萄???蝔?蝑?
-    """
+async def _classify_image_type(api_key: str, description: str) -> Literal["chart", "illustration"]:
+    """Classify an image description as a chart or a non-chart illustration."""
     client = get_llm_client(api_key)
-    
+
     prompt = f"""Please analyze the following image description and determine if it is a "Statistical Chart" or a "Non-Chart Illustration".
 
 ## Image Description
@@ -63,58 +47,54 @@ async def _classify_image_type(
 - **illustration** (Non-Chart Illustration): Diagram, concept map, flowchart, architecture diagram, scene illustration, object icon, etc., that requires drawing specific graphics.
 """
 
-    # 雿輻 JSON schema ?批?踵??澆?
     classification_schema = {
         "type": "object",
         "properties": {
             "image_type": {
                 "type": "string",
                 "enum": ["chart", "illustration"],
-                "description": "Image Type: chart (Statistical Chart) or illustration (Non-Chart Illustration)"
+                "description": "Image Type: chart (Statistical Chart) or illustration (Non-Chart Illustration)",
             }
         },
         "required": ["image_type"],
-        "additionalProperties": False
+        "additionalProperties": False,
     }
 
     response = await asyncio.to_thread(
         client.chat.completions.create,
         model=CLASSIFICATION_MODEL,
-        messages=[
-            {"role": "user", "content": prompt}
-        ],
+        messages=[{"role": "user", "content": prompt}],
         response_format={
             "type": "json_schema",
             "json_schema": {
                 "name": "image_classification",
                 "strict": True,
-                "schema": classification_schema
-            }
-        }
+                "schema": classification_schema,
+            },
+        },
     )
-    
-    result_text = extract_chat_completion_text(response, "??憿???")
-    
+
+    result_text = extract_chat_completion_text(response, "Visualizer image type classification")
+
     try:
         result = json.loads(result_text)
         image_type = result.get("image_type", "illustration")
         if image_type in ["chart", "illustration"]:
             return image_type
     except json.JSONDecodeError:
-        logger.warning(f"[Visualizer] JSON 閫??憭望?嚗蝙?券?閮剖? {result_text}")
-    
+        logger.warning("[Visualizer] Failed to parse image classification JSON: %s", result_text)
+
     return "illustration"
 
 
 # ============================================================================
-# Matplotlib ?”??
+# Matplotlib chart generation
 # ============================================================================
 
 def _build_code_generation_prompt(image_description: str, output_path: str) -> str:
-    """撱箸? Matplotlib 隞?Ⅳ????prompt"""
-    # 撠楝敺葉????頧??箸迤??嚗??蝚虫葡頧儔??
+    """Build the prompt used to request executable Matplotlib code."""
     safe_path = output_path.replace("\\", "/")
-    
+
     return f"""You are a Python data visualization expert. Please generate executable Matplotlib Python code based on the following chart description.
 
 ## Chart Description
@@ -153,53 +133,42 @@ Now please generate the complete code based on the chart description:"""
 
 
 def _execute_matplotlib_code(code: str) -> bool:
-    """
-    ?瑁? Matplotlib 隞?Ⅳ
-    
-    瘜冽?嚗銝?陛??撖衣???啣?銝哨?
-    ?府雿輻?游??函?瘝拳?瑁??啣???    """
+    """Execute generated Matplotlib code in a minimal globals scope."""
     try:
-        # ?楊霅舀炎?亥?瘜?        compile(code, '<string>', 'exec')
-        
-        # 皞??瑁??啣?
+        compile(code, "<string>", "exec")
         exec_globals = {
             "__builtins__": __builtins__,
         }
-        
-        # ?瑁?隞?Ⅳ
         exec(code, exec_globals)
         return True
     except SyntaxError as e:
-        logger.error(f"[Visualizer] 隞?Ⅳ隤??航炊: {e}")
-        logger.debug(f"[Visualizer] ??隞?Ⅳ:\n{code}")
+        logger.error("[Visualizer] Matplotlib code has invalid syntax: %s", e)
+        logger.debug("[Visualizer] Generated Matplotlib code:\n%s", code)
         return False
     except Exception as e:
-        logger.error(f"[Visualizer] 隞?Ⅳ?瑁?憭望?: {e}")
-        logger.debug(f"[Visualizer] ??隞?Ⅳ:\n{code}")
+        logger.error("[Visualizer] Matplotlib code execution failed: %s", e)
+        logger.debug("[Visualizer] Generated Matplotlib code:\n%s", code)
         return False
 
 
 async def _generate_chart_code(api_key: str, description: str, output_path: str, model_name: str) -> str:
-    """雿輻 Gemini ?? Matplotlib 隞?Ⅳ"""
+    """Generate Matplotlib code from the LLM."""
     client = get_llm_client(api_key)
     prompt = _build_code_generation_prompt(description, output_path)
-    
+
     response = await asyncio.to_thread(
         client.chat.completions.create,
         model=model_name,
-        messages=[
-            {"role": "user", "content": prompt}
-        ]
+        messages=[{"role": "user", "content": prompt}],
     )
-    
-    code = extract_chat_completion_text(response, "Matplotlib ?”蝔???")
-    
-    # Strip markdown code fences if the model returned them.
+
+    code = extract_chat_completion_text(response, "Visualizer Matplotlib code generation")
+
     if "```python" in code:
         code = code.split("```python")[1].split("```")[0]
     elif "```" in code:
         code = code.split("```")[1].split("```")[0]
-    
+
     return code.strip()
 
 
@@ -207,45 +176,25 @@ async def _generate_chart_with_matplotlib(
     api_key: str,
     description: str,
     output_path: str,
-    model_name: str
+    model_name: str,
 ) -> bool:
-    """
-    雿輻 Matplotlib ???”
-    
-    Returns:
-        bool: ?臬?????”
-    """
-    # ?? Matplotlib 隞?Ⅳ
+    """Generate a chart image with Matplotlib and return whether it succeeded."""
     code = await _generate_chart_code(api_key, description, output_path, model_name)
-    
-    logger.debug(f"[Visualizer] ????Matplotlib 隞?Ⅳ:\n{code[:500]}...")
-    
-    # ?瑁?隞?Ⅳ???”
+
+    logger.debug("[Visualizer] Generated Matplotlib code preview:\n%s...", code[:500])
     success = await asyncio.to_thread(_execute_matplotlib_code, code)
-    
+
     return success and os.path.exists(output_path)
 
 
 # ============================================================================
-# Gemini ???? API
+# Direct image generation
 # ============================================================================
 
-async def _transform_to_image_prompt(
-    api_key: str,
-    description: str
-) -> str:
-    """
-    雿輻 AI 撠???餈啗????拙????? API ??prompt
-    
-    Args:
-        api_key: Gemini API key
-        description: ?????膩
-    
-    Returns:
-        ?芸?敺????? prompt
-    """
+async def _transform_to_image_prompt(api_key: str, description: str) -> str:
+    """Convert the description into a better prompt for image generation."""
     client = get_llm_client(api_key)
-    
+
     prompt = f"""You are a professional AI image generation prompt engineer. Please convert the following image description into a prompt suitable for an AI image generation model.
 
 ## Original Description
@@ -263,45 +212,27 @@ Output only the converted prompt, without any explanation or extra text."""
 
     response = await asyncio.to_thread(
         client.chat.completions.create,
-        model=CLASSIFICATION_MODEL,  # 雿輻頛?璅∪?
-        messages=[
-            {"role": "user", "content": prompt}
-        ]
+        model=CLASSIFICATION_MODEL,
+        messages=[{"role": "user", "content": prompt}],
     )
-    
+
     result = extract_chat_completion_text(response, "Image prompt transformation").strip()
     return result if result else description
 
 
-async def _generate_image_with_gemini(
-    api_key: str,
-    description: str,
-    output_path: str
-) -> bool:
-    """
-    雿輻 OpenRouter ???? API ????
-    
-    Args:
-        api_key: API key
-        description: ???膩嚗??????芸???prompt嚗?        output_path: 頛詨頝臬?
-    
-    Returns:
-        bool: ?臬??????
-    """
+async def _generate_image_with_gemini(api_key: str, description: str, output_path: str) -> bool:
+    """Generate an illustration image and write it to disk."""
     client = get_llm_client(api_key)
-    
-    # ???膩頧???? prompt
+
     optimized_prompt = await _transform_to_image_prompt(api_key, description)
-    logger.debug(f"[Visualizer] ?芸?敺??? prompt: {optimized_prompt[:200]}...")
-    
+    logger.debug("[Visualizer] Optimized image prompt: %s...", optimized_prompt[:200])
+
     try:
         response = await asyncio.to_thread(
             client.chat.completions.create,
             model=IMAGE_GENERATION_MODEL,
-            messages=[
-                {"role": "user", "content": optimized_prompt}
-            ],
-            modalities=["image", "text"]
+            messages=[{"role": "user", "content": optimized_prompt}],
+            modalities=["image", "text"],
         )
 
         if not response or not getattr(response, "choices", None):
@@ -333,7 +264,7 @@ async def _generate_image_with_gemini(
             try:
                 image_bytes = base64.b64decode(encoded)
             except Exception as e:
-                logger.warning(f"[Visualizer] Failed to decode OpenRouter image base64: {e}")
+                logger.warning("[Visualizer] Failed to decode OpenRouter image base64: %s", e)
                 continue
 
             if not image_bytes:
@@ -343,140 +274,111 @@ async def _generate_image_with_gemini(
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             with open(output_path, "wb") as f:
                 f.write(image_bytes)
-            logger.info(f"[Visualizer] OpenRouter ??????: {output_path}")
+            logger.info("[Visualizer] OpenRouter image saved to: %s", output_path)
             return True
 
         logger.warning("[Visualizer] OpenRouter response did not contain any usable image data")
         return False
-        
+
     except Exception as e:
-        logger.error(f"[Visualizer] OpenRouter ????憭望?: {e}")
+        logger.error("[Visualizer] OpenRouter image generation failed: %s", e)
         return False
 
 
 # ============================================================================
-# 銝餉??????摩
+# Question image orchestration
 # ============================================================================
 
-async def _generate_single_image(
-    question: ExamQuestion,
-    exam_id: str,
-    model_name: str
-) -> Optional[str]:
-    """
-    ?箏???桃?????    
-    瘚?嚗?    1. AI ?? image_description嚗?銵?vs ??銵剁?
-    2. ?寞???蝯??豢????孵?嚗?       - chart: 雿輻 Matplotlib ??蝯梯??”
-       - illustration: 雿輻 Gemini ???? API
-    """
+async def _generate_single_image(question: ExamQuestion, exam_id: str, model_name: str) -> Optional[str]:
+    """Generate one image asset for a question when an image description exists."""
     if not question.image_description:
         return None
-    
-    # Build a stable filename for the generated image asset.
+
     image_filename = f"{exam_id}_{question.question_id}.png"
     output_path = os.path.join(IMAGES_DIR, image_filename)
     relative_path = f"/static/images/{image_filename}"
-    
-    logger.info(f"[Visualizer] ??????: {question.question_id}")
-    
+
+    logger.info("[Visualizer] Starting image generation for question_id=%s", question.question_id)
+
     try:
-        # Step 1: AI ????憿?
         image_type = await with_llm_retry_async(
-            "??憿???",
+            "Image type classification",
             _classify_image_type,
             question.image_description,
-            error_type=RuntimeError
+            error_type=RuntimeError,
         )
-        
-        logger.info(f"[Visualizer] ??憿???蝯?: {image_type}")
-        
+
+        logger.info("[Visualizer] Image type classified as: %s", image_type)
+
         success = False
-        
-        # Step 2: ?寞???蝯??豢????孵?
+
         if image_type == "chart":
-            # 雿輻 Matplotlib ??蝯梯??”
-            logger.info(f"[Visualizer] 雿輻 Matplotlib ???”")
+            logger.info("[Visualizer] Generating chart with Matplotlib")
             success = await with_llm_retry_async(
-                "Matplotlib ?”??",
+                "Matplotlib chart generation",
                 _generate_chart_with_matplotlib,
                 question.image_description,
                 output_path,
                 model_name,
-                error_type=RuntimeError
+                error_type=RuntimeError,
             )
         else:
-            # 雿輻 Gemini ???? API ????
-            logger.info(f"[Visualizer] 雿輻 Gemini ?? API ????")
+            logger.info("[Visualizer] Generating illustration with Gemini image API")
             success = await with_llm_retry_async(
-                "Gemini ????",
+                "Gemini image generation",
                 _generate_image_with_gemini,
                 question.image_description,
                 output_path,
-                error_type=RuntimeError
+                error_type=RuntimeError,
             )
-        
+
         if success and os.path.exists(output_path):
-            logger.info(f"[Visualizer] ??????: {relative_path}")
+            logger.info("[Visualizer] Image generated successfully: %s", relative_path)
             return relative_path
-        else:
-            logger.warning(f"[Visualizer] ????憭望???隞嗡?摮: {output_path}")
-            return None
-            
+
+        logger.warning("[Visualizer] Image generation did not produce a file: %s", output_path)
+        return None
+
     except Exception as e:
-        logger.error(f"[Visualizer] ??????隤? {e}")
+        logger.error("[Visualizer] Unexpected image generation failure: %s", e)
         return None
 
 
 async def visualizer_node(state: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Visualizer Node - ??憿??????    
-    ?舀?拍車???孵?嚗?    - 蝯梯??”嚗蝙??Matplotlib ??嚗???蝺?????嚗?    - ??銵冽???雿輻 Gemini ???? API嚗內????敹萄?蝑?
-    
-    頛詨 State:
-        - questions: 憿?”嚗??賣? image_description嚗?        - exam_id: ?岫 ID
-    
-    頛詨 State ?湔:
-        - questions: ?湔敺?憿?”嚗???image_path嚗?        - images: ??頝臬???
-    """
+    """Generate image assets for questions and store image paths back into state."""
     questions: List[ExamQuestion] = state.get("questions", [])
     exam_id = state.get("exam_id", "exam_unknown")
-    
-    # ?曉?閬?????憿
     questions_with_images = [q for q in questions if q.image_description]
-    
+
     if not questions_with_images:
         logger.info("[Visualizer] No questions require generated images")
         return {
             **state,
-            "images": {}
+            "images": {},
         }
-    
+
     logger.info("[Visualizer] Generating images for %s questions", len(questions_with_images))
-    
+
     settings = get_settings()
     model_name = settings.llm_model or "gemini-2.5-flash"
-    
-    # 靘?????
+
     images: Dict[str, str] = {}
     updated_questions: List[ExamQuestion] = []
-    
+
     for question in questions:
         if question.image_description:
-            # ????
             image_path = await _generate_single_image(question, exam_id, model_name)
-            
+
             if image_path:
-                # ?湔憿??image_path
                 question.image_path = image_path
                 images[question.question_id] = image_path
-        
+
         updated_questions.append(question)
-    
-    logger.info(f"[Visualizer] ????摰? - ??: {len(images)}/{len(questions_with_images)}")
-    
+
+    logger.info("[Visualizer] Image generation finished - success=%s/%s", len(images), len(questions_with_images))
+
     return {
         **state,
         "questions": updated_questions,
-        "images": images
+        "images": images,
     }
-

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.config import get_settings
 from app.logger import get_logger
+from app.routers.service_helpers import require_teacher, run_service
 from app.services import pg_service
 from app.services.ai_service import generate_quiz_feedback_text
 from app.utils.api_key_manager import get_llm_client, with_llm_retry_async
@@ -177,72 +178,77 @@ async def get_difficulties():
 
 @router.get("/list")
 async def get_all_quizzes(class_id: str = Query(...)):
-    try:
-        quizzes = await asyncio.to_thread(pg_service.get_quizzes_by_class, class_id)
-        return {"message": "Fetched quizzes", "quizzes": quizzes, "total": len(quizzes)}
-    except Exception as error:
-        logger.error("Get quizzes failed: %s", error)
-        raise HTTPException(status_code=500, detail=f"Get quizzes failed: {error}") from error
+    quizzes = await run_service(
+        pg_service.get_quizzes_by_class,
+        class_id,
+        logger=logger,
+        log_message="Get quizzes failed: %s",
+        fallback_detail=lambda error: f"Get quizzes failed: {error}",
+    )
+    return {"message": "Fetched quizzes", "quizzes": quizzes, "total": len(quizzes)}
 
 
 @router.get("/{quiz_id}")
 async def get_quiz(quiz_id: str):
-    try:
-        quiz_payload = await asyncio.to_thread(pg_service.get_quiz_by_id, quiz_id)
-        return {"message": "Fetched quiz", "quiz": quiz_payload}
-    except Exception as error:
-        if _looks_like_quiz_not_found(error):
-            raise HTTPException(status_code=404, detail="Quiz not found") from error
-        raise HTTPException(status_code=500, detail=f"Get quiz failed: {error}") from error
+    quiz_payload = await run_service(
+        pg_service.get_quiz_by_id,
+        quiz_id,
+        error_rules=[(_looks_like_quiz_not_found, 404, "Quiz not found")],
+        logger=logger,
+        log_message="Get quiz failed: %s",
+        fallback_detail=lambda error: f"Get quiz failed: {error}",
+    )
+    return {"message": "Fetched quiz", "quiz": quiz_payload}
 
 
 @router.post("/")
 async def create_quiz(payload: dict = Body(...)):
-    try:
-        questions = payload.get("questions") or []
-        if not isinstance(questions, list) or not questions:
-            raise HTTPException(status_code=400, detail="questions must be a non-empty list")
-        file_ids = payload.get("file_ids") or []
-        saved = await asyncio.to_thread(pg_service.save_quiz, {"questions": questions}, file_ids, payload.get("name"), payload.get("class_id"))
-        return {"message": "Quiz created", "quiz": saved}
-    except HTTPException:
-        raise
-    except Exception as error:
-        logger.error("Create quiz failed: %s", error)
-        raise HTTPException(status_code=500, detail=f"Create quiz failed: {error}") from error
+    questions = payload.get("questions") or []
+    if not isinstance(questions, list) or not questions:
+        raise HTTPException(status_code=400, detail="questions must be a non-empty list")
+    file_ids = payload.get("file_ids") or []
+    saved = await run_service(
+        pg_service.save_quiz,
+        {"questions": questions},
+        file_ids,
+        payload.get("name"),
+        payload.get("class_id"),
+        logger=logger,
+        log_message="Create quiz failed: %s",
+        fallback_detail=lambda error: f"Create quiz failed: {error}",
+    )
+    return {"message": "Quiz created", "quiz": saved}
 
 
 @router.put("/{quiz_id}")
 async def update_quiz(quiz_id: str, payload: dict = Body(...)):
-    try:
-        questions = payload.get("questions")
-        if questions is None:
-            raise HTTPException(status_code=400, detail="questions is required")
-        updated = await asyncio.to_thread(
-            pg_service.update_quiz,
-            quiz_id,
-            {"questions": questions},
-            payload.get("name"),
-            payload.get("file_ids") if "file_ids" in payload else None,
-        )
-        return {"message": "Quiz updated", "quiz": updated}
-    except HTTPException:
-        raise
-    except Exception as error:
-        logger.error("Update quiz failed: %s", error)
-        if _looks_like_quiz_not_found(error):
-            raise HTTPException(status_code=404, detail="Quiz not found") from error
-        raise HTTPException(status_code=500, detail=f"Update quiz failed: {error}") from error
+    questions = payload.get("questions")
+    if questions is None:
+        raise HTTPException(status_code=400, detail="questions is required")
+    updated = await run_service(
+        pg_service.update_quiz,
+        quiz_id,
+        {"questions": questions},
+        payload.get("name"),
+        payload.get("file_ids") if "file_ids" in payload else None,
+        error_rules=[(_looks_like_quiz_not_found, 404, "Quiz not found")],
+        logger=logger,
+        log_message="Update quiz failed: %s",
+        fallback_detail=lambda error: f"Update quiz failed: {error}",
+    )
+    return {"message": "Quiz updated", "quiz": updated}
 
 
 @router.delete("/{quiz_id}")
 async def delete_quiz(quiz_id: str):
-    try:
-        return await asyncio.to_thread(pg_service.delete_quiz, quiz_id)
-    except Exception as error:
-        if _looks_like_quiz_not_found(error):
-            raise HTTPException(status_code=404, detail="Quiz not found") from error
-        raise HTTPException(status_code=500, detail=f"Delete quiz failed: {error}") from error
+    return await run_service(
+        pg_service.delete_quiz,
+        quiz_id,
+        error_rules=[(_looks_like_quiz_not_found, 404, "Quiz not found")],
+        logger=logger,
+        log_message="Delete quiz failed: %s",
+        fallback_detail=lambda error: f"Delete quiz failed: {error}",
+    )
 
 
 @router.post("/{quiz_id}/submit")
@@ -251,34 +257,43 @@ async def submit_quiz(quiz_id: str, payload: dict = Body(...), user: dict = Depe
     total_questions = payload.get("total_questions")
     if score is None or total_questions is None:
         raise HTTPException(status_code=400, detail="Score and total_questions required")
-    try:
-        return await asyncio.to_thread(pg_service.submit_quiz_result, quiz_id, user["user_id"], payload.get("answers", []), score, total_questions)
-    except Exception as error:
-        logger.error("Submit quiz failed: %s", error)
-        raise HTTPException(status_code=500, detail=str(error)) from error
+    return await run_service(
+        pg_service.submit_quiz_result,
+        quiz_id,
+        user["user_id"],
+        payload.get("answers", []),
+        score,
+        total_questions,
+        logger=logger,
+        log_message="Submit quiz failed: %s",
+        fallback_detail=lambda error: str(error),
+    )
 
 
 @router.get("/{quiz_id}/results")
 async def get_quiz_results(quiz_id: str, user: dict = Depends(get_current_user)):
-    try:
-        if not pg_service.is_user_teacher(user["user_id"]):
-            raise HTTPException(status_code=403, detail="Only teachers can view all results")
-        return {"results": await asyncio.to_thread(pg_service.get_quiz_submissions, quiz_id)}
-    except HTTPException:
-        raise
-    except Exception as error:
-        logger.error("Get quiz results failed: %s", error)
-        raise HTTPException(status_code=500, detail=str(error)) from error
+    require_teacher(user, "Only teachers can view all results", pg_service.is_user_teacher)
+    results = await run_service(
+        pg_service.get_quiz_submissions,
+        quiz_id,
+        logger=logger,
+        log_message="Get quiz results failed: %s",
+        fallback_detail=lambda error: str(error),
+    )
+    return {"results": results}
 
 
 @router.get("/{quiz_id}/my-result")
 async def get_my_quiz_result(quiz_id: str, user: dict = Depends(get_current_user)):
-    try:
-        result = await asyncio.to_thread(pg_service.get_student_quiz_submission, quiz_id, user["user_id"])
-        return {"submission": result} if result else {"submission": None}
-    except Exception as error:
-        logger.error("Get my result failed: %s", error)
-        raise HTTPException(status_code=500, detail=str(error)) from error
+    result = await run_service(
+        pg_service.get_student_quiz_submission,
+        quiz_id,
+        user["user_id"],
+        logger=logger,
+        log_message="Get my result failed: %s",
+        fallback_detail=lambda error: str(error),
+    )
+    return {"submission": result} if result else {"submission": None}
 
 
 @router.post("/{quiz_id}/feedback")

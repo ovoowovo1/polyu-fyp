@@ -8,6 +8,7 @@ from jose import jwt, JWTError
 
 from app.config import get_settings
 from app.logger import get_logger
+from app.routers.service_helpers import error_detail
 
 logger = get_logger(__name__)
 
@@ -97,16 +98,16 @@ def get_current_user(
     FastAPI 依賴：驗證 Authorization Bearer token 並回傳 payload。
     """
     if not credentials or not credentials.credentials:
-        raise HTTPException(status_code=401, detail={"error": "Authorization header missing"})
+        raise HTTPException(status_code=401, detail=error_detail("Authorization header missing"))
 
     token = credentials.credentials
     payload = verify_token(token)
     if not payload:
-        raise HTTPException(status_code=401, detail={"error": "Invalid or expired token"})
+        raise HTTPException(status_code=401, detail=error_detail("Invalid or expired token"))
 
     user_id = payload.get("sub")
     if not user_id:
-        raise HTTPException(status_code=401, detail={"error": "Invalid token payload"})
+        raise HTTPException(status_code=401, detail=error_detail("Invalid token payload"))
 
     return {
         "token": token,
@@ -114,4 +115,3 @@ def get_current_user(
         "email": payload.get("username"),
         "payload": payload,
     }
-

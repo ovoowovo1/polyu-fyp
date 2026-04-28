@@ -18,6 +18,8 @@ class AuthApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["session_token"], "token")
+        self.assertEqual(response.json()["message"], "Login successful")
+        self.assertEqual(response.json()["data"]["session_token"], "token")
 
     def test_login_invalid_credentials_returns_401(self):
         with patch("app.routers.auth.auth_login", side_effect=ValueError("bad credentials")):
@@ -53,6 +55,7 @@ class AuthApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["message"], "ok")
+        self.assertEqual(response.json()["data"]["message"], "ok")
 
     def test_register_value_error_returns_400(self):
         with patch("app.routers.auth.auth_register", side_effect=ValueError("duplicate")):
@@ -87,10 +90,11 @@ class AuthApiTests(unittest.TestCase):
             response = self.client.get("/auth/verify", headers={"Authorization": "Bearer valid-token"})
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.json(),
-            {"valid": True, "user_id": "user-1", "email": "u@example.com"},
-        )
+        self.assertTrue(response.json()["valid"])
+        self.assertEqual(response.json()["user_id"], "user-1")
+        self.assertEqual(response.json()["email"], "u@example.com")
+        self.assertEqual(response.json()["message"], "Token verified")
+        self.assertTrue(response.json()["data"]["valid"])
 
     def test_verify_rejects_invalid_token(self):
         with patch("app.routers.auth.verify_token", return_value=None):
@@ -98,3 +102,9 @@ class AuthApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["detail"]["error"], "Invalid or expired token")
+
+    def test_verify_rejects_missing_authorization_header(self):
+        response = self.client.get("/auth/verify")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"]["error"], "Authorization header missing")

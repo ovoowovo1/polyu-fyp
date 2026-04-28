@@ -7,6 +7,7 @@ from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Sequenc
 from app.logger import get_logger
 from app.services import adaptive_retrieval_service, citation_evidence_service
 from app.services.ai_service import generate_structured_json
+from app.services.rag_shared import build_raw_sources, normalize_doc, safe_emit
 
 logger = get_logger(__name__)
 
@@ -62,26 +63,7 @@ def _make_event(message: str, data: Any = None, event_type: str = "progress") ->
 
 
 def _normalize_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
-    page = (
-        doc.get("page")
-        or doc.get("pageNumber")
-        or doc.get("page_start")
-        or doc.get("pageStart")
-        or "Unknown page"
-    )
-    source = doc.get("source") or doc.get("document_name") or "Unknown source"
-    text = doc.get("content") or doc.get("text") or ""
-    file_id = doc.get("fileId") or doc.get("fileid")
-    chunk_id = doc.get("chunkId") or doc.get("chunkid")
-    return {
-        **doc,
-        "text": text,
-        "content": text,
-        "source": source,
-        "page": page,
-        "fileId": file_id,
-        "chunkId": chunk_id,
-    }
+    return normalize_doc(doc)
 
 
 def _reciprocal_rank_fusion(results_list: List[List[Dict[str, Any]]], k: int = RRF_K) -> List[Dict[str, Any]]:
@@ -103,7 +85,7 @@ def _format_docs_for_answer(documents: Sequence[Dict[str, Any]]) -> tuple[str, L
     chunk_ids: List[str] = []
 
     for idx, raw_doc in enumerate(documents, start=1):
-        doc = _normalize_doc(raw_doc)
+        doc = normalize_doc(raw_doc)
         content = doc.get("text") or ""
         formatted_context.append(
             "\n".join(
@@ -184,7 +166,7 @@ def _build_result_payload(
     answer_with_citations: List[Dict[str, Any]],
     raw_sources: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    sources = citation_evidence_service.build_raw_sources(raw_sources)
+    sources = build_raw_sources(raw_sources)
 
     return {
         "type": "result",
@@ -198,7 +180,7 @@ def _build_result_payload(
 
 
 async def _safe_emit(callback: EventCallback, message: str, data: Any = None, event_type: str = "retrieval") -> None:
-    await callback(message, data, event_type)
+    await safe_emit(callback, message, data, event_type)
 
 
 async def route_question_node(state: AdaptiveRAGState, emit: EventCallback) -> AdaptiveRAGState:
