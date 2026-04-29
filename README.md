@@ -8,6 +8,12 @@ Modern educational assessment faces two recurring problems: manual feedback is t
 
 The platform is centered on the **Intelligent Exam Studio**, a workflow-driven environment for generating exams and quizzes from course materials. It uses RAG to retrieve evidence from uploaded documents, supports Bloom's Taxonomy-aware question generation, and keeps document management, classroom workflows, and assessment tools in one application.
 
+## Demo Video
+
+Watch the project demo video: [https://www.youtube.com/watch?v=HmWtOWc2jEk](https://www.youtube.com/watch?v=HmWtOWc2jEk)
+
+Related legacy project: [RAG_js](https://github.com/ovoowovo1/RAG_js) is an older RAG implementation built with JavaScript and a Neo4j database. It has fewer features than this maintained FYP platform, but may be useful for reference if you are interested.
+
 ## Key Capabilities
 
 - Grounded Q&A over teacher-provided course materials
@@ -34,9 +40,9 @@ The system follows a decoupled full-stack architecture: a React/Vite frontend co
 
 *Figure 3.2. Entity relationship design for users, classes, documents, and chunk-level storage used to support retrieval and source grounding.*
 
-![Figure 3.3: Hybrid Search Workflow combining Vector and Keyword Search using RRF](docs/images/readme/figure-3-3-hybrid-search-workflow.png)
+![Figure 3.3: Retrieval-Augmented Generation (RAG) System Workflow](docs/images/readme/figure-3-3-rag-workflow.png)
 
-*Figure 3.3. Hybrid retrieval pipeline that combines vector search and keyword search, then merges ranked results with Reciprocal Rank Fusion (RRF).*
+*Figure 3.3. RAG system pipeline demonstrating document ingestion, embedding generation, context retrieval, and AI model response generation.*
 
 ![Figure 3.4: Multi-Agent State Graph for Automated Exam Generation](docs/images/readme/figure-3-4-multi-agent-state-graph.png)
 
@@ -68,6 +74,10 @@ For a concise record of ongoing repository updates, see [docs/repository-updates
 ![Figure 4.3: Interactive Assessment with Pre-computed Rationale](docs/images/readme/figure-4-3-interactive-assessment.png)
 
 *Figure 4.3. Interactive assessment experience with pre-computed rationale and source-aware assistance inside the learning workspace.*
+
+![Figure 4.4: AI Exam Generator and PDF Export](docs/images/readme/figure-4-4-ai-exam-generator.png)
+
+*Figure 4.4. AI Exam Generator interface showing a successfully generated exam with question previews and a side-by-side view of the exported PDF exam paper.*
 
 ## Evaluation Highlights
 
