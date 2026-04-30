@@ -1,6 +1,6 @@
 # PolyU FYP Learning Platform
 
-This repository contains an educational assessment platform built for the PolyU FYP project. It combines Retrieval-Augmented Generation (RAG), a multi-agent exam-generation workflow, and a web-based teaching interface to help teachers manage materials, generate assessments, and support student learning with grounded AI outputs.
+This repository contains an educational assessment platform built for the PolyU FYP project. It combines Retrieval-Augmented Generation (RAG), a multi-agent exam-generation workflow, and both web and mobile teaching interfaces to help teachers manage materials, generate assessments, and support student learning with grounded AI outputs.
 
 ## Project Overview
 
@@ -30,7 +30,7 @@ Current repository implementation note:
 
 ## Architecture and Workflow
 
-The system follows a decoupled full-stack architecture: a React/Vite frontend communicates with a FastAPI backend, which coordinates retrieval, generation, grading, and storage services over PostgreSQL and model APIs.
+The system follows a decoupled full-stack architecture: React/Vite and Expo frontends communicate with a FastAPI backend, which coordinates retrieval, generation, grading, and storage services over PostgreSQL and model APIs.
 
 ![Figure 3.1: System Architecture Overview](docs/images/readme/figure-3-1-system-architecture.png)
 
@@ -79,6 +79,10 @@ For a concise record of ongoing repository updates, see [docs/repository-updates
 
 *Figure 4.4. AI Exam Generator interface showing a successfully generated exam with question previews and a side-by-side view of the exported PDF exam paper.*
 
+![Figure 4.5: Expo Mobile Workspace (Source, Chat, and Studio)](docs/images/readme/figure-4-5-expo-mobile-workspace.jpg)
+
+*Figure 4.5. Expo mobile workspace showing the Source, Chat, and Studio screens used for document selection, citation-aware assistance, and generated assessment management.*
+
 ## Evaluation Highlights
 
 The final report evaluated retrieval quality in both cross-lingual and monolingual settings. The main findings were:
@@ -99,11 +103,13 @@ These results support the design choice to use retrieval strategies selectively 
 |       |-- readme/
 |-- frontend/
 |   |-- vite-project/
+|   |-- expo-app/
 ```
 
 ## Tech Stack
 
-- Frontend: React 18, Vite, Ant Design, Redux Toolkit
+- Frontend (Web): React 18, Vite, Ant Design, Redux Toolkit
+- Frontend (Mobile): Expo, Expo Router, React Native
 - Backend: FastAPI, Pydantic Settings, LangChain, LangGraph
 - Database: PostgreSQL with vector-based retrieval support
 - Models and APIs: Gemini-family models and OpenAI-compatible embedding endpoints
@@ -144,7 +150,7 @@ Important notes:
 - PostgreSQL must be reachable before starting the API.
 - The application initializes its vector index on startup, so database connectivity is required during launch.
 
-## Frontend Setup
+## Web Frontend Setup
 
 From the repository root:
 
@@ -157,6 +163,35 @@ npm run dev
 
 The frontend uses `VITE_API_BASE_URL` to decide which backend base URL to call.
 
+## Expo App Setup
+
+From the repository root:
+
+```powershell
+cd frontend\expo-app
+npm install
+Copy-Item .env.example .env
+npm run start
+```
+
+Useful Expo commands:
+
+```powershell
+npm run android
+npm run ios
+npm run web
+npm run start:lan
+npm run start:tunnel
+```
+
+The Expo app uses `EXPO_PUBLIC_API_BASE_URL` to decide which backend base URL to call.
+
+Notes:
+
+- For the Android emulator, `.env.example` already shows the `10.0.2.2` backend URL pattern.
+- For a physical device, set `EXPO_PUBLIC_API_BASE_URL` to a reachable LAN IP such as `http://<your-lan-ip>:3000`.
+- The Expo app is an additional client for the same backend used by the web frontend.
+
 ## Local Development Workflow
 
 Run the backend first:
@@ -167,27 +202,47 @@ cd backend\RAG_python-quiz
 uvicorn main:app --host 0.0.0.0 --port 3000 --reload
 ```
 
-Then start the frontend in a separate terminal:
+Then start either frontend in a separate terminal.
+
+Web frontend:
 
 ```powershell
 cd frontend\vite-project
 npm run dev
 ```
 
+Expo app:
+
+```powershell
+cd frontend\expo-app
+npm run start
+```
+
 Default local URLs:
 
-- Frontend: `http://localhost:5173`
+- Web frontend: `http://localhost:5173`
+- Expo app: runs through the Expo dev server, emulator, simulator, Expo Go, or web mode
 - Backend: `http://localhost:3000`
+
+The backend can be shared by both frontends at the same time.
 
 ## Environment Variables
 
-### Frontend
+### Web Frontend
 
 The frontend example file is located at `frontend/vite-project/.env.example`.
 
 | Variable | Required | Description |
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | Yes | Base URL for the FastAPI backend, for example `http://localhost:3000`. |
+
+### Expo App
+
+The Expo app example file is located at `frontend/expo-app/.env.example`.
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `EXPO_PUBLIC_API_BASE_URL` | Yes | Base URL for the FastAPI backend, using a URL reachable from the emulator, simulator, or device. |
 
 ### Backend
 
@@ -243,12 +298,19 @@ python -m pytest -q
 
 Manual backend smoke and evaluation scripts must load provider credentials from `.env` or shell environment variables. Do not commit live API keys into backend test or evaluation files.
 
-### Frontend
+### Web Frontend
 
 ```powershell
 cd frontend\vite-project
 npm install
 npm run build
+```
+
+### Expo App
+
+```powershell
+cd frontend\expo-app
+npx tsc --noEmit
 ```
 
 ## API Areas
