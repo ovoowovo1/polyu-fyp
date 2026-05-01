@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.routers import quiz
+from app.services.exceptions import NotFoundError
 from app.utils.aqg import MultipleChoice
 from tests.support import FakeConnection, FakeCursor, build_app, with_auth
 
@@ -365,7 +366,7 @@ class QuizApiTests(unittest.TestCase):
         with patch("app.routers.quiz.pg_service.get_quiz_by_id", return_value={"id": "quiz-1"}):
             self.assertEqual(self.client.get("/quiz/quiz-1").status_code, 200)
 
-        with patch("app.routers.quiz.pg_service.get_quiz_by_id", side_effect=RuntimeError("Quiz not found")):
+        with patch("app.routers.quiz.pg_service.get_quiz_by_id", side_effect=NotFoundError("Quiz not found")):
             self.assertEqual(self.client.get("/quiz/quiz-1").status_code, 404)
 
         with patch("app.routers.quiz.pg_service.get_quiz_by_id", side_effect=RuntimeError("db")):
@@ -389,7 +390,7 @@ class QuizApiTests(unittest.TestCase):
 
         self.assertEqual(self.client.put("/quiz/quiz-1", json={}).status_code, 400)
 
-        with patch("app.routers.quiz.pg_service.update_quiz", side_effect=RuntimeError("Quiz not found")):
+        with patch("app.routers.quiz.pg_service.update_quiz", side_effect=NotFoundError("Quiz not found")):
             self.assertEqual(self.client.put("/quiz/quiz-1", json={"questions": []}).status_code, 404)
 
         with patch("app.routers.quiz.pg_service.update_quiz", side_effect=RuntimeError("db")):
@@ -398,7 +399,7 @@ class QuizApiTests(unittest.TestCase):
         with patch("app.routers.quiz.pg_service.delete_quiz", return_value={"message": "deleted"}):
             self.assertEqual(self.client.delete("/quiz/quiz-1").status_code, 200)
 
-        with patch("app.routers.quiz.pg_service.delete_quiz", side_effect=RuntimeError("Quiz not found")):
+        with patch("app.routers.quiz.pg_service.delete_quiz", side_effect=NotFoundError("Quiz not found")):
             self.assertEqual(self.client.delete("/quiz/quiz-1").status_code, 404)
 
         with patch("app.routers.quiz.pg_service.delete_quiz", side_effect=RuntimeError("db")):

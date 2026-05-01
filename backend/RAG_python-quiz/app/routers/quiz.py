@@ -34,12 +34,6 @@ class QuizGenerateResponse(BaseModel):
     was_summarized: bool
 
 
-def _looks_like_quiz_not_found(error: Exception) -> bool:
-    message = str(error)
-    lowered = message.lower()
-    return "not found" in lowered or any([ord(ch) > 127 for ch in message])
-
-
 def _merge_selected_levels(bloom_levels: Optional[List[BloomLevel]], difficulty: Optional[Difficulty]) -> List[BloomLevel]:
     selected_levels = list(dict.fromkeys(bloom_levels or []))
     if difficulty:
@@ -193,7 +187,6 @@ async def get_quiz(quiz_id: str):
     quiz_payload = await run_service(
         pg_service.get_quiz_by_id,
         quiz_id,
-        error_rules=[(_looks_like_quiz_not_found, 404, "Quiz not found")],
         logger=logger,
         log_message="Get quiz failed: %s",
         fallback_detail=lambda error: f"Get quiz failed: {error}",
@@ -231,7 +224,6 @@ async def update_quiz(quiz_id: str, payload: dict = Body(...)):
         {"questions": questions},
         payload.get("name"),
         payload.get("file_ids") if "file_ids" in payload else None,
-        error_rules=[(_looks_like_quiz_not_found, 404, "Quiz not found")],
         logger=logger,
         log_message="Update quiz failed: %s",
         fallback_detail=lambda error: f"Update quiz failed: {error}",
@@ -244,7 +236,6 @@ async def delete_quiz(quiz_id: str):
     return await run_service(
         pg_service.delete_quiz,
         quiz_id,
-        error_rules=[(_looks_like_quiz_not_found, 404, "Quiz not found")],
         logger=logger,
         log_message="Delete quiz failed: %s",
         fallback_detail=lambda error: f"Delete quiz failed: {error}",

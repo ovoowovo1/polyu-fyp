@@ -9,7 +9,7 @@ from pydantic import BaseModel, model_validator
 from app.agents.graph import run_exam_generation, run_exam_generation_with_pdf
 from app.agents.schemas import ExamGenerationRequest, ExamGenerationResponse, ExamQuestion
 from app.logger import get_logger
-from app.routers.service_helpers import message_contains, require_teacher, run_service
+from app.routers.service_helpers import require_teacher, run_service
 from app.services import pg_service
 from app.services.ai_service import ai_generate_exam_overall_comment, ai_grade_answer
 from app.utils.jwt_utils import get_current_user
@@ -61,17 +61,6 @@ class GradeSubmissionRequest(BaseModel):
 
 PDF_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static", "pdfs")
 IMAGES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static", "images")
-_MISSING_ZH = "".join(map(chr, [0x4E0D, 0x5B58, 0x5728]))
-_NOT_RELEASED_ZH_TRAD = "".join(map(chr, [0x5C1A, 0x672A, 0x767C, 0x5E03]))
-_NOT_RELEASED_ZH_SIMP = "".join(map(chr, [0x5C1A, 0x672A, 0x53D1, 0x5E03]))
-_ALREADY_SUBMITTED_ZH = "".join(map(chr, [0x5DF2, 0x63D0, 0x4EA4]))
-_ALREADY_COMPLETED_ZH = "".join(map(chr, [0x5DF2, 0x5B8C, 0x6210]))
-
-def _looks_like_missing(error: Exception) -> bool:
-    message = str(error)
-    lowered = message.lower()
-    return "not found" in lowered or "does not exist" in lowered or _MISSING_ZH in message
-
 
 @router.post("/generate", response_model=ExamGenerationResponse)
 async def generate_exam(request: ExamGenerationRequest = Body(...), user: dict = Depends(get_current_user)):
@@ -197,10 +186,6 @@ async def get_exam(exam_id: str, include_answers: bool = Query(True, description
         exam_id,
         user["user_id"],
         include_answers,
-        error_rules=[
-            (lambda error: isinstance(error, PermissionError), 403, lambda error: str(error)),
-            (_looks_like_missing, 404, "Exam not found"),
-        ],
         logger=logger,
         log_message="[ExamAPI] get exam failed: %s",
         fallback_detail=lambda error: f"Get exam failed: {error}",
@@ -222,7 +207,6 @@ async def update_exam(exam_id: str, request: ExamUpdateRequest = Body(...), user
         request.file_ids,
         request.start_at,
         request.end_at,
-        error_rules=[(_looks_like_missing, 404, "Exam not found")],
         logger=logger,
         log_message="[ExamAPI] update exam failed: %s",
         fallback_detail=lambda error: f"Update exam failed: {error}",
@@ -236,7 +220,6 @@ async def delete_exam(exam_id: str, user: dict = Depends(get_current_user)):
     return await run_service(
         pg_service.delete_exam,
         exam_id,
-        error_rules=[(_looks_like_missing, 404, "Exam not found")],
         logger=logger,
         log_message="[ExamAPI] delete exam failed: %s",
         fallback_detail=lambda error: f"Delete exam failed: {error}",
@@ -250,7 +233,6 @@ async def publish_exam(exam_id: str, is_published: bool = Body(True, embed=True)
         pg_service.publish_exam,
         exam_id,
         is_published,
-        error_rules=[(_looks_like_missing, 404, "Exam not found")],
         logger=logger,
         log_message="[ExamAPI] publish exam failed: %s",
         fallback_detail=lambda error: f"Publish exam failed: {error}",
@@ -265,14 +247,6 @@ async def start_exam(exam_id: str, user: dict = Depends(get_current_user)):
         pg_service.start_exam_submission,
         exam_id,
         user["user_id"],
-        error_rules=[
-            (
-                message_contains("not yet been released", "not released", _NOT_RELEASED_ZH_TRAD, _NOT_RELEASED_ZH_SIMP),
-                403,
-                "The exam has not yet been released.",
-            ),
-            (_looks_like_missing, 404, "Exam not found"),
-        ],
         logger=logger,
         log_message="[ExamAPI] start exam failed: %s",
         fallback_detail=lambda error: f"Start exam failed: {error}",
@@ -287,14 +261,6 @@ async def submit_exam(submission_id: str, request: ExamSubmitRequest = Body(...)
         submission_id,
         request.answers,
         request.time_spent_seconds,
-        error_rules=[
-            (
-                message_contains("already submitted", "already completed", _ALREADY_SUBMITTED_ZH, _ALREADY_COMPLETED_ZH),
-                400,
-                "The submission has already been submitted.",
-            ),
-            (_looks_like_missing, 404, "Submission not found"),
-        ],
         logger=logger,
         log_message="[ExamAPI] submit exam failed: %s",
         fallback_detail=lambda error: f"Submit exam failed: {error}",
@@ -338,7 +304,6 @@ async def grade_submission(submission_id: str, request: GradeSubmissionRequest =
         user["user_id"],
         answers_grades,
         request.teacher_comment,
-        error_rules=[(_looks_like_missing, 404, "Submission not found")],
         logger=logger,
         log_message="[ExamAPI] grade submission failed: %s",
         fallback_detail=lambda error: f"Grade submission failed: {error}",

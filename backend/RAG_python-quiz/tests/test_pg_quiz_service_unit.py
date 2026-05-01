@@ -2,6 +2,7 @@ from datetime import datetime
 from unittest.mock import patch
 
 from app.services import pg_service
+from app.services.exceptions import PermissionDeniedError
 from tests.pg_service_test_support import FixedDateTime, PgServiceBase
 from tests.support import FakeConnection, FakeCursor
 
@@ -136,7 +137,7 @@ class PgQuizServiceTests(PgServiceBase):
 
         cursor = FakeCursor(fetchone_results=[quiz_row, {"role": "teacher"}, None], fetchall_results=[docs_rows])
         with self.patch_conn(cursor):
-            with self.assertRaises(PermissionError):
+            with self.assertRaises(PermissionDeniedError):
                 pg_service.get_quiz_by_id("quiz-1", user_id="teacher-2")
 
     def test_quiz_submission_helpers_cover_none_string_and_invalid_json(self):

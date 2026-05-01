@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 from typing import Any, Dict, List, Optional
 
+from app.services.exceptions import PermissionDeniedError, ValidationServiceError
 from app.services.pg_db import _get_conn
 from app.utils.datetime_utils import iso
 
 
 def is_user_teacher(user_id: str) -> bool:
-    """檢查使用者是否為教師角色。"""
     with _get_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT role FROM users WHERE id=%s", (user_id,))
         row = cur.fetchone()
@@ -16,12 +16,11 @@ def is_user_teacher(user_id: str) -> bool:
 def create_class_for_teacher(
     teacher_user_id: str, name: str, code: Optional[str] = None
 ) -> Dict[str, Any]:
-    """由教師建立班級。"""
     if not name or not name.strip():
-        raise RuntimeError("班級名稱不得為空")
+        raise ValidationServiceError("Class name must not be empty")
 
     if not is_user_teacher(teacher_user_id):
-        raise PermissionError("只有教師可以建立班級")
+        raise PermissionDeniedError("Only teachers can create classes")
 
     with _get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -44,9 +43,8 @@ def create_class_for_teacher(
 
 
 def list_classes_by_teacher(teacher_user_id: str) -> List[Dict[str, Any]]:
-    """列出教師名下的所有班級（新到舊）。"""
     if not is_user_teacher(teacher_user_id):
-        raise PermissionError("只有教師可以查看自己的班級列表")
+        raise PermissionDeniedError("Only teachers can view their classes")
 
     with _get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -88,10 +86,9 @@ def list_classes_by_teacher(teacher_user_id: str) -> List[Dict[str, Any]]:
 
 
 def list_classes_for_student(student_user_id: str) -> List[Dict[str, Any]]:
-    """列出學生所屬的所有班級（新到舊）。"""
     with _get_conn() as conn, conn.cursor() as cur:
         if not _is_student_exists(cur, student_user_id):
-            raise PermissionError("僅學生可查詢所屬班級")
+            raise PermissionDeniedError("Only students can view enrolled classes")
 
         cur.execute(
             """
@@ -137,24 +134,23 @@ def _is_class_owned_by_teacher(cur, class_id: str, teacher_user_id: str) -> bool
 def invite_student_to_class(
     teacher_user_id: str, class_id: str, student_email: str
 ) -> Dict[str, Any]:
-    """由教師將學生加入指定班級（透過學生 email）。"""
     if not is_user_teacher(teacher_user_id):
-        raise PermissionError("只有教師可以邀請學生加入班級")
+        raise PermissionDeniedError("Only teachers can invite students to classes")
     if not student_email or not student_email.strip():
-        raise RuntimeError("學生 email 不得為空")
+        raise ValidationServiceError("Student email must not be empty")
 
     with _get_conn() as conn, conn.cursor() as cur:
         if not _is_class_owned_by_teacher(cur, class_id, teacher_user_id):
-            raise PermissionError("無權操作此班級或班級不存在")
+            raise PermissionDeniedError("Class not found or not owned by teacher")
 
         student = _get_user_by_email(cur, student_email.strip())
         if not student:
-            raise RuntimeError("學生不存在，請先註冊該學生帳號")
+            raise ValidationServiceError("Student does not exist")
         if student.get("role") != "student":
-            raise RuntimeError("該使用者不是學生角色")
+            raise ValidationServiceError("User is not a student")
         student_id = student.get("id")
         if not _is_student_exists(cur, student_id):
-            raise RuntimeError("學生資料不完整（students 表無記錄）")
+            raise ValidationServiceError("Student profile is incomplete")
 
         cur.execute(
             """

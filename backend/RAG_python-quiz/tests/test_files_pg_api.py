@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from app.routers import files_pg
+from app.services.exceptions import NotFoundError
 from tests.support import build_client
 
 
@@ -33,7 +34,7 @@ class FilesPgApiTests(unittest.TestCase):
         self.assertTrue(response.json()["success"])
 
     def test_delete_file_not_found(self):
-        with patch("app.routers.files_pg.pg_service.delete_file", side_effect=Exception("檔案不存在")):
+        with patch("app.routers.files_pg.pg_service.delete_file", side_effect=NotFoundError("File not found")):
             response = self.client.delete("/files/file-1")
 
         self.assertEqual(response.status_code, 404)
@@ -55,7 +56,7 @@ class FilesPgApiTests(unittest.TestCase):
         self.assertEqual(response.json()["file"]["id"], "file-1")
 
     def test_get_file_details_not_found(self):
-        with patch("app.routers.files_pg.pg_service.get_specific_file", side_effect=Exception("檔案不存在")):
+        with patch("app.routers.files_pg.pg_service.get_specific_file", side_effect=NotFoundError("File not found")):
             response = self.client.get("/files/file-1")
 
         self.assertEqual(response.status_code, 404)
@@ -90,7 +91,7 @@ class FilesPgApiTests(unittest.TestCase):
         self.assertEqual(response.json()["details"]["page"], 2)
 
     def test_get_chunk_source_details_not_found(self):
-        with patch("app.routers.files_pg.pg_service.get_source_details_by_chunk_id", side_effect=Exception("找不到 chunk")):
+        with patch("app.routers.files_pg.pg_service.get_source_details_by_chunk_id", side_effect=NotFoundError("Chunk not found")):
             response = self.client.get("/chunks/chunk-1/source-details")
 
         self.assertEqual(response.status_code, 404)

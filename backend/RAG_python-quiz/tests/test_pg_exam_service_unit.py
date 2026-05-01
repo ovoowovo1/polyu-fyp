@@ -2,6 +2,7 @@ from datetime import datetime
 from unittest.mock import patch
 
 from app.services import pg_service
+from app.services.exceptions import NotReleasedError, PermissionDeniedError
 from tests.pg_service_test_support import FixedDateTime, PgServiceBase
 from tests.support import FakeCursor
 
@@ -110,12 +111,12 @@ class PgExamServiceTests(PgServiceBase):
         unpublished_row["is_published"] = False
         cursor = FakeCursor(fetchone_results=[unpublished_row, {"role": "student"}], fetchall_results=[docs_rows, eq_rows])
         with self.patch_conn(cursor):
-            with self.assertRaises(PermissionError):
+            with self.assertRaises(NotReleasedError):
                 pg_service.get_exam_by_id("exam-1", user_id="student-1")
 
         cursor = FakeCursor(fetchone_results=[exam_row, {"role": "student"}, None], fetchall_results=[docs_rows, eq_rows])
         with self.patch_conn(cursor):
-            with self.assertRaises(PermissionError):
+            with self.assertRaises(PermissionDeniedError):
                 pg_service.get_exam_by_id("exam-1", user_id="student-1")
 
         fallback_row = dict(exam_row)

@@ -3,6 +3,12 @@ from datetime import datetime
 import json as json_lib
 from typing import Any, Dict, List, Optional
 
+from app.services.exceptions import (
+    AlreadySubmittedError,
+    NotFoundError,
+    NotReleasedError,
+    PermissionDeniedError,
+)
 from app.services.pg_db import _get_conn
 from app.services.pg_shared import (
     fetch_default_document_names,
@@ -193,7 +199,7 @@ def get_exam_by_id(
         cur.execute(sql, (exam_id,))
         r = cur.fetchone()
         if not r:
-            raise RuntimeError("考試不存在")
+            raise NotFoundError("Exam not found")
 
         documents = fetch_linked_documents(
             cur,
@@ -221,14 +227,14 @@ def get_exam_by_id(
 
             if role == "student":
                 if not r["is_published"]:
-                    raise PermissionError("此考試尚未發布")
+                    raise NotReleasedError()
                 if r["class_id"]:
                     cur.execute(
                         "SELECT 1 FROM class_students WHERE class_id = %s AND student_id = %s",
                         (r["class_id"], user_id),
                     )
                     if not cur.fetchone():
-                        raise PermissionError("您不在此班級中")
+                        raise PermissionDeniedError("Permission denied")
 
         if eq_rows:
             questions = []
@@ -286,7 +292,7 @@ def update_exam(
         cur.execute("SELECT id, questions_json FROM exams WHERE id = %s", (exam_id,))
         existing = cur.fetchone()
         if not existing:
-            raise RuntimeError("考試不存在")
+            raise NotFoundError("Exam not found")
 
         updates = ["updated_at = now()"]
         params = []
@@ -362,7 +368,7 @@ def delete_exam(exam_id: str) -> Dict[str, Any]:
         cur.execute("DELETE FROM exams WHERE id = %s RETURNING id, title", (exam_id,))
         row = cur.fetchone()
         if not row:
-            raise RuntimeError("考試不存在")
+            raise NotFoundError("Exam not found")
         conn.commit()
         return {"message": "考試已成功刪除", "exam_id": str(row["id"]), "title": row["title"]}
 
@@ -375,7 +381,7 @@ def publish_exam(exam_id: str, is_published: bool = True) -> Dict[str, Any]:
         )
         row = cur.fetchone()
         if not row:
-            raise RuntimeError("考試不存在")
+            raise NotFoundError("Exam not found")
         conn.commit()
         return {
             "exam_id": str(row["id"]),
@@ -394,9 +400,9 @@ def start_exam_submission(
         )
         exam = cur.fetchone()
         if not exam:
-            raise RuntimeError("考試不存在")
+            raise NotFoundError("Exam not found")
         if not exam["is_published"]:
-            raise RuntimeError("考試尚未發布")
+            raise NotReleasedError()
 
         row, _attempt_no = insert_submission_with_attempt(
             cur,
@@ -441,9 +447,9 @@ def submit_exam(
         )
         sub = cur.fetchone()
         if not sub:
-            raise RuntimeError("提交記錄不存在")
+            raise NotFoundError("Submission not found")
         if sub["status"] != "in_progress":
-            raise RuntimeError("此提交已完成，無法再次提交")
+            raise AlreadySubmittedError()
 
         exam_id = sub["exam_id"]
         cur.execute(
@@ -622,7 +628,7 @@ def grade_exam_submission(
         cur.execute("SELECT id, total_marks FROM exam_submissions WHERE id = %s", (submission_id,))
         sub = cur.fetchone()
         if not sub:
-            raise RuntimeError("提交記錄不存在")
+            raise NotFoundError("Submission not found")
 
         if answers_grades:
             for g in answers_grades:
@@ -739,7 +745,7 @@ def ai_grade_exam_submission(
         )
         sub = cur.fetchone()
         if not sub:
-            raise RuntimeError(f"Submission {submission_id} not found")
+            raise NotFoundError("Submission not found")
 
         for g in graded_answers:
             answer_id = g.get("answer_id")

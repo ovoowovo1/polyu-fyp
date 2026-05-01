@@ -2,6 +2,7 @@ from datetime import datetime
 from unittest.mock import patch
 
 from app.services import pg_service
+from app.services.exceptions import PermissionDeniedError
 from tests.pg_service_test_support import PgServiceBase
 from tests.support import FakeCursor
 
@@ -20,7 +21,7 @@ class PgClassesServiceTests(PgServiceBase):
             pg_service.create_class_for_teacher("teacher-1", "")
 
         with patch("app.services.pg_classes_service.is_user_teacher", return_value=False):
-            with self.assertRaises(PermissionError):
+            with self.assertRaises(PermissionDeniedError):
                 pg_service.create_class_for_teacher("teacher-1", "Class")
 
         row = {"id": "class-1", "teacher_id": "teacher-1", "name": "Databases", "code": "DB01", "created_at": datetime(2025, 1, 2, 3, 4, 5)}
@@ -30,7 +31,7 @@ class PgClassesServiceTests(PgServiceBase):
 
     def test_class_listing_and_student_helpers_cover_success_and_error_paths(self):
         with patch("app.services.pg_classes_service.is_user_teacher", return_value=False):
-            with self.assertRaises(PermissionError):
+            with self.assertRaises(PermissionDeniedError):
                 pg_service.list_classes_by_teacher("teacher-1")
 
         created_at = datetime(2025, 1, 2, 3, 4, 5)
@@ -53,7 +54,7 @@ class PgClassesServiceTests(PgServiceBase):
         self.assertTrue(pg_service._is_class_owned_by_teacher(cursor, "class-1", "teacher-1"))
 
         with self.patch_conn(FakeCursor(fetchone_results=[None])):
-            with self.assertRaises(PermissionError):
+            with self.assertRaises(PermissionDeniedError):
                 pg_service.list_classes_for_student("student-1")
 
         list_row = {"id": "class-1", "teacher_id": "teacher-1", "name": "Databases", "code": None, "created_at": created_at, "student_count": 2}
@@ -64,7 +65,7 @@ class PgClassesServiceTests(PgServiceBase):
 
     def test_invite_student_to_class_covers_validation_and_conflict_lookup(self):
         with patch("app.services.pg_classes_service.is_user_teacher", return_value=False):
-            with self.assertRaises(PermissionError):
+            with self.assertRaises(PermissionDeniedError):
                 pg_service.invite_student_to_class("teacher-1", "class-1", "s@example.com")
 
         with patch("app.services.pg_classes_service.is_user_teacher", return_value=True):
@@ -72,7 +73,7 @@ class PgClassesServiceTests(PgServiceBase):
                 pg_service.invite_student_to_class("teacher-1", "class-1", "")
 
         with patch("app.services.pg_classes_service.is_user_teacher", return_value=True), self.patch_conn(FakeCursor(fetchone_results=[None])):
-            with self.assertRaises(PermissionError):
+            with self.assertRaises(PermissionDeniedError):
                 pg_service.invite_student_to_class("teacher-1", "class-1", "s@example.com")
 
         cursor = FakeCursor(fetchone_results=[{"ok": 1}, None])

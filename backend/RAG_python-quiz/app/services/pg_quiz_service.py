@@ -3,6 +3,7 @@ from datetime import datetime
 import json as json_lib
 from typing import Any, Dict, List, Optional
 
+from app.services.exceptions import NotFoundError, PermissionDeniedError, ValidationServiceError
 from app.services.pg_db import _get_conn
 from app.services.pg_shared import (
     fetch_default_document_names,
@@ -78,7 +79,7 @@ def update_quiz(
 ) -> Dict[str, Any]:
     """Update existing quiz's questions and optionally name and linked documents."""
     if not quiz_data or "questions" not in quiz_data:
-        raise RuntimeError("quiz_data must contain 'questions'")
+        raise ValidationServiceError("quiz_data must contain 'questions'")
 
     with _get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -99,7 +100,7 @@ def update_quiz(
         )
         row = cur.fetchone()
         if not row:
-            raise RuntimeError("測驗不存在")
+            raise NotFoundError("Quiz not found")
 
         if file_ids is not None:
             replace_linked_documents(cur, "quiz_documents", "quiz_id", quiz_id, file_ids)
@@ -222,7 +223,7 @@ def get_quiz_by_id(quiz_id: str, user_id: Optional[str] = None) -> Dict[str, Any
         cur.execute(sql, (quiz_id,))
         r = cur.fetchone()
         if not r:
-            raise RuntimeError("測驗不存在")
+            raise NotFoundError("Quiz not found")
 
         documents = fetch_linked_documents(
             cur,
@@ -257,7 +258,7 @@ def get_quiz_by_id(quiz_id: str, user_id: Optional[str] = None) -> Dict[str, Any
                         allowed = True
 
             if not allowed:
-                raise PermissionError("無權訪問此測驗")
+                raise PermissionDeniedError("Permission denied")
 
         questions = maybe_json_load(r["questions_json"], [])
         return {
@@ -281,7 +282,7 @@ def delete_quiz(quiz_id: str) -> Dict[str, Any]:
         cur.execute("DELETE FROM quizzes WHERE id=%s RETURNING id", (quiz_id,))
         row = cur.fetchone()
         if not row:
-            raise RuntimeError("測驗不存在")
+            raise NotFoundError("Quiz not found")
         return {"message": "測驗已成功刪除", "quiz_id": str(quiz_id)}
 
 
@@ -291,7 +292,7 @@ def submit_quiz_result(
     with _get_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT id FROM quizzes WHERE id = %s", (quiz_id,))
         if not cur.fetchone():
-            raise RuntimeError("Quiz not found")
+            raise NotFoundError("Quiz not found")
 
         sql = """
         INSERT INTO quiz_submissions (quiz_id, student_id, score, total_questions, answers_json, attempt_no)

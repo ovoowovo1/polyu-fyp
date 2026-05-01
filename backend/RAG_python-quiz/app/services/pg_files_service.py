@@ -1,15 +1,12 @@
 # -*- coding: utf-8 -*-
 from typing import Any, Dict, List, Optional
 
+from app.services.exceptions import NotFoundError, ValidationServiceError
 from app.services.pg_db import _get_conn
 from app.utils.datetime_utils import iso
 
 
 def get_files_list(class_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """等價於原 /files 端點所需的資訊。
-
-    如果傳入 class_id，會僅回傳該班級所屬的文件。
-    """
     base_sql = """
     SELECT d.id, d.name, d.size_bytes AS size, d.mimetype AS mime_type,
            d.created_at AS upload_date, COUNT(c.id) AS total_chunks
@@ -42,17 +39,16 @@ def get_files_list(class_id: Optional[str] = None) -> List[Dict[str, Any]]:
 
 
 def delete_file(file_id: str) -> Dict[str, Any]:
-    """刪除文件及其 chunks（外鍵 ON DELETE CASCADE）"""
     with _get_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT id, name FROM documents WHERE id=%s", (file_id,))
         row = cur.fetchone()
         if not row:
-            raise RuntimeError("檔案不存在")
+            raise NotFoundError("File not found")
         name = row["name"]
         cur.execute("DELETE FROM documents WHERE id=%s", (file_id,))
         conn.commit()
         return {
-            "message": f"檔案 '{name}' 已成功從資料庫刪除。",
+            "message": f"File '{name}' deleted",
             "deletedFile": {"id": str(row["id"]), "name": name},
         }
 
@@ -65,9 +61,9 @@ def rename_file(file_id: str, new_name: str) -> Dict[str, Any]:
         )
         row = cur.fetchone()
         if not row:
-            raise RuntimeError("檔案不存在")
+            raise NotFoundError("File not found")
         return {
-            "message": f"檔案已成功重命名為 '{new_name}'",
+            "message": f"File renamed to '{new_name}'",
             "renamedFile": {"id": str(row["id"]), "name": row["name"]},
         }
 
@@ -84,7 +80,7 @@ def get_specific_file(file_id: str) -> dict:
         cur.execute(sql_file, (file_id,))
         f = cur.fetchone()
         if not f:
-            raise RuntimeError("檔案不存在")
+            raise NotFoundError("File not found")
         cur.execute(sql_chunks, (file_id,))
         chunks = cur.fetchall()
         formatted_file = {
@@ -120,7 +116,7 @@ def get_source_details_by_chunk_id(chunk_id: str) -> dict:
         cur.execute(sql, (chunk_id,))
         r = cur.fetchone()
         if not r:
-            raise RuntimeError("找不到 chunk")
+            raise NotFoundError("Chunk not found")
         return {
             "file_id": str(r["file_id"]),
             "page_number": r["page_start"],
@@ -132,7 +128,7 @@ def get_source_details_by_chunk_id(chunk_id: str) -> dict:
 
 def get_files_text_content(file_ids: list[str]) -> str:
     if not file_ids:
-        raise RuntimeError("文件 ID 列表不能為空")
+        raise ValidationServiceError("File id list cannot be empty")
     sql = """
     SELECT d.name AS file_name, c.text AS text, c.chunk_index
     FROM documents d
@@ -150,7 +146,7 @@ def get_files_text_content(file_ids: list[str]) -> str:
                 parts.append(f"\n\n=== {current} ===\n")
             parts.append(r["text"])
         if not parts:
-            raise RuntimeError("找不到指定文件或文件沒有內容")
+            raise ValidationServiceError("Specified files were not found or contain no text")
         return "\n\n".join(parts)
 
 

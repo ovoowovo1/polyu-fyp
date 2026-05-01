@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.agents.schemas import ExamGenerationResponse, ExamQuestion
 from app.routers import exam
+from app.services.exceptions import AlreadySubmittedError, NotFoundError, NotReleasedError, PermissionDeniedError
 from tests.support import build_app, with_auth
 
 
@@ -169,14 +170,14 @@ class ExamApiTests(unittest.TestCase):
 
         with patch("app.routers.exam.pg_service.is_user_teacher", return_value=True), patch(
             "app.routers.exam.pg_service.get_exam_by_id",
-            side_effect=PermissionError("forbidden"),
+            side_effect=PermissionDeniedError("forbidden"),
         ):
             forbidden = self.client.get("/exam/exam-1")
         self.assertEqual(forbidden.status_code, 403)
 
         with patch("app.routers.exam.pg_service.is_user_teacher", return_value=True), patch(
             "app.routers.exam.pg_service.get_exam_by_id",
-            side_effect=RuntimeError("不存在"),
+            side_effect=NotFoundError("not found"),
         ):
             missing = self.client.get("/exam/exam-1")
         self.assertEqual(missing.status_code, 404)
@@ -204,7 +205,7 @@ class ExamApiTests(unittest.TestCase):
 
         with patch("app.routers.exam.pg_service.is_user_teacher", return_value=True), patch(
             "app.routers.exam.pg_service.update_exam",
-            side_effect=RuntimeError("不存在"),
+            side_effect=NotFoundError("not found"),
         ):
             self.assertEqual(self.client.put("/exam/exam-1", json=payload).status_code, 404)
 
@@ -216,7 +217,7 @@ class ExamApiTests(unittest.TestCase):
 
         with patch("app.routers.exam.pg_service.is_user_teacher", return_value=True), patch(
             "app.routers.exam.pg_service.delete_exam",
-            side_effect=RuntimeError("不存在"),
+            side_effect=NotFoundError("not found"),
         ):
             self.assertEqual(self.client.delete("/exam/exam-1").status_code, 404)
 
@@ -231,20 +232,20 @@ class ExamApiTests(unittest.TestCase):
             started = self.client.post("/exam/exam-1/start")
         self.assertEqual(started.status_code, 200)
 
-        with patch("app.routers.exam.pg_service.start_exam_submission", side_effect=RuntimeError("不存在")):
+        with patch("app.routers.exam.pg_service.start_exam_submission", side_effect=NotFoundError("not found")):
             self.assertEqual(self.client.post("/exam/exam-1/start").status_code, 404)
 
-        with patch("app.routers.exam.pg_service.start_exam_submission", side_effect=RuntimeError("尚未發布")):
+        with patch("app.routers.exam.pg_service.start_exam_submission", side_effect=NotReleasedError()):
             self.assertEqual(self.client.post("/exam/exam-1/start").status_code, 403)
 
         with patch("app.routers.exam.pg_service.submit_exam", return_value={"submission_id": "sub-1"}):
             submitted = self.client.post("/exam/submission/sub-1/submit", json={"answers": []})
         self.assertEqual(submitted.status_code, 200)
 
-        with patch("app.routers.exam.pg_service.submit_exam", side_effect=RuntimeError("不存在")):
+        with patch("app.routers.exam.pg_service.submit_exam", side_effect=NotFoundError("not found")):
             self.assertEqual(self.client.post("/exam/submission/sub-1/submit", json={"answers": []}).status_code, 404)
 
-        with patch("app.routers.exam.pg_service.submit_exam", side_effect=RuntimeError("已完成")):
+        with patch("app.routers.exam.pg_service.submit_exam", side_effect=AlreadySubmittedError()):
             self.assertEqual(self.client.post("/exam/submission/sub-1/submit", json={"answers": []}).status_code, 400)
 
     def test_submission_listing_and_manual_grading_routes(self):
@@ -277,7 +278,7 @@ class ExamApiTests(unittest.TestCase):
 
         with patch("app.routers.exam.pg_service.is_user_teacher", return_value=True), patch(
             "app.routers.exam.pg_service.grade_exam_submission",
-            side_effect=RuntimeError("不存在"),
+            side_effect=NotFoundError("not found"),
         ):
             missing = self.client.put(
                 "/exam/submission/sub-1/grade",
@@ -361,7 +362,7 @@ class ExamApiTests(unittest.TestCase):
 
         with patch("app.routers.exam.pg_service.is_user_teacher", return_value=True), patch(
             "app.routers.exam.pg_service.publish_exam",
-            side_effect=RuntimeError("不存在"),
+            side_effect=NotFoundError("not found"),
         ):
             self.assertEqual(self.client.post("/exam/exam-1/publish", json={"is_published": True}).status_code, 404)
 
