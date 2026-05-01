@@ -195,14 +195,6 @@ def update_chunk_embeddings(
     return len(rows)
 
 
-def retrieve_context_by_entities(
-    entity_names: List[str], selected_file_ids: List[str] = []
-) -> List[Dict[str, Any]]:
-    """你已停用圖檢索；為相容保留函式，直接回空。"""
-    del entity_names, selected_file_ids
-    return []
-
-
 def retrieve_context_by_keywords(
     keywords: str, selected_file_ids: list[str] = [], k: int = 10
 ) -> list[dict]:
@@ -248,7 +240,6 @@ __all__ = [
     "create_graph_from_document",
     "find_document_by_hash",
     "get_chunks_missing_embeddings",
-    "retrieve_context_by_entities",
     "retrieve_context_by_keywords",
     "retrieve_graph_context",
     "update_chunk_embeddings",

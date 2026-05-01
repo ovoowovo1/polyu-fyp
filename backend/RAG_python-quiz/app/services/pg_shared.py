@@ -12,7 +12,7 @@ VALID_EMBEDDING_COLUMNS = {"embedding", "embedding_v2"}
 
 
 def _to_pgvector(vec: Sequence[float]) -> str:
-    # 轉成 pgvector 文本字面量，如 "[0.1,0.2,...]"
+    # Convert to a pgvector text literal, e.g. "[0.1,0.2,...]"
     return "[" + ",".join(f"{float(x):.8f}" for x in vec) + "]"
 
 

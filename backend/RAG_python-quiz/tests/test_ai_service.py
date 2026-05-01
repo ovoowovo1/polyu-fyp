@@ -90,49 +90,6 @@ class AiServiceTests(unittest.IsolatedAsyncioTestCase):
                     system_prompt="system",
                 )
 
-    async def test_generate_answer_with_langchain_returns_structured_result(self):
-        response = SimpleNamespace()
-        client = make_chat_client(response)
-
-        async def fake_retry(_name, func, *args, error_type=RuntimeError):
-            return await func("api-key", *args)
-
-        with patch("app.services.ai_service.get_llm_client", return_value=client), patch(
-            "app.services.ai_service.get_default_llm_model_name",
-            return_value="model",
-        ), patch(
-            "app.services.ai_service.extract_chat_completion_text",
-            return_value=json.dumps({"answer_with_citations": []}),
-        ), patch(
-            "app.services.ai_service.with_llm_retry_async",
-            side_effect=fake_retry,
-        ):
-            result = await ai_service.generate_answer_with_langchain("context", "question", ["file-1"], ["chunk-1"])
-
-        self.assertEqual(result, {"answer_with_citations": []})
-        client.chat.completions.create.assert_called_once()
-
-    async def test_generate_answer_with_langchain_rejects_empty_model_text(self):
-        response = SimpleNamespace()
-        client = make_chat_client(response)
-
-        async def fake_retry(_name, func, *args, error_type=RuntimeError):
-            return await func("api-key", *args)
-
-        with patch("app.services.ai_service.get_llm_client", return_value=client), patch(
-            "app.services.ai_service.get_default_llm_model_name",
-            return_value="model",
-        ), patch(
-            "app.services.ai_service.extract_chat_completion_text",
-            return_value="",
-        ), patch(
-            "app.services.ai_service.with_llm_retry_async",
-            side_effect=fake_retry,
-        ):
-            with self.assertRaises(RuntimeError):
-                await ai_service.generate_answer_with_langchain("context", "question", ["file-1"], ["chunk-1"])
-
-    async def test_generate_quiz_feedback_text_success_and_empty_failure(self):
         response = SimpleNamespace()
         client = make_chat_client(response)
 

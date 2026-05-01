@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Sequence, TypedDict
 
 from app.logger import get_logger
-from app.services import adaptive_retrieval_service, citation_evidence_service
+from app.services import adaptive_retrieval_service, citation_evidence_service, retrieval_intent
 from app.services.ai_service import generate_structured_json
 from app.services.rag_shared import build_raw_sources, normalize_doc, safe_emit
 
@@ -438,7 +438,7 @@ async def run_adaptive_rag_stream(question: str, selected_file_ids: List[str]) -
         "generation_retry_count": 0,
         "candidate_documents": [],
         "filtered_documents": [],
-        "query_intent": adaptive_retrieval_service.analyze_query_intent(question.strip()),
+        "query_intent": retrieval_intent.analyze_query_intent(question.strip()),
         "covered_concepts": [],
         "missing_concepts": [],
         "answer": "",

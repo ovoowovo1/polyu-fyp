@@ -1,4 +1,4 @@
-from datetime import datetime
+﻿from datetime import datetime
 from unittest.mock import patch
 
 from app.services import pg_service
@@ -11,7 +11,7 @@ class PgExamServiceTests(PgServiceBase):
     module_path = "app.services.pg_exam_service"
 
     def test_default_exam_title_and_save_exam_cover_generated_and_manual_titles(self):
-        with patch("app.services.pg_exam_service.datetime", FixedDateTime):
+        with patch("app.services.pg_exam_crud.datetime", FixedDateTime):
             cursor = FakeCursor(fetchall_results=[[{"name": "lesson.pdf"}]])
             self.assertIn("lesson -", pg_service._default_exam_title(cursor, ["file-1"]))
 
@@ -45,7 +45,7 @@ class PgExamServiceTests(PgServiceBase):
         self.assertTrue(execute_values.called)
 
         cursor = FakeCursor(fetchone_results=[row], fetchall_results=[[{"name": "lesson.pdf"}]])
-        with self.patch_conn(cursor), patch("app.services.pg_exam_service.datetime", FixedDateTime), patch(
+        with self.patch_conn(cursor), patch("app.services.pg_exam_crud.datetime", FixedDateTime), patch(
             "app.services.pg_shared.psycopg2.extras.execute_values"
         ) as execute_values:
             generated = pg_service.save_exam("exam-2", "", questions[:1], [])
@@ -76,7 +76,7 @@ class PgExamServiceTests(PgServiceBase):
         with self.patch_conn(cursor):
             exams = pg_service.get_exams_by_class("class-1")
         self.assertEqual(exams[0]["documents"][0]["name"], "lesson.pdf")
-        self.assertEqual(exams[0]["title"], "未命名考試")
+        self.assertEqual(exams[0]["title"], "Untitled Exam")
 
         with self.patch_conn(FakeCursor(fetchone_results=[None])):
             with self.assertRaises(RuntimeError):
@@ -379,3 +379,4 @@ class PgExamServiceTests(PgServiceBase):
         with self.patch_conn(cursor):
             ai_result = pg_service.ai_grade_exam_submission("sub-1", [{"exam_question_id": "eq-1", "marks_earned": 2, "teacher_feedback": None, "is_correct": True}])
         self.assertEqual(ai_result["status"], "ai_graded")
+

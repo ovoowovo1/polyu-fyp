@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import tempfile
 import unittest
 from pathlib import Path
@@ -52,44 +52,44 @@ class ExamApiTests(unittest.TestCase):
             exam.GradeAnswerItem(marks_earned=1)
 
     def test_generate_exam_success(self):
-        with patch("app.routers.exam.run_exam_generation_with_pdf", AsyncMock(return_value=make_exam_response())):
+        with patch("app.services.exam_workflow_service.run_exam_generation_with_pdf", AsyncMock(return_value=make_exam_response())):
             response = self.client.post("/exam/generate", json={"file_ids": ["file-1"]})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["exam_id"], "exam-1")
 
     def test_generate_exam_value_error(self):
-        with patch("app.routers.exam.run_exam_generation_with_pdf", AsyncMock(side_effect=ValueError("bad input"))):
+        with patch("app.services.exam_workflow_service.run_exam_generation_with_pdf", AsyncMock(side_effect=ValueError("bad input"))):
             response = self.client.post("/exam/generate", json={"file_ids": ["file-1"]})
 
         self.assertEqual(response.status_code, 400)
 
     def test_generate_exam_unexpected_error(self):
-        with patch("app.routers.exam.run_exam_generation_with_pdf", AsyncMock(side_effect=RuntimeError("boom"))):
+        with patch("app.services.exam_workflow_service.run_exam_generation_with_pdf", AsyncMock(side_effect=RuntimeError("boom"))):
             response = self.client.post("/exam/generate", json={"file_ids": ["file-1"]})
 
         self.assertEqual(response.status_code, 500)
 
     def test_generate_questions_only_success(self):
-        with patch("app.routers.exam.run_exam_generation", AsyncMock(return_value=make_exam_response())):
+        with patch("app.services.exam_workflow_service.run_exam_generation", AsyncMock(return_value=make_exam_response())):
             response = self.client.post("/exam/generate-questions-only", json={"file_ids": ["file-1"]})
 
         self.assertEqual(response.status_code, 200)
 
     def test_generate_questions_only_value_error(self):
-        with patch("app.routers.exam.run_exam_generation", AsyncMock(side_effect=ValueError("bad input"))):
+        with patch("app.services.exam_workflow_service.run_exam_generation", AsyncMock(side_effect=ValueError("bad input"))):
             response = self.client.post("/exam/generate-questions-only", json={"file_ids": ["file-1"]})
 
         self.assertEqual(response.status_code, 400)
 
     def test_generate_questions_only_unexpected_error(self):
-        with patch("app.routers.exam.run_exam_generation", AsyncMock(side_effect=RuntimeError("boom"))):
+        with patch("app.services.exam_workflow_service.run_exam_generation", AsyncMock(side_effect=RuntimeError("boom"))):
             response = self.client.post("/exam/generate-questions-only", json={"file_ids": ["file-1"]})
 
         self.assertEqual(response.status_code, 500)
 
     def test_regenerate_pdf_success(self):
-        with patch("app.utils.pdf_generator.generate_exam_pdf", AsyncMock(return_value="/tmp/exam-1.pdf")):
+        with patch("app.services.exam_workflow_service.generate_exam_pdf", AsyncMock(return_value="/tmp/exam-1.pdf")):
             response = self.client.post(
                 "/exam/exam-1/regenerate-pdf",
                 json={"questions": [make_question_dict()], "exam_name": "Database Exam"},
@@ -99,7 +99,7 @@ class ExamApiTests(unittest.TestCase):
         self.assertEqual(response.json()["pdf_path"], "/tmp/exam-1.pdf")
 
     def test_regenerate_pdf_failure(self):
-        with patch("app.utils.pdf_generator.generate_exam_pdf", AsyncMock(side_effect=RuntimeError("pdf boom"))):
+        with patch("app.services.exam_workflow_service.generate_exam_pdf", AsyncMock(side_effect=RuntimeError("pdf boom"))):
             response = self.client.post(
                 "/exam/exam-1/regenerate-pdf",
                 json={"questions": [make_question_dict()], "exam_name": "Database Exam"},
@@ -108,10 +108,10 @@ class ExamApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 500)
 
     def test_download_exam_pdf_handles_missing_and_success(self):
-        missing = self.client.get("/exam/exam-1/pdf")
-        self.assertEqual(missing.status_code, 404)
-
         with tempfile.TemporaryDirectory() as tmpdir, patch("app.routers.exam.PDF_DIR", tmpdir):
+            missing = self.client.get("/exam/exam-1/pdf")
+            self.assertEqual(missing.status_code, 404)
+
             pdf_path = tempfile.NamedTemporaryFile(dir=tmpdir, suffix=".pdf", delete=False)
             pdf_path.write(b"%PDF-1.4")
             pdf_path.close()
@@ -291,13 +291,13 @@ class ExamApiTests(unittest.TestCase):
             self.assertEqual(self.client.post("/exam/submission/sub-1/ai-grade").status_code, 403)
 
         with patch("app.routers.exam.pg_service.is_user_teacher", return_value=True), patch(
-            "app.routers.exam.pg_service.get_submission_with_answers",
+            "app.services.exam_workflow_service.get_submission_with_answers",
             return_value=None,
         ):
             self.assertEqual(self.client.post("/exam/submission/sub-1/ai-grade").status_code, 404)
 
         with patch("app.routers.exam.pg_service.is_user_teacher", return_value=True), patch(
-            "app.routers.exam.pg_service.get_submission_with_answers",
+            "app.services.exam_workflow_service.get_submission_with_answers",
             return_value={"answers": []},
         ):
             self.assertEqual(self.client.post("/exam/submission/sub-1/ai-grade").status_code, 400)
@@ -322,16 +322,16 @@ class ExamApiTests(unittest.TestCase):
             ]
         }
         with patch("app.routers.exam.pg_service.is_user_teacher", return_value=True), patch(
-            "app.routers.exam.pg_service.get_submission_with_answers",
+            "app.services.exam_workflow_service.get_submission_with_answers",
             return_value=submission,
         ), patch(
-            "app.routers.exam.ai_grade_answer",
+            "app.services.exam_workflow_service.ai_grade_answer",
             AsyncMock(return_value={"marks_earned": 2, "feedback": "good", "is_correct": False}),
         ), patch(
-            "app.routers.exam.ai_generate_exam_overall_comment",
+            "app.services.exam_workflow_service.ai_generate_exam_overall_comment",
             AsyncMock(return_value="overall"),
         ), patch(
-            "app.routers.exam.pg_service.ai_grade_exam_submission",
+            "app.services.exam_workflow_service.persist_ai_grade_exam_submission",
             return_value={"submission_id": "sub-1"},
         ):
             response = self.client.post("/exam/submission/sub-1/ai-grade")
@@ -426,13 +426,13 @@ class ExamApiTests(unittest.TestCase):
             ]
         }
         with patch("app.routers.exam.pg_service.is_user_teacher", return_value=True), patch(
-            "app.routers.exam.pg_service.get_submission_with_answers",
+            "app.services.exam_workflow_service.get_submission_with_answers",
             return_value=mcq_only,
         ), patch(
-            "app.routers.exam.ai_generate_exam_overall_comment",
+            "app.services.exam_workflow_service.ai_generate_exam_overall_comment",
             AsyncMock(return_value="overall"),
         ), patch(
-            "app.routers.exam.pg_service.ai_grade_exam_submission",
+            "app.services.exam_workflow_service.persist_ai_grade_exam_submission",
             return_value={"submission_id": "sub-1"},
         ):
             response = self.client.post("/exam/submission/sub-1/ai-grade")
@@ -458,16 +458,16 @@ class ExamApiTests(unittest.TestCase):
             ]
         }
         with patch("app.routers.exam.pg_service.is_user_teacher", return_value=True), patch(
-            "app.routers.exam.pg_service.get_submission_with_answers",
+            "app.services.exam_workflow_service.get_submission_with_answers",
             return_value=mixed_submission,
         ), patch(
-            "app.routers.exam.ai_grade_answer",
+            "app.services.exam_workflow_service.ai_grade_answer",
             AsyncMock(side_effect=RuntimeError("provider failed")),
         ), patch(
-            "app.routers.exam.ai_generate_exam_overall_comment",
+            "app.services.exam_workflow_service.ai_generate_exam_overall_comment",
             AsyncMock(return_value="overall"),
         ), patch(
-            "app.routers.exam.pg_service.ai_grade_exam_submission",
+            "app.services.exam_workflow_service.persist_ai_grade_exam_submission",
             return_value={"submission_id": "sub-1"},
         ):
             response = self.client.post("/exam/submission/sub-1/ai-grade")
@@ -475,13 +475,14 @@ class ExamApiTests(unittest.TestCase):
         self.assertIn("Please grade manually", response.json()["graded_answers"][0]["teacher_feedback"])
 
         with patch("app.routers.exam.pg_service.is_user_teacher", return_value=True), patch(
-            "app.routers.exam.pg_service.get_submission_with_answers",
+            "app.services.exam_workflow_service.get_submission_with_answers",
             return_value=mixed_submission,
         ), patch(
-            "app.routers.exam.ai_grade_answer",
+            "app.services.exam_workflow_service.ai_grade_answer",
             AsyncMock(return_value={"marks_earned": 1, "feedback": "ok", "is_correct": True}),
         ), patch(
-            "app.routers.exam.ai_generate_exam_overall_comment",
+            "app.services.exam_workflow_service.ai_generate_exam_overall_comment",
             AsyncMock(side_effect=RuntimeError("overall failed")),
         ):
             self.assertEqual(self.client.post("/exam/submission/sub-1/ai-grade").status_code, 500)
+

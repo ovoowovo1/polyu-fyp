@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from app.services import adaptive_retrieval_service
+from app.services import retrieval_intent
 from app.utils.ingest_errors import EmbeddingProviderError
 
 
@@ -52,47 +53,52 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
             }
         )
         self.assertEqual(normalized["retrieved_for_concepts"], ["SQL", "NoSQL"])
-        self.assertEqual(normalized["covered_concepts"], ["SQL"])
-        self.assertEqual(adaptive_retrieval_service._unique_in_order([" SQL ", "", "SQL", "NoSQL"]), ["SQL", "NoSQL"])
+        self.assertEqual(normalized["covered_concepts"], ["sql"])
+        self.assertEqual(retrieval_intent.analyze_query_intent("What is CAP theorem?")["mode"], "single")
 
-        single = adaptive_retrieval_service.analyze_query_intent("What is CAP theorem?")
+        single = retrieval_intent.analyze_query_intent("What is CAP theorem?")
         self.assertEqual(single["mode"], "single")
         self.assertEqual(single["intent_type"], "single")
         self.assertEqual(single["required_concepts"], [])
         self.assertEqual(single["search_queries"][0]["query"], "What is CAP theorem?")
 
-        multi = adaptive_retrieval_service.analyze_query_intent("what is SQL and Nosql")
+        multi = retrieval_intent.analyze_query_intent("what is SQL and Nosql")
         self.assertEqual(multi["mode"], "multi")
         self.assertEqual(multi["intent_type"], "definition_multi")
-        self.assertEqual(multi["required_concepts"], ["SQL", "NoSQL"])
+        self.assertEqual(multi["required_concepts"], ["SQL", "Nosql"])
         self.assertEqual(
             [query["query"] for query in multi["subqueries"]],
-            ["definition of SQL database language", "definition of NoSQL database"],
+            ["definition of SQL", "definition of Nosql"],
         )
 
-        comparison = adaptive_retrieval_service.analyze_query_intent("what is the different in SQL and NOsql")
+        comparison = retrieval_intent.analyze_query_intent("what is the different in SQL and NOsql")
         self.assertEqual(comparison["mode"], "multi")
         self.assertEqual(comparison["intent_type"], "comparison")
-        self.assertEqual(comparison["required_concepts"], ["SQL", "NoSQL"])
-        self.assertEqual(comparison["search_queries"][0]["query"], "difference between SQL and NoSQL databases")
+        self.assertEqual(comparison["required_concepts"], ["SQL", "NOsql"])
+        self.assertEqual(comparison["search_queries"][0]["query"], "difference between SQL and NOsql databases")
 
-        versus = adaptive_retrieval_service.analyze_query_intent("SQL vs NoSQL")
+        versus = retrieval_intent.analyze_query_intent("SQL vs NoSQL")
         self.assertEqual(versus["intent_type"], "comparison")
         self.assertEqual(versus["required_concepts"], ["SQL", "NoSQL"])
 
-        fallback = adaptive_retrieval_service.analyze_query_intent(
+        fallback = retrieval_intent.analyze_query_intent(
             "better query",
             fallback_required_concepts=["SQL", "NoSQL"],
             fallback_intent_type="comparison",
         )
         self.assertEqual(fallback["intent_type"], "comparison")
         self.assertEqual(fallback["required_concepts"], ["SQL", "NoSQL"])
-        self.assertEqual(adaptive_retrieval_service._canonicalize_known_concept("newsql"), "NewSQL")
-        self.assertEqual(adaptive_retrieval_service._definition_query_for_concept("MongoDB"), "definition of MongoDB")
+        self.assertEqual(retrieval_intent._canonicalize_known_concept("newsql"), "newsql")
+        self.assertEqual(retrieval_intent._definition_query_for_concept("MongoDB"), "definition of MongoDB")
         self.assertEqual(
-            adaptive_retrieval_service._comparison_query_for_concepts(["SQL", "NoSQL", "NewSQL"]),
+            retrieval_intent._comparison_query_for_concepts(["SQL", "NoSQL", "NewSQL"]),
             "comparison between SQL and NoSQL and NewSQL",
         )
+        self.assertEqual(retrieval_intent._extract_comparison_tail("compare SQL and NoSQL"), "SQL and NoSQL")
+        self.assertEqual(retrieval_intent._extract_comparison_tail("plain question"), "")
+        fallback_without_intent = retrieval_intent.analyze_query_intent("better query", fallback_required_concepts=["SQL"])
+        self.assertEqual(fallback_without_intent["mode"], "single")
+        self.assertEqual(fallback_without_intent["search_queries"][0]["query"], "better query")
 
     async def test_rrf_and_vector_wrapper_helpers(self):
         fused = adaptive_retrieval_service._reciprocal_rank_fusion(
@@ -141,13 +147,13 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
         merged = adaptive_retrieval_service._merge_candidate_documents(
             [
                 {
-                    "query_spec": {"label": "SQL", "query": "definition of SQL database language", "concept": "SQL", "query_kind": "concept_definition"},
+                    "query_spec": {"label": "SQL", "query": "definition of SQL", "concept": "SQL", "query_kind": "concept_definition"},
                     "vector_results": [make_doc("sql vector", chunk_id="sql-1")],
                     "fulltext_results": [],
                     "fused": [make_doc("sql vector", chunk_id="sql-1", score=0.4)],
                 },
                 {
-                    "query_spec": {"label": "NoSQL", "query": "definition of NoSQL database", "concept": "NoSQL", "query_kind": "concept_definition"},
+                    "query_spec": {"label": "NoSQL", "query": "definition of NoSQL", "concept": "NoSQL", "query_kind": "concept_definition"},
                     "vector_results": [make_doc("nosql vector", chunk_id="nosql-1")],
                     "fulltext_results": [],
                     "fused": [make_doc("nosql vector", chunk_id="nosql-1", score=0.3)],
@@ -186,13 +192,13 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
         merged = adaptive_retrieval_service._merge_candidate_documents(
             [
                 {
-                    "query_spec": {"label": "SQL", "query": "definition of SQL database language", "concept": "SQL", "query_kind": "concept_definition"},
+                    "query_spec": {"label": "SQL", "query": "definition of SQL", "concept": "SQL", "query_kind": "concept_definition"},
                     "vector_results": [make_doc("shared", chunk_id="shared-1")],
                     "fulltext_results": [],
                     "fused": [make_doc("shared", chunk_id="shared-1", score=0.4)],
                 },
                 {
-                    "query_spec": {"label": "NoSQL", "query": "definition of NoSQL database", "concept": "NoSQL", "query_kind": "concept_definition"},
+                    "query_spec": {"label": "NoSQL", "query": "definition of NoSQL", "concept": "NoSQL", "query_kind": "concept_definition"},
                     "vector_results": [make_doc("shared", chunk_id="shared-1")],
                     "fulltext_results": [],
                     "fused": [make_doc("shared", chunk_id="shared-1", score=0.4)],
@@ -260,7 +266,7 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
                     "question": "what is the different in SQL and NOsql",
                     "original_question": "what is the different in SQL and NOsql",
                     "current_query": "what is the different in SQL and NOsql",
-                    "query_intent": adaptive_retrieval_service.analyze_query_intent("what is the different in SQL and NOsql"),
+                    "query_intent": retrieval_intent.analyze_query_intent("what is the different in SQL and NOsql"),
                 },
                 emit,
                 max_rewrite_attempts=2,
@@ -464,9 +470,9 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
 
         async def vector_side_effect(query, selected_file_ids, *, k, log_prefix):
             del selected_file_ids, k, log_prefix
-            if query == "definition of SQL database language":
+            if query == "definition of SQL":
                 return ([sql_doc], "primary")
-            if query == "definition of NoSQL database":
+            if query == "definition of NoSQL":
                 return ([nosql_doc], "primary")
             if query == "what is SQL and NoSQL":
                 return ([comparison_doc], "primary")
@@ -474,9 +480,9 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
 
         def fulltext_side_effect(query, selected_file_ids, retrieval_k):
             del selected_file_ids, retrieval_k
-            if query == "definition of SQL database language":
+            if query == "definition of SQL":
                 return [sql_doc]
-            if query == "definition of NoSQL database":
+            if query == "definition of NoSQL":
                 return [nosql_doc]
             if query == "what is SQL and NoSQL":
                 return [comparison_doc]

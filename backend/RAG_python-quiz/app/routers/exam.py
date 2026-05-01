@@ -1,4 +1,3 @@
-import asyncio
 import os
 from typing import List, Optional
 
@@ -6,12 +5,11 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, model_validator
 
-from app.agents.graph import run_exam_generation, run_exam_generation_with_pdf
-from app.agents.schemas import ExamGenerationRequest, ExamGenerationResponse, ExamQuestion
+from app.agents.schemas import ExamGenerationRequest, ExamGenerationResponse
 from app.logger import get_logger
 from app.routers.service_helpers import require_teacher, run_service
+from app.services import exam_workflow_service
 from app.services import pg_service
-from app.services.ai_service import ai_generate_exam_overall_comment, ai_grade_answer
 from app.utils.jwt_utils import get_current_user
 
 logger = get_logger(__name__)
@@ -65,43 +63,20 @@ IMAGES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file
 @router.post("/generate", response_model=ExamGenerationResponse)
 async def generate_exam(request: ExamGenerationRequest = Body(...), user: dict = Depends(get_current_user)):
     logger.info("[ExamAPI] generate exam user=%s", user.get("email", "unknown"))
-    try:
-        response = await run_exam_generation_with_pdf(request)
-        logger.info("[ExamAPI] generated exam id=%s questions=%s", response.exam_id, len(response.questions))
-        return response
-    except ValueError as error:
-        logger.error("[ExamAPI] validation error: %s", error)
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    except Exception as error:
-        logger.error("[ExamAPI] generation failed: %s", error, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Exam generation failed: {error}") from error
+    return await exam_workflow_service.generate_exam_with_pdf(request)
 
 
 @router.post("/generate-questions-only")
 async def generate_questions_only(request: ExamGenerationRequest = Body(...), user: dict = Depends(get_current_user)):
     logger.info("[ExamAPI] generate questions only user=%s", user.get("email", "unknown"))
-    try:
-        return await run_exam_generation(request)
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    except Exception as error:
-        logger.error("[ExamAPI] generation failed: %s", error, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Question generation failed: {error}") from error
+    return await exam_workflow_service.generate_questions_only(request)
 
 
 @router.post("/{exam_id}/regenerate-pdf")
 async def regenerate_pdf(exam_id: str, questions: list = Body(..., embed=True), exam_name: str = Body("Exam", embed=True), user: dict = Depends(get_current_user)):
     del user
-    from app.utils.pdf_generator import generate_exam_pdf
-
     logger.info("[ExamAPI] regenerate pdf exam_id=%s", exam_id)
-    try:
-        exam_questions = [ExamQuestion(**question) if isinstance(question, dict) else question for question in questions]
-        pdf_path = await generate_exam_pdf(exam_id=exam_id, exam_name=exam_name, questions=exam_questions)
-        return {"message": "PDF regenerated successfully", "exam_id": exam_id, "pdf_path": pdf_path}
-    except Exception as error:
-        logger.error("[ExamAPI] PDF regeneration failed: %s", error)
-        raise HTTPException(status_code=500, detail=f"PDF generation failed: {error}") from error
+    return await exam_workflow_service.regenerate_exam_pdf(exam_id, questions, exam_name)
 
 
 @router.get("/{exam_id}/pdf")
@@ -314,86 +289,5 @@ async def grade_submission(submission_id: str, request: GradeSubmissionRequest =
 @router.post("/submission/{submission_id}/ai-grade")
 async def ai_grade_submission(submission_id: str, user: dict = Depends(get_current_user)):
     require_teacher(user, "Only teachers can trigger AI grading", pg_service.is_user_teacher)
-    try:
-        submission = await asyncio.to_thread(pg_service.get_submission_with_answers, submission_id)
-        if not submission:
-            raise HTTPException(status_code=404, detail="Submission not found")
-
-        answers = submission.get("answers", [])
-        if not answers:
-            raise HTTPException(status_code=400, detail="No answers found in submission")
-
-        ai_grading_tasks = []
-        answer_indices = []
-        for index, answer in enumerate(answers):
-            question = answer.get("question_snapshot", {})
-            question_type = question.get("question_type", "")
-            choices = question.get("choices", [])
-            is_real_mcq = question_type == "multiple_choice" and choices and len(choices) > 0
-            if is_real_mcq:
-                continue
-            effective_type = "short_answer" if question_type == "multiple_choice" and not choices else question_type
-            ai_grading_tasks.append(
-                ai_grade_answer(
-                    question_text=question.get("question_text", question.get("question", "")),
-                    question_type=effective_type,
-                    model_answer=question.get("model_answer"),
-                    marking_scheme=question.get("marking_scheme", []),
-                    student_answer=answer.get("answer_text", ""),
-                    max_marks=question.get("marks", 1),
-                )
-            )
-            answer_indices.append(index)
-
-        ai_results = await asyncio.gather(*ai_grading_tasks, return_exceptions=True) if ai_grading_tasks else []
-
-        graded_answers = []
-        ai_result_index = 0
-        for index, answer in enumerate(answers):
-            grade_item = {
-                "answer_id": answer.get("id"),
-                "exam_question_id": answer.get("exam_question_id"),
-                "marks_earned": answer.get("marks_earned", 0),
-                "teacher_feedback": answer.get("teacher_feedback", ""),
-                "is_correct": answer.get("is_correct", False),
-                "ai_graded": False,
-            }
-            if index in answer_indices:
-                ai_result = ai_results[ai_result_index]
-                ai_result_index += 1
-                if isinstance(ai_result, Exception):
-                    logger.error("AI grading failed for answer %s: %s", answer.get("id"), ai_result)
-                    grade_item["teacher_feedback"] = f"AI grading failed: {ai_result}. Please grade manually."
-                else:
-                    grade_item["marks_earned"] = ai_result.get("marks_earned", 0)
-                    grade_item["teacher_feedback"] = ai_result.get("feedback", "")
-                    grade_item["is_correct"] = ai_result.get("is_correct", False)
-                    grade_item["ai_graded"] = True
-            graded_answers.append(grade_item)
-
-        total_score = sum(item["marks_earned"] for item in graded_answers)
-        total_marks = sum(answer.get("question_snapshot", {}).get("marks", 1) for answer in answers)
-
-        summary_lines = []
-        for index, graded_answer in enumerate(graded_answers):
-            answer = answers[index]
-            question_text = answer.get("question_snapshot", {}).get("question_text", "")
-            question_text = question_text[:50] if question_text else "Question"
-            max_marks = answer.get("question_snapshot", {}).get("marks", 1)
-            summary_lines.append(
-                f"Q{index + 1}: {question_text}... | Score: {graded_answer['marks_earned']}/{max_marks} | Correct: {graded_answer['is_correct']}"
-            )
-
-        overall_comment = await ai_generate_exam_overall_comment(
-            submission_summary="\n".join(summary_lines),
-            total_score=total_score,
-            total_marks=total_marks,
-        )
-        result = await asyncio.to_thread(pg_service.ai_grade_exam_submission, submission_id, graded_answers, teacher_comment=overall_comment)
-        return {"message": "AI grading completed", "submission": result, "graded_answers": graded_answers}
-    except HTTPException:
-        raise
-    except Exception as error:
-        logger.error("[ExamAPI] AI grading failed: %s", error)
-        raise HTTPException(status_code=500, detail=f"AI grading failed: {error}") from error
+    return await exam_workflow_service.ai_grade_submission(submission_id)
 

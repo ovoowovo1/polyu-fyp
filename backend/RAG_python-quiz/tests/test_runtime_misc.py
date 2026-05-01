@@ -44,7 +44,10 @@ class RuntimeMiscTests(unittest.TestCase):
         self.assertEqual(connect.call_args.kwargs["application_name"], "pg_service")
 
     def test_load_markdown_transforms_async_html_documents(self):
-        loader = SimpleNamespace(aload=asyncio.coroutine(lambda: ["<p>Hello</p>"]))
+        async def fake_aload():
+            return ["<p>Hello</p>"]
+
+        loader = SimpleNamespace(aload=fake_aload)
         transformer = SimpleNamespace(transform_documents=lambda docs: ["hello"])
 
         async def run():

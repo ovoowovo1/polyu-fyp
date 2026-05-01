@@ -21,7 +21,7 @@ Difficulty = Literal["easy", "medium", "difficult"]
 class MultipleChoice(BaseModel):
     bloom_level: BloomLevel
     question: str
-    choices: List[str] = Field(..., min_items=4, max_items=4)
+    choices: List[str] = Field(..., min_length=4, max_length=4)
     answer_index: int = Field(..., ge=0, le=3, description="0-based index of correct choice")
     rationale: str = Field(..., description="Short explanation for the correct answer")
 
@@ -34,7 +34,7 @@ class AQGRequest(BaseModel):
 class _MC(_BaseModel):
     bloom_level: BloomLevel
     question: str
-    choices: List[str] = Field(..., min_items=4, max_items=4, description="Exactly 4 choices")
+    choices: List[str] = Field(..., min_length=4, max_length=4, description="Exactly 4 choices")
     answer_index: int = Field(..., ge=0, le=3, description="0-based index of correct choice")
     rationale: str
 

@@ -291,12 +291,17 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, "## Answer\n\nGrounded explanation [1]")
         prompt = generate_text_completion.await_args.args[0]
         self.assertIn("Rewrite the grounded answer into a fuller English Markdown response.", prompt)
-        self.assertIn("Every factual paragraph or bullet item must end with one or more bracket citations", prompt)
+        self.assertIn(
+            "Every factual paragraph, bullet item, or table row must end with one or more bracket citations",
+            prompt,
+        )
         self.assertIn("[1] notes.pdf | page 5 | chunk_id=chunk-1", prompt)
         self.assertEqual(
             await service.synthesize_markdown_answer("What is CAP theorem?", "   ", [_source_node("chunk-1")]),
             "",
         )
+        
+        
 
     def test_static_retriever_and_custom_llm_cover_core_methods(self):
         nodes = [_source_node("chunk-1")]

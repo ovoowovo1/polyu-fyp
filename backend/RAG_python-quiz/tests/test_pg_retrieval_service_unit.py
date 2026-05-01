@@ -106,8 +106,6 @@ class PgRetrievalServiceTests(PgServiceBase):
         self.assertEqual(execute_values.call_args.args[2], [("chunk-1", "[0.90000000]")])
 
     def test_retrieve_context_helpers_cover_empty_and_keyword_paths(self):
-        self.assertEqual(pg_service.retrieve_context_by_entities(["entity"]), [])
-
         cursor = FakeCursor(
             fetchall_results=[
                 [{"text": "chunk", "score": None, "source": "lesson.pdf", "page_start": 1, "fileid": "file-1", "chunkid": "chunk-1"}],

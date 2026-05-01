@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 import psycopg2
 from datetime import datetime
 
@@ -14,21 +14,25 @@ from app.services.pg_classes_service import (
     list_classes_for_student,
 )
 from app.services.pg_db import _get_conn
-from app.services.pg_exam_service import (
+from app.services.pg_exam_crud import (
     _default_exam_title,
-    ai_grade_exam_submission,
     delete_exam,
     get_exam_by_id,
-    get_exam_submissions,
     get_exams_by_class,
-    get_student_exam_submissions,
-    get_submission_with_answers,
-    grade_exam_submission,
     publish_exam,
     save_exam,
+    update_exam,
+)
+from app.services.pg_exam_grading_service import (
+    ai_grade_exam_submission,
+    grade_exam_submission,
+)
+from app.services.pg_exam_submission_service import (
+    get_exam_submissions,
+    get_student_exam_submissions,
+    get_submission_with_answers,
     start_exam_submission,
     submit_exam,
-    update_exam,
 )
 from app.services.pg_files_service import (
     delete_file,
@@ -49,12 +53,13 @@ from app.services.pg_quiz_service import (
     save_quiz,
     submit_quiz_result,
     update_quiz,
+    QuizService,
+    get_quiz_service,
 )
 from app.services.pg_retrieval_service import (
     create_graph_from_document,
     find_document_by_hash,
     get_chunks_missing_embeddings,
-    retrieve_context_by_entities,
     retrieve_context_by_keywords,
     retrieve_graph_context,
     update_chunk_embeddings,
@@ -113,7 +118,6 @@ __all__ = [
     "psycopg2",
     "publish_exam",
     "rename_file",
-    "retrieve_context_by_entities",
     "retrieve_context_by_keywords",
     "retrieve_graph_context",
     "save_exam",
@@ -125,4 +129,6 @@ __all__ = [
     "update_chunk_embeddings",
     "update_exam",
     "update_quiz",
+    "QuizService",
+    "get_quiz_service",
 ]

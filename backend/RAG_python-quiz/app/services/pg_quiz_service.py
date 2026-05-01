@@ -375,3 +375,34 @@ __all__ = [
     "submit_quiz_result",
     "update_quiz",
 ]
+
+class QuizService:
+    def get_all_quizzes(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        return get_all_quizzes(user_id)
+        
+    def get_quizzes_by_class(self, class_id: str) -> List[Dict[str, Any]]:
+        return get_quizzes_by_class(class_id)
+        
+    def get_quiz_by_id(self, quiz_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+        return get_quiz_by_id(quiz_id, user_id)
+        
+    def save_quiz(self, quiz_data: Dict[str, Any], file_ids: List[str], quiz_name: str = None, class_id: str = None) -> Dict[str, Any]:
+        return save_quiz(quiz_data, file_ids, quiz_name, class_id)
+        
+    def update_quiz(self, quiz_id: str, quiz_data: Dict[str, Any], name: Optional[str] = None, file_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+        return update_quiz(quiz_id, quiz_data, name, file_ids)
+        
+    def delete_quiz(self, quiz_id: str) -> Dict[str, Any]:
+        return delete_quiz(quiz_id)
+        
+    def submit_quiz_result(self, quiz_id: str, student_id: str, answers: List[dict], score: float, total_questions: int) -> dict:
+        return submit_quiz_result(quiz_id, student_id, answers, score, total_questions)
+        
+    def get_quiz_submissions(self, quiz_id: str) -> List[dict]:
+        return get_quiz_submissions(quiz_id)
+        
+    def get_student_quiz_submission(self, quiz_id: str, student_id: str) -> Optional[dict]:
+        return get_student_quiz_submission(quiz_id, student_id)
+
+def get_quiz_service() -> QuizService:
+    return QuizService()

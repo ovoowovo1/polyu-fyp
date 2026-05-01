@@ -1,4 +1,4 @@
-import os
+﻿import os
 import time
 
 import uvicorn
@@ -17,6 +17,8 @@ from app.routers.quiz import router as quiz_router
 from app.routers.sse import router as sse_router
 from app.routers.tts import router as tts_router
 from app.routers.upload import router as upload_router
+from fastapi.responses import JSONResponse
+from app.services.exceptions import ServiceError
 from app.services import pg_service
 from app.utils.jwt_utils import verify_token
 
@@ -142,7 +144,7 @@ def create_app(*, settings=None, static_dir: str | None = None) -> FastAPI:
     os.makedirs(os.path.join(resolved_static_dir, "pdfs"), exist_ok=True)
     os.makedirs(os.path.join(resolved_static_dir, "images"), exist_ok=True)
     app.mount("/static", StaticFiles(directory=resolved_static_dir), name="static")
-    app.add_event_handler("startup", _create_startup_handler())
+    app.add_event_handler('startup', _create_startup_handler())
     return app
 
 
