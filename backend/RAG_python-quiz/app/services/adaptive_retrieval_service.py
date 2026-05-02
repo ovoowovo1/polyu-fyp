@@ -240,7 +240,7 @@ async def grade_documents_node(
     question = state["question"]
     candidate_documents = state.get("candidate_documents", [])
     query_intent = state.get("query_intent") or retrieval_intent.analyze_query_intent(question)
-    required_concepts = query_intent.get("required_concepts", [])
+    required_concepts = normalize_concepts(query_intent.get("required_concepts", []), normalizer=_clean_concept_fragment)
     intent_type = query_intent.get("intent_type", "single")
     filtered_documents: List[Dict[str, Any]] = []
     logger.info(
@@ -356,9 +356,16 @@ Content:
             merged_doc = {**doc, "covered_concepts": covered}
             return index, should_keep, merged_doc, covered
         except Exception as err:
-            logger.warning("[%s] document grading failed; keeping chunk %s: %s", log_prefix, doc.get("chunkId"), err)
-            merged_doc = {**doc, "covered_concepts": []}
-            return index, True, merged_doc, []
+            fallback_covered = [concept for concept in retrieved_for if concept in required_concepts]
+            logger.warning(
+                "[%s] document grading failed; keeping chunk %s with fallback_covered_concepts=%s: %s",
+                log_prefix,
+                doc.get("chunkId"),
+                fallback_covered,
+                err,
+            )
+            merged_doc = {**doc, "covered_concepts": fallback_covered}
+            return index, True, merged_doc, fallback_covered
 
     grading_results = await asyncio.gather(
         *(grade_one(index, doc) for index, doc in enumerate(candidate_documents))
