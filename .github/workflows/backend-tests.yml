@@ -2,13 +2,19 @@ name: Backend Tests
 
 on:
   push:
+    branches:
+      - main
     paths:
       - "backend/RAG_python-quiz/**"
       - ".github/workflows/backend-tests.yml"
+
   pull_request:
+    branches:
+      - main
     paths:
       - "backend/RAG_python-quiz/**"
       - ".github/workflows/backend-tests.yml"
+
 
 jobs:
   backend:
