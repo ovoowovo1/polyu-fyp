@@ -18,8 +18,9 @@ from app.routers.sse import router as sse_router
 from app.routers.tts import router as tts_router
 from app.routers.upload import router as upload_router
 from fastapi.responses import JSONResponse
-from app.services.exceptions import ServiceError
-from app.services import pg_service
+from app.services.core.exceptions import ServiceError
+from app.services.pg import pg_service
+from app.services.pg.rls_context import clear_current_rls_user
 from app.utils.jwt_utils import verify_token
 
 
@@ -100,6 +101,7 @@ def _add_request_logging_middleware(app: FastAPI) -> None:
     async def log_api_request(request: Request, call_next):
         started_at = time.perf_counter()
         user = _request_user_from_authorization(request.headers.get("authorization"))
+        clear_current_rls_user()
         try:
             response = await call_next(request)
         except Exception as error:
@@ -112,6 +114,8 @@ def _add_request_logging_middleware(app: FastAPI) -> None:
                 error=error,
             )
             raise
+        finally:
+            clear_current_rls_user()
 
         _log_api_request(request, user, started_at, status_code=response.status_code)
         return response

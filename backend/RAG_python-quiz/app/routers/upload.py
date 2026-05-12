@@ -2,15 +2,16 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.logger import get_logger
 from app.routers.service_helpers import error_detail, run_async_service, success_payload
-from app.services.document_service import ingest_document, ingest_website
-from app.services.progress_bus import publish_progress
+from app.services.documents.document_service import ingest_document, ingest_website
+from app.services.realtime.progress_bus import publish_progress
 from app.utils.ingest_errors import DocumentIngestError, EmbeddingProviderError
+from app.utils.jwt_utils import get_current_user
 
 logger = get_logger(__name__)
 
@@ -114,6 +115,7 @@ async def upload_multiple(
     files: Optional[List[UploadFile]] = File(default=None),
     clientId: Optional[str] = Query(default=None),
     class_id: Optional[str] = Query(default=None),
+    user: dict = Depends(get_current_user),
 ):
     if not files:
         return JSONResponse(
@@ -185,6 +187,7 @@ async def upload_link(
     body: UploadLinkBody,
     clientId: Optional[str] = Query(default=None),
     class_id: Optional[str] = Query(default=None),
+    user: dict = Depends(get_current_user),
 ):
     if not body.url or not body.url.strip():
         return JSONResponse(

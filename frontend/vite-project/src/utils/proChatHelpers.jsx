@@ -4,6 +4,7 @@ import axios from 'axios';
 import MarkdownIt from 'markdown-it';
 
 import { API_BASE_URL } from '../config.js';
+import { getToken } from '../api/auth.js';
 import Citation from '../components/Citation.jsx';
 import i18n from '../i18n/config.js';
 import { buildStructuredContentFromResult } from './queryStreamSse.js';
@@ -104,11 +105,17 @@ export const handleProChatRequestWithProgress = async (messages, options = {}) =
 
         console.log('發送 SSE 請求:', requestData);
 
+        const token = getToken();
+        const headers = {
+            'Content-Type': 'application/json',
+        };
+        if (token) {
+            headers.Authorization = `Bearer ${token}`;
+        }
+
         const response = await fetch(`${API_BASE_URL}/api/query-stream`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers,
             body: JSON.stringify(requestData),
         });
 

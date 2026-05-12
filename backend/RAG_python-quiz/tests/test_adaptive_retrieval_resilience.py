@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from app.services import adaptive_retrieval_service
+from app.services.rag import adaptive_retrieval_service
 
 
 def make_doc(text, *, chunk_id="chunk-1", source="doc.pdf", page=1, file_id="file-1", score=0.12):
@@ -18,7 +18,7 @@ def make_doc(text, *, chunk_id="chunk-1", source="doc.pdf", page=1, file_id="fil
 class AdaptiveRetrievalResilienceTests(unittest.IsolatedAsyncioTestCase):
     async def test_document_grading_exception_uses_retrieval_hints_for_covered_concepts(self):
         with patch(
-            "app.services.adaptive_retrieval_service.generate_structured_json",
+            "app.services.rag.adaptive_retrieval_service.generate_structured_json",
             AsyncMock(side_effect=RuntimeError("grader unavailable")),
         ):
             graded = await adaptive_retrieval_service.grade_documents_node(
@@ -67,13 +67,13 @@ class AdaptiveRetrievalResilienceTests(unittest.IsolatedAsyncioTestCase):
             raise AssertionError(query)
 
         with patch(
-            "app.services.adaptive_retrieval_service._retrieve_vector_context",
+            "app.services.rag.adaptive_retrieval_service._retrieve_vector_context",
             AsyncMock(side_effect=vector_side_effect),
         ), patch(
-            "app.services.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
+            "app.services.rag.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
             side_effect=fulltext_side_effect,
         ), patch(
-            "app.services.adaptive_retrieval_service.generate_structured_json",
+            "app.services.rag.adaptive_retrieval_service.generate_structured_json",
             AsyncMock(side_effect=RuntimeError("grader unavailable")),
         ):
             result = await adaptive_retrieval_service.run_adaptive_retrieval(

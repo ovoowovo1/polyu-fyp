@@ -1,15 +1,16 @@
 from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.routers.service_helpers import run_service
-from app.services import pg_service
+from app.services.pg import pg_service
+from app.utils.jwt_utils import get_current_user
 
 router = APIRouter(prefix="", tags=["files"])
 
 
 @router.get("/files")
-async def get_files(class_id: Optional[str] = None):
+async def get_files(class_id: Optional[str] = None, user: dict = Depends(get_current_user)):
     files = await run_service(
         pg_service.get_files_list,
         class_id,
@@ -22,7 +23,7 @@ async def get_files(class_id: Optional[str] = None):
 
 
 @router.delete("/files/{file_id}")
-async def delete_file(file_id: str):
+async def delete_file(file_id: str, user: dict = Depends(get_current_user)):
     result = await run_service(
         pg_service.delete_file,
         file_id,
@@ -39,7 +40,7 @@ async def delete_file(file_id: str):
 
 
 @router.get("/files/{file_id}")
-async def get_file_details(file_id: str):
+async def get_file_details(file_id: str, user: dict = Depends(get_current_user)):
     details = await run_service(
         pg_service.get_specific_file,
         file_id,
@@ -56,7 +57,7 @@ async def get_file_details(file_id: str):
 
 
 @router.put("/files/{file_id}")
-async def rename_file(file_id: str, new_name: str):
+async def rename_file(file_id: str, new_name: str, user: dict = Depends(get_current_user)):
     result = await run_service(
         pg_service.rename_file,
         file_id,
@@ -74,7 +75,7 @@ async def rename_file(file_id: str, new_name: str):
 
 
 @router.get("/chunks/{chunk_id}/source-details")
-async def get_chunk_source_details(chunk_id: str):
+async def get_chunk_source_details(chunk_id: str, user: dict = Depends(get_current_user)):
     details = await run_service(
         pg_service.get_source_details_by_chunk_id,
         chunk_id,

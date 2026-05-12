@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 from llama_index.core.base.response.schema import Response
 from llama_index.core.schema import NodeWithScore, TextNode
 
-from app.services import citation_evidence_service as service
+from app.services.rag import citation_evidence_service as service
 
 
 def _source_node(chunk_id: str, *, file_id="file-1", source="notes.pdf", page=5):
@@ -275,7 +275,7 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_synthesize_markdown_answer_uses_grounded_prompt_and_normalizes_output(self):
         with patch(
-            "app.services.citation_evidence_service.generate_text_completion",
+            "app.services.rag.citation_evidence_service.generate_text_completion",
             AsyncMock(return_value="## Answer\n\nGrounded explanation [1]\n"),
         ) as generate_text_completion:
             result = await service.synthesize_markdown_answer(
@@ -324,8 +324,8 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
                 self.chat = _FakeChat()
 
         llm = service.OpenAICompatibleCustomLLM(model_name="test-model", api_key="abc")
-        with patch("app.services.citation_evidence_service.get_llm_client", return_value=_FakeClient()), patch(
-            "app.services.citation_evidence_service.extract_chat_completion_text",
+        with patch("app.services.rag.citation_evidence_service.get_llm_client", return_value=_FakeClient()), patch(
+            "app.services.rag.citation_evidence_service.extract_chat_completion_text",
             return_value="Completed answer",
         ):
             completion = llm.complete("Prompt text")
@@ -349,8 +349,8 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
                 captured["question"] = question
                 return fake_response
 
-        with patch("app.services.citation_evidence_service.CitationQueryEngine", _FakeQueryEngine), patch(
-            "app.services.citation_evidence_service.get_default_llm_model_name",
+        with patch("app.services.rag.citation_evidence_service.CitationQueryEngine", _FakeQueryEngine), patch(
+            "app.services.rag.citation_evidence_service.get_default_llm_model_name",
             return_value="test-model",
         ):
             result = service._run_citation_query(
@@ -384,10 +384,10 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
 
         response = Response(response="Grounded answer [1].", source_nodes=[_source_node("chunk-1")])
         with patch(
-            "app.services.citation_evidence_service._run_citation_query",
+            "app.services.rag.citation_evidence_service._run_citation_query",
             return_value=response,
         ) as run_query, patch(
-            "app.services.citation_evidence_service.generate_text_completion",
+            "app.services.rag.citation_evidence_service.generate_text_completion",
             AsyncMock(return_value="## Answer\nGrounded answer in Markdown [1]."),
         ) as generate_text_completion:
             result = await service.generate_citation_evidence(
@@ -432,10 +432,10 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
         response = Response(response="NoSQL uses flexible schemas [1].", source_nodes=[_source_node("chunk-1")])
 
         with patch(
-            "app.services.citation_evidence_service._run_citation_query",
+            "app.services.rag.citation_evidence_service._run_citation_query",
             return_value=response,
         ) as run_query, patch(
-            "app.services.citation_evidence_service.generate_text_completion",
+            "app.services.rag.citation_evidence_service.generate_text_completion",
             AsyncMock(return_value="## NoSQL\nNoSQL uses flexible schemas [1]."),
         ):
             result = await service.generate_citation_evidence(
@@ -474,10 +474,10 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
         response = Response(response="Grounded answer without inline citations.", source_nodes=[_source_node("chunk-1")])
 
         with patch(
-            "app.services.citation_evidence_service._run_citation_query",
+            "app.services.rag.citation_evidence_service._run_citation_query",
             return_value=response,
         ), patch(
-            "app.services.citation_evidence_service.generate_text_completion",
+            "app.services.rag.citation_evidence_service.generate_text_completion",
             AsyncMock(return_value="## Answer\nGrounded answer without inline citations."),
         ):
             result = await service.generate_citation_evidence(
@@ -507,10 +507,10 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
         response = Response(response="Grounded answer [1].", source_nodes=[_source_node("chunk-1")])
 
         with patch(
-            "app.services.citation_evidence_service._run_citation_query",
+            "app.services.rag.citation_evidence_service._run_citation_query",
             return_value=response,
         ), patch(
-            "app.services.citation_evidence_service.generate_text_completion",
+            "app.services.rag.citation_evidence_service.generate_text_completion",
             AsyncMock(side_effect=RuntimeError("llm failed")),
         ):
             result = await service.generate_citation_evidence(

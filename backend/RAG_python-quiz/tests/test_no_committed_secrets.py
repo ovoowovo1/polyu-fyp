@@ -23,11 +23,20 @@ class NoCommittedSecretsTests(unittest.TestCase):
                 if line.strip().endswith(".py")
             ]
         except (OSError, subprocess.CalledProcessError):
-            tracked_files = [
-                path
-                for path in backend_root.rglob("*.py")
-                if "__pycache__" not in path.parts
-            ]
+            tracked_files = []
+
+        filesystem_files = [
+            path
+            for path in backend_root.rglob("*.py")
+            if "__pycache__" not in path.parts and ".venv" not in path.parts
+        ]
+        scanned_files = sorted(
+            {
+                path.resolve()
+                for path in [*tracked_files, *filesystem_files]
+                if path.exists() and "__pycache__" not in path.parts and ".venv" not in path.parts
+            }
+        )
 
         token_prefix = "sk" + "-"
         openrouter_prefix = "sk" + "-or-v1-"
@@ -43,8 +52,8 @@ class NoCommittedSecretsTests(unittest.TestCase):
         findings = []
         this_file = Path(__file__).resolve()
 
-        for path in tracked_files:
-            if path.resolve() == this_file:
+        for path in scanned_files:
+            if path == this_file:
                 continue
 
             text = path.read_text(encoding="utf-8", errors="ignore")

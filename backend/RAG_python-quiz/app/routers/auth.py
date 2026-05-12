@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from app.logger import get_logger
 from app.routers.service_helpers import error_detail, run_service, success_payload
-from app.services.pg_auth_service import login as auth_login, register as auth_register
+from app.services.pg.pg_auth_service import login as auth_login, register as auth_register
 from app.utils.jwt_utils import verify_token
 
 logger = get_logger(__name__)

@@ -37,7 +37,17 @@ class UploadApiTests(unittest.TestCase):
     def setUp(self):
         app = FastAPI()
         app.include_router(router)
+        app.dependency_overrides[upload.get_current_user] = lambda: {
+            "user_id": "user-1",
+            "email": "u@example.com",
+        }
+        self.app = app
         self.client = TestClient(app)
+
+    def test_upload_routes_require_authentication(self):
+        self.app.dependency_overrides.clear()
+        response = self.client.post("/upload-multiple")
+        self.assertEqual(response.status_code, 401)
 
     def test_upload_multiple_returns_200_for_all_success_including_duplicates(self):
         mock_ingest = AsyncMock(

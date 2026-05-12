@@ -1,17 +1,17 @@
-﻿from datetime import datetime
+from datetime import datetime
 from unittest.mock import patch
 
-from app.services import pg_service
-from app.services.exceptions import NotReleasedError, PermissionDeniedError
+from app.services.pg import pg_service
+from app.services.core.exceptions import NotReleasedError, PermissionDeniedError
 from tests.pg_service_test_support import FixedDateTime, PgServiceBase
 from tests.support import FakeCursor
 
 
 class PgExamServiceTests(PgServiceBase):
-    module_path = "app.services.pg_exam_service"
+    module_path = "app.services.pg.pg_exam_service"
 
     def test_default_exam_title_and_save_exam_cover_generated_and_manual_titles(self):
-        with patch("app.services.pg_exam_crud.datetime", FixedDateTime):
+        with patch("app.services.pg.pg_exam_crud.datetime", FixedDateTime):
             cursor = FakeCursor(fetchall_results=[[{"name": "lesson.pdf"}]])
             self.assertIn("lesson -", pg_service._default_exam_title(cursor, ["file-1"]))
 
@@ -28,7 +28,7 @@ class PgExamServiceTests(PgServiceBase):
             {"question_id": "q-2", "question_type": "short_answer", "marks": 3},
         ]
         cursor = FakeCursor(fetchone_results=[row])
-        with self.patch_conn(cursor), patch("app.services.pg_shared.psycopg2.extras.execute_values") as execute_values:
+        with self.patch_conn(cursor), patch("app.services.pg.pg_shared.psycopg2.extras.execute_values") as execute_values:
             result = pg_service.save_exam(
                 "exam-1",
                 "Database Exam",
@@ -45,8 +45,8 @@ class PgExamServiceTests(PgServiceBase):
         self.assertTrue(execute_values.called)
 
         cursor = FakeCursor(fetchone_results=[row], fetchall_results=[[{"name": "lesson.pdf"}]])
-        with self.patch_conn(cursor), patch("app.services.pg_exam_crud.datetime", FixedDateTime), patch(
-            "app.services.pg_shared.psycopg2.extras.execute_values"
+        with self.patch_conn(cursor), patch("app.services.pg.pg_exam_crud.datetime", FixedDateTime), patch(
+            "app.services.pg.pg_shared.psycopg2.extras.execute_values"
         ) as execute_values:
             generated = pg_service.save_exam("exam-2", "", questions[:1], [])
         self.assertIn("lesson -", generated["title"])
@@ -133,7 +133,7 @@ class PgExamServiceTests(PgServiceBase):
 
         existing = {"id": "exam-1", "questions_json": "[]"}
         cursor = FakeCursor(fetchone_results=[existing, {"id": "exam-1", "title": "Updated", "total_marks": 3}])
-        with self.patch_conn(cursor), patch("app.services.pg_shared.psycopg2.extras.execute_values") as execute_values:
+        with self.patch_conn(cursor), patch("app.services.pg.pg_shared.psycopg2.extras.execute_values") as execute_values:
             updated = pg_service.update_exam(
                 "exam-1",
                 title="Updated",
@@ -149,7 +149,7 @@ class PgExamServiceTests(PgServiceBase):
         self.assertTrue(execute_values.called)
 
         cursor = FakeCursor(fetchone_results=[existing, {"id": "exam-1", "title": "Updated", "total_marks": 0}])
-        with self.patch_conn(cursor), patch("app.services.pg_shared.psycopg2.extras.execute_values") as execute_values:
+        with self.patch_conn(cursor), patch("app.services.pg.pg_shared.psycopg2.extras.execute_values") as execute_values:
             pg_service.update_exam("exam-1", duration_minutes=0, file_ids=[], start_at="", end_at="")
         self.assertFalse(execute_values.called)
 

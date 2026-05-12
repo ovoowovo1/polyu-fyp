@@ -1,7 +1,7 @@
 from unittest.mock import AsyncMock, patch
 import unittest
 
-from app.services import embedding_backfill_service
+from app.services.documents import embedding_backfill_service
 
 
 class EmbeddingBackfillServiceTests(unittest.IsolatedAsyncioTestCase):
@@ -9,10 +9,10 @@ class EmbeddingBackfillServiceTests(unittest.IsolatedAsyncioTestCase):
         fake_model = object()
 
         with patch(
-            "app.services.embedding_backfill_service.create_embedding_model",
+            "app.services.documents.embedding_backfill_service.create_embedding_model",
             return_value=fake_model,
         ) as create_model, patch(
-            "app.services.embedding_backfill_service.pg_service.get_chunks_missing_embeddings",
+            "app.services.documents.embedding_backfill_service.pg_service.get_chunks_missing_embeddings",
             side_effect=[
                 [
                     {"id": "chunk-1", "text": "first"},
@@ -21,10 +21,10 @@ class EmbeddingBackfillServiceTests(unittest.IsolatedAsyncioTestCase):
                 [],
             ],
         ) as get_missing, patch(
-            "app.services.embedding_backfill_service.document_service.embed_texts_with_retry",
+            "app.services.documents.embedding_backfill_service.document_service.embed_texts_with_retry",
             AsyncMock(return_value=[[1.0], [2.0]]),
         ) as embed_texts, patch(
-            "app.services.embedding_backfill_service.pg_service.update_chunk_embeddings",
+            "app.services.documents.embedding_backfill_service.pg_service.update_chunk_embeddings",
             return_value=2,
         ) as update_embeddings:
             summary = await embedding_backfill_service.backfill_embedding_column(batch_size=2)
@@ -44,16 +44,16 @@ class EmbeddingBackfillServiceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_backfill_respects_limit(self):
         with patch(
-            "app.services.embedding_backfill_service.create_embedding_model",
+            "app.services.documents.embedding_backfill_service.create_embedding_model",
             return_value=object(),
         ), patch(
-            "app.services.embedding_backfill_service.pg_service.get_chunks_missing_embeddings",
+            "app.services.documents.embedding_backfill_service.pg_service.get_chunks_missing_embeddings",
             side_effect=[[{"id": "chunk-1", "text": "only"}]],
         ) as get_missing, patch(
-            "app.services.embedding_backfill_service.document_service.embed_texts_with_retry",
+            "app.services.documents.embedding_backfill_service.document_service.embed_texts_with_retry",
             AsyncMock(return_value=[[1.0]]),
         ), patch(
-            "app.services.embedding_backfill_service.pg_service.update_chunk_embeddings",
+            "app.services.documents.embedding_backfill_service.pg_service.update_chunk_embeddings",
             return_value=1,
         ):
             summary = await embedding_backfill_service.backfill_embedding_column(batch_size=5, limit=1)

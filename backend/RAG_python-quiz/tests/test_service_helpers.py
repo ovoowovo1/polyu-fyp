@@ -5,7 +5,7 @@ from unittest.mock import Mock
 from fastapi import HTTPException
 
 from app.routers import service_helpers
-from app.services.exceptions import NotFoundError, ValidationServiceError
+from app.services.core.exceptions import NotFoundError, ValidationServiceError
 
 
 class ServiceHelpersTests(unittest.TestCase):

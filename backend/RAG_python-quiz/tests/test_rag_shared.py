@@ -1,6 +1,6 @@
 import unittest
 
-from app.services import rag_shared
+from app.services.rag import rag_shared
 
 
 class RagSharedTests(unittest.IsolatedAsyncioTestCase):

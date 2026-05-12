@@ -1,20 +1,20 @@
 import unittest
 from unittest.mock import patch
 
-from app.services import pg_service
+from app.services.pg import pg_service
 from tests.pg_service_test_support import PgServiceBase
 from tests.support import FakeCursor
 
 
 class PgRetrievalServiceTests(PgServiceBase):
-    module_path = "app.services.pg_retrieval_service"
+    module_path = "app.services.pg.pg_retrieval_service"
 
     def test_to_pgvector_formats_float_sequence(self):
         self.assertEqual(pg_service._to_pgvector([1, 2.5]), "[1.00000000,2.50000000]")
 
     def test_get_embedding_column_uses_settings_and_rejects_invalid_values(self):
         with patch(
-            "app.services.pg_shared.get_settings",
+            "app.services.pg.pg_shared.get_settings",
             return_value=type("Settings", (), {"embedding_active_column": "embedding_v2"})(),
         ):
             self.assertEqual(pg_service._get_embedding_column(), "embedding_v2")
@@ -49,7 +49,7 @@ class PgRetrievalServiceTests(PgServiceBase):
         ]
 
         with self.patch_conn(cursor), patch(
-            "app.services.pg_retrieval_service.psycopg2.extras.execute_values"
+            "app.services.pg.pg_retrieval_service.psycopg2.extras.execute_values"
         ) as execute_values:
             result = pg_service.create_graph_from_document(document, chunks, embedding_column="embedding")
 
@@ -64,9 +64,9 @@ class PgRetrievalServiceTests(PgServiceBase):
         chunks = [{"text": "Only", "metadata": {}, "embedding": [0.4]}]
 
         with self.patch_conn(cursor), patch(
-            "app.services.pg_shared.get_settings",
+            "app.services.pg.pg_shared.get_settings",
             return_value=type("Settings", (), {"embedding_active_column": "embedding"})(),
-        ), patch("app.services.pg_retrieval_service.psycopg2.extras.execute_values") as execute_values:
+        ), patch("app.services.pg.pg_retrieval_service.psycopg2.extras.execute_values") as execute_values:
             pg_service.create_graph_from_document(document, chunks)
 
         self.assertIn("INSERT INTO documents (hash, name, size_bytes, mimetype)", cursor.executed[0][0])
@@ -76,7 +76,7 @@ class PgRetrievalServiceTests(PgServiceBase):
         rows = [{"text": "chunk", "score": 0.4, "source": "doc", "page_start": 2, "fileid": "file-1", "chunkid": "chunk-1"}]
         cursor = FakeCursor(fetchall_results=[rows])
         with self.patch_conn(cursor), patch(
-            "app.services.pg_shared.get_settings",
+            "app.services.pg.pg_shared.get_settings",
             return_value=type("Settings", (), {"embedding_active_column": "embedding"})(),
         ):
             result = pg_service.retrieve_graph_context([0.1], selected_file_ids=["file-1"])
@@ -99,7 +99,7 @@ class PgRetrievalServiceTests(PgServiceBase):
 
         cursor = FakeCursor()
         with self.patch_conn(cursor), patch(
-            "app.services.pg_retrieval_service.psycopg2.extras.execute_values"
+            "app.services.pg.pg_retrieval_service.psycopg2.extras.execute_values"
         ) as execute_values:
             updated = pg_service.update_chunk_embeddings([{"id": "chunk-1", "embedding": [0.9]}])
         self.assertEqual(updated, 1)

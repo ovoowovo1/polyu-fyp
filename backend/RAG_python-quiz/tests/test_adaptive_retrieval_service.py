@@ -2,8 +2,8 @@ import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from app.services import adaptive_retrieval_service
-from app.services import retrieval_intent
+from app.services.rag import adaptive_retrieval_service
+from app.services.rag import retrieval_intent
 from app.utils.ingest_errors import EmbeddingProviderError
 
 
@@ -113,7 +113,7 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with patch(
-            "app.services.adaptive_retrieval_service.retrieve_vector_context",
+            "app.services.rag.adaptive_retrieval_service.retrieve_vector_context",
             AsyncMock(return_value=([], "primary")),
         ) as retrieve_vector_context:
             rows, mode = await adaptive_retrieval_service._retrieve_vector_context(
@@ -168,7 +168,7 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
 
     def test_merge_candidate_documents_skips_missing_and_duplicate_chunk_ids(self):
         with patch(
-            "app.services.adaptive_retrieval_service._reciprocal_rank_fusion",
+            "app.services.rag.adaptive_retrieval_service._reciprocal_rank_fusion",
             return_value=[
                 {"text": "ignored", "chunkId": None},
                 make_doc("kept", chunk_id="chunk-1", score=0.4),
@@ -223,10 +223,10 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
         }
 
         with patch(
-            "app.services.adaptive_retrieval_service._retrieve_vector_context",
+            "app.services.rag.adaptive_retrieval_service._retrieve_vector_context",
             AsyncMock(side_effect=make_retryable_error()),
         ), patch(
-            "app.services.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
+            "app.services.rag.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
             side_effect=RuntimeError("fts failed"),
         ):
             updated = await adaptive_retrieval_service.retrieve_documents_node(state, emit)
@@ -244,7 +244,7 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
             emitted.append((message, data, event_type))
 
         with patch(
-            "app.services.adaptive_retrieval_service.generate_structured_json",
+            "app.services.rag.adaptive_retrieval_service.generate_structured_json",
             AsyncMock(side_effect=RuntimeError("grader down")),
         ):
             graded = await adaptive_retrieval_service.grade_documents_node(
@@ -258,7 +258,7 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(graded["filtered_documents"][0]["covered_concepts"], [])
 
         with patch(
-            "app.services.adaptive_retrieval_service.generate_structured_json",
+            "app.services.rag.adaptive_retrieval_service.generate_structured_json",
             AsyncMock(side_effect=RuntimeError("rewrite down")),
         ):
             rewritten = await adaptive_retrieval_service.rewrite_query_node(
@@ -283,7 +283,7 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
             emitted.append((message, data, event_type))
 
         with patch(
-            "app.services.adaptive_retrieval_service.generate_structured_json",
+            "app.services.rag.adaptive_retrieval_service.generate_structured_json",
             AsyncMock(
                 side_effect=[
                     {"relevant": "yes", "covered_concepts": ["SQL"], "reason": "sql definition"},
@@ -317,7 +317,7 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_retrieved_for_concepts_do_not_count_as_covered_or_force_keep(self):
         with patch(
-            "app.services.adaptive_retrieval_service.generate_structured_json",
+            "app.services.rag.adaptive_retrieval_service.generate_structured_json",
             AsyncMock(return_value={"relevant": "no", "covered_concepts": [], "reason": "incidental mention"}),
         ):
             graded = await adaptive_retrieval_service.grade_documents_node(
@@ -364,7 +364,7 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
             raise AssertionError(prompt)
 
         with patch(
-            "app.services.adaptive_retrieval_service.generate_structured_json",
+            "app.services.rag.adaptive_retrieval_service.generate_structured_json",
             AsyncMock(side_effect=structured_side_effect),
         ):
             graded = await adaptive_retrieval_service.grade_documents_node(
@@ -378,7 +378,7 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_grade_documents_supports_bounded_concurrency_branch(self):
         with patch.object(adaptive_retrieval_service, "DOCUMENT_GRADING_CONCURRENCY", 1), patch(
-            "app.services.adaptive_retrieval_service.generate_structured_json",
+            "app.services.rag.adaptive_retrieval_service.generate_structured_json",
             AsyncMock(return_value={"relevant": "yes", "reason": "keep"}),
         ):
             graded = await adaptive_retrieval_service.grade_documents_node(
@@ -397,13 +397,13 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
             raise AssertionError(operation_name)
 
         with patch(
-            "app.services.adaptive_retrieval_service._retrieve_vector_context",
+            "app.services.rag.adaptive_retrieval_service._retrieve_vector_context",
             AsyncMock(side_effect=make_retryable_error()),
         ), patch(
-            "app.services.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
+            "app.services.rag.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
             return_value=fulltext_result,
         ), patch(
-            "app.services.adaptive_retrieval_service.generate_structured_json",
+            "app.services.rag.adaptive_retrieval_service.generate_structured_json",
             AsyncMock(side_effect=structured_side_effect),
         ):
             result = await collect_result()
@@ -424,13 +424,13 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
 
         retrieve_vector_context = AsyncMock(side_effect=[([], "primary"), ([doc], "primary")])
         with patch(
-            "app.services.adaptive_retrieval_service._retrieve_vector_context",
+            "app.services.rag.adaptive_retrieval_service._retrieve_vector_context",
             retrieve_vector_context,
         ), patch(
-            "app.services.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
+            "app.services.rag.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
             return_value=[],
         ), patch(
-            "app.services.adaptive_retrieval_service.generate_structured_json",
+            "app.services.rag.adaptive_retrieval_service.generate_structured_json",
             AsyncMock(side_effect=structured_side_effect),
         ):
             result = await collect_result()
@@ -449,13 +449,13 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
             raise AssertionError(operation_name)
 
         with patch(
-            "app.services.adaptive_retrieval_service._retrieve_vector_context",
+            "app.services.rag.adaptive_retrieval_service._retrieve_vector_context",
             AsyncMock(return_value=([], "primary")),
         ), patch(
-            "app.services.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
+            "app.services.rag.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
             return_value=[],
         ), patch(
-            "app.services.adaptive_retrieval_service.generate_structured_json",
+            "app.services.rag.adaptive_retrieval_service.generate_structured_json",
             AsyncMock(side_effect=structured_side_effect),
         ):
             result = await collect_result()
@@ -499,13 +499,13 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
             raise AssertionError(operation_name)
 
         with patch(
-            "app.services.adaptive_retrieval_service._retrieve_vector_context",
+            "app.services.rag.adaptive_retrieval_service._retrieve_vector_context",
             AsyncMock(side_effect=vector_side_effect),
         ), patch(
-            "app.services.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
+            "app.services.rag.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
             side_effect=fulltext_side_effect,
         ), patch(
-            "app.services.adaptive_retrieval_service.generate_structured_json",
+            "app.services.rag.adaptive_retrieval_service.generate_structured_json",
             AsyncMock(side_effect=structured_side_effect),
         ):
             result = await collect_result(question="what is SQL and NoSQL")

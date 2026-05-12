@@ -5,10 +5,11 @@ from unittest.mock import patch
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
+from app.services.pg import rls_context
 from app.utils import jwt_utils
 
 
-class JwtUtilsTests(unittest.TestCase):
+class JwtUtilsTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.settings = SimpleNamespace(jwt_secret_key="secret")
 
@@ -39,36 +40,37 @@ class JwtUtilsTests(unittest.TestCase):
         with patch("app.utils.jwt_utils.verify_token", return_value={"sub": "user-1"}):
             self.assertEqual(jwt_utils.get_user_id_from_token("good"), "user-1")
 
-    def test_get_current_user_requires_credentials(self):
+    async def test_get_current_user_requires_credentials(self):
         with self.assertRaises(HTTPException) as ctx:
-            jwt_utils.get_current_user(None)
+            await jwt_utils.get_current_user(None)
 
         self.assertEqual(ctx.exception.status_code, 401)
         self.assertEqual(ctx.exception.detail["error"], "Authorization header missing")
 
-    def test_get_current_user_rejects_invalid_token(self):
+    async def test_get_current_user_rejects_invalid_token(self):
         creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="bad")
         with patch("app.utils.jwt_utils.verify_token", return_value=None):
             with self.assertRaises(HTTPException) as ctx:
-                jwt_utils.get_current_user(creds)
+                await jwt_utils.get_current_user(creds)
 
         self.assertEqual(ctx.exception.status_code, 401)
         self.assertEqual(ctx.exception.detail["error"], "Invalid or expired token")
 
-    def test_get_current_user_rejects_missing_subject(self):
+    async def test_get_current_user_rejects_missing_subject(self):
         creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="good")
         with patch("app.utils.jwt_utils.verify_token", return_value={"username": "u@example.com"}):
             with self.assertRaises(HTTPException) as ctx:
-                jwt_utils.get_current_user(creds)
+                await jwt_utils.get_current_user(creds)
 
         self.assertEqual(ctx.exception.status_code, 401)
         self.assertEqual(ctx.exception.detail["error"], "Invalid token payload")
 
-    def test_get_current_user_returns_normalized_payload(self):
+    async def test_get_current_user_returns_normalized_payload(self):
         creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="good")
         payload = {"sub": "user-1", "username": "u@example.com"}
+        rls_context.clear_current_rls_user()
         with patch("app.utils.jwt_utils.verify_token", return_value=payload):
-            user = jwt_utils.get_current_user(creds)
+            user = await jwt_utils.get_current_user(creds)
 
         self.assertEqual(
             user,
@@ -79,3 +81,5 @@ class JwtUtilsTests(unittest.TestCase):
                 "payload": payload,
             },
         )
+        self.assertEqual(rls_context.get_current_rls_user(), "user-1")
+        rls_context.clear_current_rls_user()

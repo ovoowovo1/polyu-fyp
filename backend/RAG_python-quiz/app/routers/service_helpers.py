@@ -3,7 +3,7 @@ from typing import Any, Callable
 
 from fastapi import HTTPException
 
-from app.services.exceptions import ServiceError
+from app.services.core.exceptions import ServiceError
 
 
 ErrorPredicate = Callable[[Exception], bool]

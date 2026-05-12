@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from app.routers.service_helpers import error_detail
-from app.services.progress_bus import get_queue, remove_queue
+from app.services.realtime.progress_bus import get_queue, remove_queue
 
 
 router = APIRouter(prefix="/sse", tags=["sse"])

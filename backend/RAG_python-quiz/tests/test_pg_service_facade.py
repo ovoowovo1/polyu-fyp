@@ -1,7 +1,7 @@
 import unittest
 
-from app.services import pg_service
-from app.services import pg_classes_service, pg_exam_service, pg_files_service, pg_quiz_service, pg_retrieval_service, pg_shared
+from app.services.pg import pg_service
+from app.services.pg import pg_classes_service, pg_exam_service, pg_files_service, pg_quiz_service, pg_retrieval_service, pg_shared
 
 
 class PgServiceFacadeTests(unittest.TestCase):

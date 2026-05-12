@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import json
 import unittest
 from types import SimpleNamespace
@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
 from app.routers import quiz
-from app.services.exceptions import NotFoundError, ServiceError
+from app.services.core.exceptions import NotFoundError, ServiceError
 from app.utils.aqg import MultipleChoice
 from tests.support import FakeConnection, FakeCursor, with_auth
 
@@ -57,17 +57,17 @@ class QuizApiTests(unittest.TestCase):
         conn = FakeConnection(cursor)
 
         async def run():
-            with patch("app.services.quiz_generation_service.pg_service.get_files_text_content", return_value="Short source"), patch(
-                "app.services.pg_db._get_conn",
+            with patch("app.services.assessment.quiz_generation_service.pg_service.get_files_text_content", return_value="Short source"), patch(
+                "app.services.pg.pg_db._get_conn",
                 return_value=conn,
             ), patch(
-                "app.services.quiz_generation_service.get_settings",
+                "app.services.assessment.quiz_generation_service.get_settings",
                 return_value=SimpleNamespace(llm_model="test-model"),
             ), patch(
-                "app.services.quiz_generation_service.with_llm_retry_async",
+                "app.services.assessment.quiz_generation_service.with_llm_retry_async",
                 return_value={"quiz_name": "Quiz", "questions": [make_question()]},
             ), patch(
-                "app.services.quiz_generation_service.pg_service.save_quiz",
+                "app.services.assessment.quiz_generation_service.pg_service.save_quiz",
                 return_value={"quiz_id": "quiz-1", "name": "Quiz"},
             ):
                 return await quiz.generate_quiz(
@@ -87,17 +87,17 @@ class QuizApiTests(unittest.TestCase):
         long_text = "x" * 13000
 
         async def run():
-            with patch("app.services.quiz_generation_service.pg_service.get_files_text_content", return_value=long_text), patch(
-                "app.services.pg_db._get_conn",
+            with patch("app.services.assessment.quiz_generation_service.pg_service.get_files_text_content", return_value=long_text), patch(
+                "app.services.pg.pg_db._get_conn",
                 return_value=conn,
             ), patch(
-                "app.services.quiz_generation_service.get_settings",
+                "app.services.assessment.quiz_generation_service.get_settings",
                 return_value=SimpleNamespace(llm_model="test-model"),
             ), patch(
-                "app.services.quiz_generation_service.with_llm_retry_async",
+                "app.services.assessment.quiz_generation_service.with_llm_retry_async",
                 side_effect=["summary", {"quiz_name": "Quiz", "questions": [make_question()]}],
             ), patch(
-                "app.services.quiz_generation_service.pg_service.save_quiz",
+                "app.services.assessment.quiz_generation_service.pg_service.save_quiz",
                 return_value={"quiz_id": "quiz-1", "name": "Quiz"},
             ):
                 return await quiz.generate_quiz(
@@ -123,8 +123,8 @@ class QuizApiTests(unittest.TestCase):
         conn = FakeConnection(cursor)
 
         async def run_missing_text():
-            with patch("app.services.quiz_generation_service.pg_service.get_files_text_content", return_value=""), patch(
-                "app.services.pg_db._get_conn",
+            with patch("app.services.assessment.quiz_generation_service.pg_service.get_files_text_content", return_value=""), patch(
+                "app.services.pg.pg_db._get_conn",
                 return_value=conn,
             ):
                 return await quiz.generate_quiz(file_ids=["file-1"], bloom_levels=None, difficulty=None, num_questions=1)
@@ -134,8 +134,8 @@ class QuizApiTests(unittest.TestCase):
         self.assertEqual(missing_text.exception.status_code, 400)
 
         async def run_bad_count():
-            with patch("app.services.quiz_generation_service.pg_service.get_files_text_content", return_value="Short source"), patch(
-                "app.services.pg_db._get_conn",
+            with patch("app.services.assessment.quiz_generation_service.pg_service.get_files_text_content", return_value="Short source"), patch(
+                "app.services.pg.pg_db._get_conn",
                 return_value=conn,
             ):
                 return await quiz.generate_quiz(file_ids=["file-1"], bloom_levels=None, difficulty=None, num_questions=100)
@@ -145,8 +145,8 @@ class QuizApiTests(unittest.TestCase):
         self.assertEqual(bad_count.exception.status_code, 400)
 
         async def run_difficulty_only():
-            with patch("app.services.quiz_generation_service.pg_service.get_files_text_content", return_value="   "), patch(
-                "app.services.pg_db._get_conn",
+            with patch("app.services.assessment.quiz_generation_service.pg_service.get_files_text_content", return_value="   "), patch(
+                "app.services.pg.pg_db._get_conn",
                 return_value=conn,
             ):
                 return await quiz.generate_quiz(
@@ -161,8 +161,8 @@ class QuizApiTests(unittest.TestCase):
         self.assertEqual(blank_text.exception.status_code, 400)
 
         async def run_bad_class_lookup():
-            with patch("app.services.quiz_generation_service.pg_service.get_files_text_content", return_value="Short source"), patch(
-                "app.services.pg_db._get_conn",
+            with patch("app.services.assessment.quiz_generation_service.pg_service.get_files_text_content", return_value="Short source"), patch(
+                "app.services.pg.pg_db._get_conn",
                 side_effect=RuntimeError("db down"),
             ):
                 return await quiz.generate_quiz(
@@ -178,7 +178,7 @@ class QuizApiTests(unittest.TestCase):
 
     def test_generate_quiz_source_and_model_edge_paths(self):
         async def run_missing_source():
-            with patch("app.services.quiz_generation_service.pg_service.get_files_text_content", side_effect=RuntimeError("missing")):
+            with patch("app.services.assessment.quiz_generation_service.pg_service.get_files_text_content", side_effect=RuntimeError("missing")):
                 return await quiz.generate_quiz(
                     file_ids=["file-1"],
                     bloom_levels=["remember"],
@@ -191,8 +191,8 @@ class QuizApiTests(unittest.TestCase):
         self.assertEqual(missing_source.exception.status_code, 404)
 
         async def run_invalid_class():
-            with patch("app.services.quiz_generation_service.pg_service.get_files_text_content", return_value="Short source"), patch(
-                "app.services.pg_db._get_conn",
+            with patch("app.services.assessment.quiz_generation_service.pg_service.get_files_text_content", return_value="Short source"), patch(
+                "app.services.pg.pg_db._get_conn",
                 return_value=FakeConnection(FakeCursor(fetchall_results=[[]])),
             ):
                 return await quiz.generate_quiz(
@@ -212,20 +212,20 @@ class QuizApiTests(unittest.TestCase):
             return await func("api-key", *args)
 
         async def run_empty_provider():
-            with patch("app.services.quiz_generation_service.pg_service.get_files_text_content", return_value="Short source"), patch(
-                "app.services.pg_db._get_conn",
+            with patch("app.services.assessment.quiz_generation_service.pg_service.get_files_text_content", return_value="Short source"), patch(
+                "app.services.pg.pg_db._get_conn",
                 return_value=FakeConnection(FakeCursor(fetchall_results=[[{"class_id": "class-1"}]])),
             ), patch(
-                "app.services.quiz_generation_service.get_settings",
+                "app.services.assessment.quiz_generation_service.get_settings",
                 return_value=SimpleNamespace(llm_model="test-model"),
             ), patch(
-                "app.services.quiz_generation_service.get_llm_client",
+                "app.services.assessment.quiz_generation_service.get_llm_client",
                 return_value=fake_client,
             ), patch(
-                "app.services.quiz_generation_service.extract_chat_completion_text",
+                "app.services.assessment.quiz_generation_service.extract_chat_completion_text",
                 return_value="",
             ), patch(
-                "app.services.quiz_generation_service.with_llm_retry_async",
+                "app.services.assessment.quiz_generation_service.with_llm_retry_async",
                 side_effect=fake_retry,
             ):
                 return await quiz.generate_quiz(
@@ -250,17 +250,17 @@ class QuizApiTests(unittest.TestCase):
             return await func("api-key", *args)
 
         async def run_success():
-            with patch("app.services.quiz_generation_service.pg_service.get_files_text_content", return_value="Short source"), patch(
-                "app.services.pg_db._get_conn",
+            with patch("app.services.assessment.quiz_generation_service.pg_service.get_files_text_content", return_value="Short source"), patch(
+                "app.services.pg.pg_db._get_conn",
                 return_value=make_conn(),
             ), patch(
-                "app.services.quiz_generation_service.get_settings",
+                "app.services.assessment.quiz_generation_service.get_settings",
                 return_value=SimpleNamespace(llm_model="test-model"),
             ), patch(
-                "app.services.quiz_generation_service.get_llm_client",
+                "app.services.assessment.quiz_generation_service.get_llm_client",
                 return_value=fake_client,
             ), patch(
-                "app.services.quiz_generation_service.extract_chat_completion_text",
+                "app.services.assessment.quiz_generation_service.extract_chat_completion_text",
                 return_value=json.dumps(
                     {
                         "quiz_name": "Quiz",
@@ -268,10 +268,10 @@ class QuizApiTests(unittest.TestCase):
                     }
                 ),
             ), patch(
-                "app.services.quiz_generation_service.with_llm_retry_async",
+                "app.services.assessment.quiz_generation_service.with_llm_retry_async",
                 side_effect=fake_retry,
             ), patch(
-                "app.services.quiz_generation_service.pg_service.save_quiz",
+                "app.services.assessment.quiz_generation_service.pg_service.save_quiz",
                 return_value={"quiz_id": "quiz-1", "name": "Quiz"},
             ):
                 return await quiz.generate_quiz(
@@ -286,20 +286,20 @@ class QuizApiTests(unittest.TestCase):
         self.assertFalse(result.was_summarized)
 
         async def run_bad_json():
-            with patch("app.services.quiz_generation_service.pg_service.get_files_text_content", return_value="Short source"), patch(
-                "app.services.pg_db._get_conn",
+            with patch("app.services.assessment.quiz_generation_service.pg_service.get_files_text_content", return_value="Short source"), patch(
+                "app.services.pg.pg_db._get_conn",
                 return_value=make_conn(),
             ), patch(
-                "app.services.quiz_generation_service.get_settings",
+                "app.services.assessment.quiz_generation_service.get_settings",
                 return_value=SimpleNamespace(llm_model="test-model"),
             ), patch(
-                "app.services.quiz_generation_service.get_llm_client",
+                "app.services.assessment.quiz_generation_service.get_llm_client",
                 return_value=fake_client,
             ), patch(
-                "app.services.quiz_generation_service.extract_chat_completion_text",
+                "app.services.assessment.quiz_generation_service.extract_chat_completion_text",
                 return_value="not-json",
             ), patch(
-                "app.services.quiz_generation_service.with_llm_retry_async",
+                "app.services.assessment.quiz_generation_service.with_llm_retry_async",
                 side_effect=fake_retry,
             ):
                 return await quiz.generate_quiz(
@@ -320,26 +320,26 @@ class QuizApiTests(unittest.TestCase):
         summary_client = SimpleNamespace()
         quiz_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock())))
 
-        with patch("app.services.quiz_generation_service.pg_service.get_files_text_content", return_value="x" * 13001), patch(
-            "app.services.pg_db._get_conn",
+        with patch("app.services.assessment.quiz_generation_service.pg_service.get_files_text_content", return_value="x" * 13001), patch(
+            "app.services.pg.pg_db._get_conn",
             return_value=FakeConnection(FakeCursor(fetchall_results=[[{"class_id": "class-1"}]])),
         ), patch(
-            "app.services.quiz_generation_service.get_settings",
+            "app.services.assessment.quiz_generation_service.get_settings",
             return_value=SimpleNamespace(llm_model="test-model"),
         ), patch(
-            "app.services.quiz_generation_service.get_llm_client",
+            "app.services.assessment.quiz_generation_service.get_llm_client",
             side_effect=[summary_client, quiz_client],
         ), patch(
-            "app.services.quiz_generation_service.maybe_truncate_or_summarize",
+            "app.services.assessment.quiz_generation_service.maybe_truncate_or_summarize",
             return_value="summary text",
         ), patch(
-            "app.services.quiz_generation_service.extract_chat_completion_text",
+            "app.services.assessment.quiz_generation_service.extract_chat_completion_text",
             return_value=json.dumps({"quiz_name": "Quiz", "questions": [make_question().model_dump()]}),
         ), patch(
-            "app.services.quiz_generation_service.with_llm_retry_async",
+            "app.services.assessment.quiz_generation_service.with_llm_retry_async",
             side_effect=fake_retry,
         ), patch(
-            "app.services.quiz_generation_service.pg_service.save_quiz",
+            "app.services.assessment.quiz_generation_service.pg_service.save_quiz",
             side_effect=RuntimeError("save failed"),
         ):
             result = asyncio.run(
@@ -353,11 +353,11 @@ class QuizApiTests(unittest.TestCase):
         self.assertTrue(result.was_summarized)
         self.assertEqual(result.source_text_length, len("summary text"))
 
-        with patch("app.services.quiz_generation_service.pg_service.get_files_text_content", return_value="Short source"), patch(
-            "app.services.pg_db._get_conn",
+        with patch("app.services.assessment.quiz_generation_service.pg_service.get_files_text_content", return_value="Short source"), patch(
+            "app.services.pg.pg_db._get_conn",
             return_value=FakeConnection(FakeCursor(fetchall_results=[[{"class_id": "class-1"}]])),
         ), patch(
-            "app.services.quiz_generation_service.get_settings",
+            "app.services.assessment.quiz_generation_service.get_settings",
             side_effect=RuntimeError("settings boom"),
         ):
             with self.assertRaises(HTTPException) as outer_error:
@@ -480,7 +480,9 @@ class QuizApiTests(unittest.TestCase):
 
         self.quiz_service.get_quiz_submissions.side_effect = HTTPException(status_code=418, detail="teapot")
         with patch("app.routers.quiz.pg_service.is_user_teacher", return_value=True):
-            self.assertEqual(self.client.get("/quiz/quiz-1/results").status_code, 500)
+            teapot = self.client.get("/quiz/quiz-1/results")
+        self.assertEqual(teapot.status_code, 418)
+        self.assertEqual(teapot.json()["detail"], "teapot")
         self.quiz_service.get_quiz_submissions.side_effect = None
 
     def test_generate_feedback_route(self):
@@ -509,52 +511,52 @@ class QuizApiTests(unittest.TestCase):
         self.assertEqual(teapot.status_code, 418)
 
     def test_quiz_service_wrapper_methods(self):
-        from app.services import pg_quiz_service
+        from app.services.pg import pg_quiz_service
 
         service = pg_quiz_service.QuizService()
 
-        with patch("app.services.pg_quiz_service.get_all_quizzes", return_value=["all"]) as mocked:
+        with patch("app.services.pg.pg_quiz_service.get_all_quizzes", return_value=["all"]) as mocked:
             self.assertEqual(service.get_all_quizzes("user-1"), ["all"])
             mocked.assert_called_once_with("user-1")
 
-        with patch("app.services.pg_quiz_service.get_quizzes_by_class", return_value=["quiz"]) as mocked:
+        with patch("app.services.pg.pg_quiz_service.get_quizzes_by_class", return_value=["quiz"]) as mocked:
             self.assertEqual(service.get_quizzes_by_class("class-1"), ["quiz"])
             mocked.assert_called_once_with("class-1")
 
-        with patch("app.services.pg_quiz_service.get_quiz_by_id", return_value={"id": "quiz-1"}) as mocked:
+        with patch("app.services.pg.pg_quiz_service.get_quiz_by_id", return_value={"id": "quiz-1"}) as mocked:
             self.assertEqual(service.get_quiz_by_id("quiz-1", "user-1"), {"id": "quiz-1"})
             mocked.assert_called_once_with("quiz-1", "user-1")
 
-        with patch("app.services.pg_quiz_service.save_quiz", return_value={"quiz_id": "quiz-1"}) as mocked:
+        with patch("app.services.pg.pg_quiz_service.save_quiz", return_value={"quiz_id": "quiz-1"}) as mocked:
             self.assertEqual(
                 service.save_quiz({"questions": []}, ["file-1"], "Quiz", "class-1"),
                 {"quiz_id": "quiz-1"},
             )
             mocked.assert_called_once_with({"questions": []}, ["file-1"], "Quiz", "class-1")
 
-        with patch("app.services.pg_quiz_service.update_quiz", return_value={"quiz_id": "quiz-1"}) as mocked:
+        with patch("app.services.pg.pg_quiz_service.update_quiz", return_value={"quiz_id": "quiz-1"}) as mocked:
             self.assertEqual(
                 service.update_quiz("quiz-1", {"questions": []}, "Quiz", ["file-1"]),
                 {"quiz_id": "quiz-1"},
             )
             mocked.assert_called_once_with("quiz-1", {"questions": []}, "Quiz", ["file-1"])
 
-        with patch("app.services.pg_quiz_service.delete_quiz", return_value={"message": "deleted"}) as mocked:
+        with patch("app.services.pg.pg_quiz_service.delete_quiz", return_value={"message": "deleted"}) as mocked:
             self.assertEqual(service.delete_quiz("quiz-1"), {"message": "deleted"})
             mocked.assert_called_once_with("quiz-1")
 
-        with patch("app.services.pg_quiz_service.submit_quiz_result", return_value={"submission_id": "sub-1"}) as mocked:
+        with patch("app.services.pg.pg_quiz_service.submit_quiz_result", return_value={"submission_id": "sub-1"}) as mocked:
             self.assertEqual(
                 service.submit_quiz_result("quiz-1", "student-1", [], 1, 1),
                 {"submission_id": "sub-1"},
             )
             mocked.assert_called_once_with("quiz-1", "student-1", [], 1, 1)
 
-        with patch("app.services.pg_quiz_service.get_quiz_submissions", return_value=[{"id": "sub-1"}]) as mocked:
+        with patch("app.services.pg.pg_quiz_service.get_quiz_submissions", return_value=[{"id": "sub-1"}]) as mocked:
             self.assertEqual(service.get_quiz_submissions("quiz-1"), [{"id": "sub-1"}])
             mocked.assert_called_once_with("quiz-1")
 
-        with patch("app.services.pg_quiz_service.get_student_quiz_submission", return_value={"id": "sub-1"}) as mocked:
+        with patch("app.services.pg.pg_quiz_service.get_student_quiz_submission", return_value={"id": "sub-1"}) as mocked:
             self.assertEqual(service.get_student_quiz_submission("quiz-1", "student-1"), {"id": "sub-1"})
             mocked.assert_called_once_with("quiz-1", "student-1")
 

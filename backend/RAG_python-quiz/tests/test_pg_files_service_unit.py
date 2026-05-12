@@ -1,12 +1,12 @@
 from datetime import datetime
 
-from app.services import pg_service
+from app.services.pg import pg_service
 from tests.pg_service_test_support import PgServiceBase
 from tests.support import FakeCursor
 
 
 class PgFilesServiceTests(PgServiceBase):
-    module_path = "app.services.pg_files_service"
+    module_path = "app.services.pg.pg_files_service"
 
     def test_file_listing_and_mutations_cover_success_and_missing_rows(self):
         upload_time = datetime(2025, 1, 2, 3, 4, 5)

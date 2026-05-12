@@ -18,9 +18,9 @@ class PgServiceBase(unittest.TestCase):
     @contextmanager
     def _patch_exam_service_split(self, cursor: FakeCursor):
         modules = [
-            "app.services.pg_exam_crud",
-            "app.services.pg_exam_submission_service",
-            "app.services.pg_exam_grading_service",
+            "app.services.pg.pg_exam_crud",
+            "app.services.pg.pg_exam_submission_service",
+            "app.services.pg.pg_exam_grading_service",
         ]
         with ExitStack() as stack:
             for module in modules:
@@ -29,6 +29,6 @@ class PgServiceBase(unittest.TestCase):
 
     def patch_conn(self, cursor: FakeCursor, module_path: str | None = None):
         target = module_path or self.module_path
-        if target == "app.services.pg_exam_service":
+        if target == "app.services.pg.pg_exam_service":
             return self._patch_exam_service_split(cursor)
         return patch(f"{target}._get_conn", return_value=FakeConnection(cursor))

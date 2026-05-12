@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import main
+from app.services.pg import rls_context
 
 
 class MainAppTests(unittest.TestCase):
@@ -146,3 +147,19 @@ class MainAppTests(unittest.TestCase):
         self.assertIn("method=GET", message)
         self.assertIn("path=/boom", message)
         self.assertIn("status_code=error", message)
+
+    def test_request_logging_middleware_clears_rls_context_after_request(self):
+        app = FastAPI()
+        main._add_request_logging_middleware(app)
+
+        @app.get("/set-context")
+        def set_context():
+            rls_context.set_current_rls_user("user-1")
+            return {"ok": True}
+
+        client = TestClient(app)
+        with self.assertLogs("api.request", level="INFO"):
+            response = client.get("/set-context")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(rls_context.get_current_rls_user())

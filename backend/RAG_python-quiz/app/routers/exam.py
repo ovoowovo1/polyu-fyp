@@ -8,8 +8,8 @@ from pydantic import BaseModel, model_validator
 from app.agents.schemas import ExamGenerationRequest, ExamGenerationResponse
 from app.logger import get_logger
 from app.routers.service_helpers import require_teacher, run_service
-from app.services import exam_workflow_service
-from app.services import pg_service
+from app.services.assessment import exam_workflow_service
+from app.services.pg import pg_service
 from app.utils.jwt_utils import get_current_user
 
 logger = get_logger(__name__)

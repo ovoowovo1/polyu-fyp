@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../config.js';
+import { getToken } from '../api/auth.js';
 import {
   buildStructuredContentFromResult,
   readSseStream,
@@ -66,12 +67,18 @@ export const handleProChatRequestWithSse = async (messages, options = {}) => {
       ...requestBody,
     };
 
+    const token = getToken();
+    const headers = {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
     const response = await fetch(`${API_BASE_URL}/api/query-stream`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
-      },
+      headers,
       body: JSON.stringify(requestData),
     });
 

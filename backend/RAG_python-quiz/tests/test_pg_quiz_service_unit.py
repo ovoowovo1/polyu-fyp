@@ -1,17 +1,17 @@
 from datetime import datetime
 from unittest.mock import patch
 
-from app.services import pg_service
-from app.services.exceptions import PermissionDeniedError
+from app.services.pg import pg_service
+from app.services.core.exceptions import PermissionDeniedError
 from tests.pg_service_test_support import FixedDateTime, PgServiceBase
 from tests.support import FakeConnection, FakeCursor
 
 
 class PgQuizServiceTests(PgServiceBase):
-    module_path = "app.services.pg_quiz_service"
+    module_path = "app.services.pg.pg_quiz_service"
 
     def test_default_quiz_name_covers_single_multiple_and_empty_file_sets(self):
-        with patch("app.services.pg_quiz_service.datetime", FixedDateTime):
+        with patch("app.services.pg.pg_quiz_service.datetime", FixedDateTime):
             cursor = FakeCursor(fetchall_results=[[{"name": "lesson.pdf"}]])
             self.assertIn("lesson -", pg_service._default_quiz_name(cursor, ["file-1"]))
 
@@ -27,8 +27,8 @@ class PgQuizServiceTests(PgServiceBase):
         conn = FakeConnection(cursor)
         quiz_data = {"questions": [{"q": 1}], "source_text_length": 10, "was_summarized": True}
 
-        with patch("app.services.pg_quiz_service._get_conn", return_value=conn), patch(
-            "app.services.pg_shared.psycopg2.extras.execute_values"
+        with patch("app.services.pg.pg_quiz_service._get_conn", return_value=conn), patch(
+            "app.services.pg.pg_shared.psycopg2.extras.execute_values"
         ) as execute_values:
             result = pg_service.save_quiz(quiz_data, ["file-1"], quiz_name="Quiz 1", class_id="class-1")
 
@@ -40,8 +40,8 @@ class PgQuizServiceTests(PgServiceBase):
             fetchone_results=[{"id": "quiz-2", "created_at": "raw"}],
             fetchall_results=[[{"name": "lesson.pdf"}]],
         )
-        with self.patch_conn(cursor), patch("app.services.pg_quiz_service.datetime", FixedDateTime), patch(
-            "app.services.pg_shared.psycopg2.extras.execute_values"
+        with self.patch_conn(cursor), patch("app.services.pg.pg_quiz_service.datetime", FixedDateTime), patch(
+            "app.services.pg.pg_shared.psycopg2.extras.execute_values"
         ):
             generated = pg_service.save_quiz({"questions": [{"q": 1}]}, ["file-1"])
         self.assertIn("lesson -", generated["name"])
@@ -56,13 +56,13 @@ class PgQuizServiceTests(PgServiceBase):
                 pg_service.update_quiz("quiz-1", {"questions": []})
 
         cursor = FakeCursor(fetchone_results=[{"id": "quiz-1", "name": "Updated"}])
-        with self.patch_conn(cursor), patch("app.services.pg_shared.psycopg2.extras.execute_values") as execute_values:
+        with self.patch_conn(cursor), patch("app.services.pg.pg_shared.psycopg2.extras.execute_values") as execute_values:
             result = pg_service.update_quiz("quiz-1", {"questions": [{"q": 1}]}, name="Updated", file_ids=["file-1"])
         self.assertEqual(result["quiz_id"], "quiz-1")
         self.assertTrue(execute_values.called)
 
         cursor = FakeCursor(fetchone_results=[{"id": "quiz-2", "name": "Keep"}])
-        with self.patch_conn(cursor), patch("app.services.pg_shared.psycopg2.extras.execute_values") as execute_values:
+        with self.patch_conn(cursor), patch("app.services.pg.pg_shared.psycopg2.extras.execute_values") as execute_values:
             pg_service.update_quiz("quiz-2", {"questions": []}, file_ids=[])
         self.assertFalse(execute_values.called)
 

@@ -2,13 +2,21 @@ import unittest
 from unittest.mock import patch
 
 from app.routers import files_pg
-from app.services.exceptions import NotFoundError
-from tests.support import build_client
+from app.services.core.exceptions import NotFoundError
+from tests.support import build_app, with_auth
+from fastapi.testclient import TestClient
 
 
 class FilesPgApiTests(unittest.TestCase):
     def setUp(self):
-        self.client = build_client(files_pg.router)
+        self.app = build_app(files_pg.router)
+        with_auth(self.app, files_pg.get_current_user, {"user_id": "user-1", "email": "u@example.com"})
+        self.client = TestClient(self.app)
+
+    def test_files_routes_require_authentication(self):
+        self.app.dependency_overrides.clear()
+        response = self.client.get("/files")
+        self.assertEqual(response.status_code, 401)
 
     def test_get_files_success(self):
         with patch("app.routers.files_pg.pg_service.get_files_list", return_value=[{"id": "file-1"}]):

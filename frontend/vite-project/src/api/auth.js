@@ -107,6 +107,9 @@ export const logout = () => {
  * @returns {string|null} 返回 token 或 null
  */
 export const getToken = () => {
+    if (typeof localStorage === 'undefined') {
+        return null;
+    }
     return localStorage.getItem('session_token');
 };
 
@@ -115,6 +118,9 @@ export const getToken = () => {
  * @returns {object|null} 返回用戶信息或 null
  */
 export const getCurrentUser = () => {
+    if (typeof localStorage === 'undefined') {
+        return null;
+    }
     const userStr = localStorage.getItem('user');
     if (userStr) {
         try {

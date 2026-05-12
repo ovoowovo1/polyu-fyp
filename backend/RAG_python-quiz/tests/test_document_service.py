@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from app.services import document_service
+from app.services.documents import document_service
 from app.utils.ingest_errors import EmbeddingProviderError
 
 
@@ -98,8 +98,8 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
         ]
         model = SplittingModel()
 
-        with patch("app.services.document_service.create_embedding_model", return_value=model), patch(
-            "app.services.document_service.asyncio.sleep",
+        with patch("app.services.documents.document_service.create_embedding_model", return_value=model), patch(
+            "app.services.documents.document_service.asyncio.sleep",
             return_value=None,
         ):
             vectors = await document_service._embed_chunks_with_retry(chunks)
@@ -114,8 +114,8 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
         ]
         model = SingleFailureModel()
 
-        with patch("app.services.document_service.create_embedding_model", return_value=model), patch(
-            "app.services.document_service.asyncio.sleep",
+        with patch("app.services.documents.document_service.create_embedding_model", return_value=model), patch(
+            "app.services.documents.document_service.asyncio.sleep",
             return_value=None,
         ):
             with self.assertRaises(EmbeddingProviderError) as ctx:
@@ -134,13 +134,13 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
         fallback_model = object()
 
         with patch(
-            "app.services.document_service.get_settings",
+            "app.services.documents.document_service.get_settings",
             return_value=make_settings(),
         ), patch(
-            "app.services.document_service.create_embedding_model",
+            "app.services.documents.document_service.create_embedding_model",
             side_effect=[primary_model, fallback_model],
         ) as create_model, patch(
-            "app.services.document_service.embed_texts_with_retry",
+            "app.services.documents.document_service.embed_texts_with_retry",
             side_effect=[
                 [[1.0], [2.0]],
                 make_retryable_error(raw_preview="fallback raw response"),
@@ -156,13 +156,13 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
         chunks = [{"pageContent": "chunk-1", "metadata": {"pageNumber": 1}}]
 
         with patch(
-            "app.services.document_service.get_settings",
+            "app.services.documents.document_service.get_settings",
             return_value=make_settings(),
         ), patch(
-            "app.services.document_service.create_embedding_model",
+            "app.services.documents.document_service.create_embedding_model",
             return_value=object(),
         ) as create_model, patch(
-            "app.services.document_service.embed_texts_with_retry",
+            "app.services.documents.document_service.embed_texts_with_retry",
             side_effect=make_retryable_error(raw_preview="primary raw response"),
         ):
             with self.assertRaises(EmbeddingProviderError) as ctx:
@@ -199,13 +199,13 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
 
         chunks = [{"pageContent": "chunk-1", "metadata": {"pageNumber": 1}}]
         with patch(
-            "app.services.document_service.get_settings",
+            "app.services.documents.document_service.get_settings",
             return_value=make_settings(fallback_model="", fallback_column="embedding"),
         ), patch(
-            "app.services.document_service.create_embedding_model",
+            "app.services.documents.document_service.create_embedding_model",
             return_value=object(),
         ), patch(
-            "app.services.document_service.embed_texts_with_retry",
+            "app.services.documents.document_service.embed_texts_with_retry",
             return_value=[[1.0]],
         ):
             primary_only = await document_service._embed_chunks_for_storage(chunks)
@@ -214,13 +214,13 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
         primary_model = object()
         fallback_model = object()
         with patch(
-            "app.services.document_service.get_settings",
+            "app.services.documents.document_service.get_settings",
             return_value=make_settings(),
         ), patch(
-            "app.services.document_service.create_embedding_model",
+            "app.services.documents.document_service.create_embedding_model",
             side_effect=[primary_model, fallback_model],
         ), patch(
-            "app.services.document_service.embed_texts_with_retry",
+            "app.services.documents.document_service.embed_texts_with_retry",
             side_effect=[[[1.0]], [[2.0]]],
         ):
             vectors = await document_service._embed_chunks_for_storage(chunks)
@@ -235,7 +235,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
                 mimetype="text/plain",
             )
 
-        with patch("app.services.document_service.pg_service.find_document_by_hash", return_value={"id": "doc-1"}):
+        with patch("app.services.documents.document_service.pg_service.find_document_by_hash", return_value={"id": "doc-1"}):
             duplicate = await document_service.ingest_document(
                 filename="notes.pdf",
                 content=b"pdf",
@@ -244,8 +244,8 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertFalse(duplicate["isNew"])
 
-        with patch("app.services.document_service.pg_service.find_document_by_hash", return_value=None), patch(
-            "app.services.document_service.extract_text_by_page",
+        with patch("app.services.documents.document_service.pg_service.find_document_by_hash", return_value=None), patch(
+            "app.services.documents.document_service.extract_text_by_page",
             AsyncMock(side_effect=RuntimeError("extract failed")),
         ):
             with self.assertRaises(document_service.DocumentIngestError):
@@ -256,8 +256,8 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
                     mimetype="application/pdf",
                 )
 
-        with patch("app.services.document_service.pg_service.find_document_by_hash", return_value=None), patch(
-            "app.services.document_service.extract_text_by_page",
+        with patch("app.services.documents.document_service.pg_service.find_document_by_hash", return_value=None), patch(
+            "app.services.documents.document_service.extract_text_by_page",
             AsyncMock(return_value=["short", "   "]),
         ):
             with self.assertRaises(document_service.DocumentIngestError):
@@ -268,11 +268,11 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
                     mimetype="application/pdf",
                 )
 
-        with patch("app.services.document_service.pg_service.find_document_by_hash", return_value=None), patch(
-            "app.services.document_service.extract_text_by_page",
+        with patch("app.services.documents.document_service.pg_service.find_document_by_hash", return_value=None), patch(
+            "app.services.documents.document_service.extract_text_by_page",
             AsyncMock(return_value=["This page contains enough text to be chunked."]),
         ), patch(
-            "app.services.document_service._embed_chunks_for_storage",
+            "app.services.documents.document_service._embed_chunks_for_storage",
             AsyncMock(side_effect=make_retryable_error("embed failed")),
         ):
             with self.assertRaises(EmbeddingProviderError):
@@ -283,11 +283,11 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
                     mimetype="application/pdf",
                 )
 
-        with patch("app.services.document_service.pg_service.find_document_by_hash", return_value=None), patch(
-            "app.services.document_service.extract_text_by_page",
+        with patch("app.services.documents.document_service.pg_service.find_document_by_hash", return_value=None), patch(
+            "app.services.documents.document_service.extract_text_by_page",
             AsyncMock(return_value=["This page contains enough text to be chunked."]),
         ), patch(
-            "app.services.document_service._embed_chunks_for_storage",
+            "app.services.documents.document_service._embed_chunks_for_storage",
             AsyncMock(side_effect=RuntimeError("embed failed")),
         ):
             with self.assertRaises(document_service.DocumentIngestError):
@@ -298,17 +298,17 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
                     mimetype="application/pdf",
                 )
 
-        with patch("app.services.document_service.pg_service.find_document_by_hash", return_value=None), patch(
-            "app.services.document_service.extract_text_by_page",
+        with patch("app.services.documents.document_service.pg_service.find_document_by_hash", return_value=None), patch(
+            "app.services.documents.document_service.extract_text_by_page",
             AsyncMock(return_value=["This page contains enough text to be chunked."]),
         ), patch(
-            "app.services.document_service._embed_chunks_for_storage",
+            "app.services.documents.document_service._embed_chunks_for_storage",
             AsyncMock(return_value=([[1.0]], None)),
         ), patch(
-            "app.services.document_service.get_settings",
+            "app.services.documents.document_service.get_settings",
             return_value=make_settings(fallback_column="embedding_v2"),
         ), patch(
-            "app.services.document_service.pg_service.create_graph_from_document",
+            "app.services.documents.document_service.pg_service.create_graph_from_document",
             side_effect=RuntimeError("db failed"),
         ):
             with self.assertRaises(document_service.DocumentIngestError):
@@ -320,17 +320,17 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
                 )
 
     async def test_ingest_document_and_website_success_paths(self):
-        with patch("app.services.document_service.pg_service.find_document_by_hash", return_value=None), patch(
-            "app.services.document_service.extract_text_by_page",
+        with patch("app.services.documents.document_service.pg_service.find_document_by_hash", return_value=None), patch(
+            "app.services.documents.document_service.extract_text_by_page",
             AsyncMock(return_value=["This page contains enough text to be chunked."]),
         ), patch(
-            "app.services.document_service._embed_chunks_for_storage",
+            "app.services.documents.document_service._embed_chunks_for_storage",
             AsyncMock(return_value=([[1.0]], [[2.0]])),
         ), patch(
-            "app.services.document_service.get_settings",
+            "app.services.documents.document_service.get_settings",
             return_value=make_settings(fallback_column="embedding_v2"),
         ), patch(
-            "app.services.document_service.pg_service.create_graph_from_document",
+            "app.services.documents.document_service.pg_service.create_graph_from_document",
             return_value={"fileId": "doc-1"},
         ):
             result = await document_service.ingest_document(
@@ -343,40 +343,40 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["isNew"])
         self.assertEqual(result["fileId"], "doc-1")
 
-        with patch("app.services.document_service.load_markdown", AsyncMock(return_value=[])):
+        with patch("app.services.documents.document_service.load_markdown", AsyncMock(return_value=[])):
             with self.assertRaises(RuntimeError):
                 await document_service.ingest_website(url="https://example.com")
 
         with patch(
-            "app.services.document_service.load_markdown",
+            "app.services.documents.document_service.load_markdown",
             AsyncMock(return_value=[SimpleNamespace(page_content="   "), SimpleNamespace(page_content="")]),
         ):
             with self.assertRaises(RuntimeError):
                 await document_service.ingest_website(url="https://example.com")
 
         docs = [SimpleNamespace(page_content=""), SimpleNamespace(page_content="Actual website content")]
-        with patch("app.services.document_service.load_markdown", AsyncMock(return_value=docs)), patch(
-            "app.services.document_service.pg_service.find_document_by_hash",
+        with patch("app.services.documents.document_service.load_markdown", AsyncMock(return_value=docs)), patch(
+            "app.services.documents.document_service.pg_service.find_document_by_hash",
             return_value={"id": "doc-1"},
         ):
             duplicate = await document_service.ingest_website(url="https://example.com")
         self.assertFalse(duplicate["isNew"])
 
         progress = AsyncMock()
-        with patch("app.services.document_service.load_markdown", AsyncMock(return_value=[SimpleNamespace(page_content="Actual website content")])), patch(
-            "app.services.document_service.pg_service.find_document_by_hash",
+        with patch("app.services.documents.document_service.load_markdown", AsyncMock(return_value=[SimpleNamespace(page_content="Actual website content")])), patch(
+            "app.services.documents.document_service.pg_service.find_document_by_hash",
             return_value=None,
         ), patch(
-            "app.services.document_service._embed_chunks_for_storage",
+            "app.services.documents.document_service._embed_chunks_for_storage",
             AsyncMock(return_value=([[1.0]], None)),
         ), patch(
-            "app.services.document_service.get_settings",
+            "app.services.documents.document_service.get_settings",
             return_value=make_settings(fallback_column="embedding"),
         ), patch(
-            "app.services.document_service.pg_service.create_graph_from_document",
+            "app.services.documents.document_service.pg_service.create_graph_from_document",
             return_value={"fileId": "doc-2"},
         ), patch(
-            "app.services.document_service.publish_progress",
+            "app.services.documents.document_service.publish_progress",
             progress,
         ):
             result = await document_service.ingest_website(

@@ -13,7 +13,7 @@ from app.agents.nodes.generator import generator_node
 from app.agents.nodes.visualizer import visualizer_node
 from app.agents.nodes.reviewer import reviewer_node
 from app.agents.schemas import ExamGenerationRequest, ExamGenerationResponse
-from app.services import pg_service
+from app.services.pg import pg_service
 from app.logger import get_logger
 
 logger = get_logger(__name__)
@@ -201,7 +201,7 @@ async def _get_class_and_owner_from_files(file_ids: List[str]) -> tuple:
         return None, None
 
     try:
-        from app.services.pg_db import _get_conn
+        from app.services.pg.pg_db import _get_conn
 
         def _query():
             with _get_conn() as conn, conn.cursor() as cur:

@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime
 from unittest.mock import patch
 
-from app.services import pg_shared
+from app.services.pg import pg_shared
 from tests.support import FakeCursor
 
 
@@ -134,13 +134,13 @@ class PgSharedTests(unittest.TestCase):
         )
 
         cursor = FakeCursor()
-        with patch("app.services.pg_shared.psycopg2.extras.execute_values") as execute_values:
+        with patch("app.services.pg.pg_shared.psycopg2.extras.execute_values") as execute_values:
             pg_shared.replace_linked_documents(cursor, "quiz_documents", "quiz_id", "quiz-1", [])
         self.assertEqual(cursor.executed[0], ("DELETE FROM quiz_documents WHERE quiz_id = %s", ("quiz-1",)))
         self.assertFalse(execute_values.called)
 
         cursor = FakeCursor()
-        with patch("app.services.pg_shared.psycopg2.extras.execute_values") as execute_values:
+        with patch("app.services.pg.pg_shared.psycopg2.extras.execute_values") as execute_values:
             pg_shared.replace_linked_documents(
                 cursor, "exam_documents", "exam_id", "exam-1", ["file-1", "file-2"]
             )

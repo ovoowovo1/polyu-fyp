@@ -9,6 +9,7 @@ from jose import jwt, JWTError
 from app.config import get_settings
 from app.logger import get_logger
 from app.routers.service_helpers import error_detail
+from app.services.pg.rls_context import set_current_rls_user
 
 logger = get_logger(__name__)
 
@@ -91,7 +92,7 @@ def get_user_id_from_token(token: str) -> Optional[str]:
     return None
 
 
-def get_current_user(
+async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(_http_bearer),
 ) -> Dict[str, Any]:
     """
@@ -109,6 +110,7 @@ def get_current_user(
     if not user_id:
         raise HTTPException(status_code=401, detail=error_detail("Invalid token payload"))
 
+    set_current_rls_user(str(user_id))
     return {
         "token": token,
         "user_id": str(user_id),

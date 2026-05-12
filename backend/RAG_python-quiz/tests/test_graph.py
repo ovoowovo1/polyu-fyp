@@ -154,7 +154,7 @@ class GraphTests(unittest.IsolatedAsyncioTestCase):
                 return False
 
         conn = Conn()
-        with patch("app.services.pg_db._get_conn", return_value=conn):
+        with patch("app.services.pg.pg_db._get_conn", return_value=conn):
             class_id, owner_id = await graph._get_class_and_owner_from_files(["file-1"])
         self.assertEqual((class_id, owner_id), ("class-1", "teacher-1"))
 
@@ -169,8 +169,8 @@ class GraphTests(unittest.IsolatedAsyncioTestCase):
             def cursor(self, *args, **kwargs):
                 return MultiRowCursor()
 
-        with patch("app.services.pg_db._get_conn", return_value=MultiConn()):
+        with patch("app.services.pg.pg_db._get_conn", return_value=MultiConn()):
             self.assertEqual(await graph._get_class_and_owner_from_files(["file-1"]), (None, None))
 
-        with patch("app.services.pg_db._get_conn", side_effect=RuntimeError("db down")):
+        with patch("app.services.pg.pg_db._get_conn", side_effect=RuntimeError("db down")):
             self.assertEqual(await graph._get_class_and_owner_from_files(["file-1"]), (None, None))

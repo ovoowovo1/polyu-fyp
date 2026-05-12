@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 from typing import AsyncGenerator, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.routers.service_helpers import error_detail
-from app.services import adaptive_rag_service
+from app.services.pg.rls_context import clear_current_rls_user, set_current_rls_user
+from app.services.rag import adaptive_rag_service
+from app.utils.jwt_utils import get_current_user
 
 router = APIRouter(prefix="", tags=["query"])
 
@@ -30,16 +32,21 @@ def _encode_sse_event(payload: dict) -> bytes:
 async def sse_event_stream(
     question: str,
     selected_file_ids: List[str],
+    user_id: str,
 ) -> AsyncGenerator[bytes, None]:
-    async for event in adaptive_rag_service.run_adaptive_rag_stream(
-        question,
-        selected_file_ids,
-    ):
-        yield _encode_sse_event(event)
+    set_current_rls_user(user_id)
+    try:
+        async for event in adaptive_rag_service.run_adaptive_rag_stream(
+            question,
+            selected_file_ids,
+        ):
+            yield _encode_sse_event(event)
+    finally:
+        clear_current_rls_user()
 
 
 @router.post("/query-stream")
-async def query_stream(body: QueryStreamRequest):
+async def query_stream(body: QueryStreamRequest, user: dict = Depends(get_current_user)):
     question = body.question.strip()
     if not question:
         raise HTTPException(
@@ -53,7 +60,7 @@ async def query_stream(body: QueryStreamRequest):
         )
 
     return StreamingResponse(
-        sse_event_stream(question, body.selectedFileIds),
+        sse_event_stream(question, body.selectedFileIds, user["user_id"]),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
