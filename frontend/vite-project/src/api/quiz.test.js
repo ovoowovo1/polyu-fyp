@@ -4,12 +4,16 @@ import assert from 'node:assert/strict';
 import axios from 'axios';
 
 import {
+    createQuiz,
+    deleteQuiz,
     generateQuiz,
     generateQuizFeedback,
     getAllQuizzes,
+    getQuizById,
     getMyQuizResult,
     getQuizResults,
     submitQuiz,
+    updateQuiz,
 } from './quiz.js';
 import { API_BASE_URL } from '../config.js';
 import { clearDedupeCache } from '../utils/requestDeduper.js';
@@ -46,6 +50,7 @@ test('generateQuiz posts multipart form data with selected files and options', a
 test('getAllQuizzes uses the quiz list endpoint and dedupes repeated calls', async () => {
     const originalGet = axios.get;
     const calls = [];
+    const storage = installLocalStorage({ session_token: 'quiz-token' });
     clearDedupeCache('quiz:list:class-1');
 
     axios.get = async (url, config) => {
@@ -63,13 +68,78 @@ test('getAllQuizzes uses the quiz list endpoint and dedupes repeated calls', asy
                 url: `${API_BASE_URL}/quiz/list`,
                 config: {
                     params: { class_id: 'class-1' },
-                    headers: { 'X-Test': 'yes' },
+                    headers: { Authorization: 'Bearer quiz-token', 'X-Test': 'yes' },
                 },
             },
         ]);
     } finally {
         axios.get = originalGet;
+        storage.restore();
         clearDedupeCache('quiz:list:class-1');
+    }
+});
+
+test('quiz management APIs include auth when a session token exists', async () => {
+    const originalGet = axios.get;
+    const originalPost = axios.post;
+    const originalPut = axios.put;
+    const originalDelete = axios.delete;
+    const calls = [];
+    const storage = installLocalStorage({ session_token: 'teacher-token' });
+
+    axios.get = async (url, config) => {
+        calls.push({ method: 'get', url, config });
+        return { data: { ok: true } };
+    };
+    axios.post = async (url, body, config) => {
+        calls.push({ method: 'post', url, body, config });
+        return { data: { ok: true } };
+    };
+    axios.put = async (url, body, config) => {
+        calls.push({ method: 'put', url, body, config });
+        return { data: { ok: true } };
+    };
+    axios.delete = async (url, config) => {
+        calls.push({ method: 'delete', url, config });
+        return { data: { ok: true } };
+    };
+
+    try {
+        await getQuizById('quiz-1');
+        await createQuiz({ questions: [] });
+        await updateQuiz('quiz-1', { questions: [] });
+        await deleteQuiz('quiz-1');
+
+        assert.deepEqual(calls, [
+            {
+                method: 'get',
+                url: `${API_BASE_URL}/quiz/quiz-1`,
+                config: { headers: { Authorization: 'Bearer teacher-token' } },
+            },
+            {
+                method: 'post',
+                url: `${API_BASE_URL}/quiz`,
+                body: { questions: [] },
+                config: { headers: { Authorization: 'Bearer teacher-token' } },
+            },
+            {
+                method: 'put',
+                url: `${API_BASE_URL}/quiz/quiz-1`,
+                body: { questions: [] },
+                config: { headers: { Authorization: 'Bearer teacher-token' } },
+            },
+            {
+                method: 'delete',
+                url: `${API_BASE_URL}/quiz/quiz-1`,
+                config: { headers: { Authorization: 'Bearer teacher-token' } },
+            },
+        ]);
+    } finally {
+        axios.get = originalGet;
+        axios.post = originalPost;
+        axios.put = originalPut;
+        axios.delete = originalDelete;
+        storage.restore();
     }
 });
 

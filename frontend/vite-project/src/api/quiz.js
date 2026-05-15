@@ -3,6 +3,17 @@ import { API_BASE_URL } from '../config.js';
 import { dedupe } from '../utils/requestDeduper.js';
 import { getToken } from './auth.js';
 
+const getAuthConfig = (axiosConfig = {}) => {
+    const token = getToken();
+    const headers = {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(axiosConfig.headers || {}),
+    };
+    return {
+        ...axiosConfig,
+        ...(Object.keys(headers).length > 0 ? { headers } : {}),
+    };
+};
 
 /**
  * 生成測驗題目
@@ -42,9 +53,9 @@ export const generateQuiz = async (fileIds, options = {}) => {
         console.log(pair[0] + ': ' + pair[1]);
     }
     
-    return axios.post(`${API_BASE_URL}/quiz/generate`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-    });
+    return axios.post(`${API_BASE_URL}/quiz/generate`, formData, getAuthConfig({
+        headers: { 'Content-Type': 'multipart/form-data' },
+    }));
 };
 
 
@@ -74,10 +85,11 @@ export const getDifficulties = async () => {
 export const getAllQuizzes = async (classId, axiosConfig = {}) => {
     const key = `quiz:list:${classId || '__all__'}`;
     console.log(`[api.quiz] getAllQuizzes called, classId=${classId}, key=${key}`);
+    const config = getAuthConfig(axiosConfig);
     // use dedupe utility; we keep a small TTL to merge very close sequential calls
     return dedupe(key, () => axios.get(`${API_BASE_URL}/quiz/list`, {
         params: { class_id: classId },
-        ...axiosConfig,
+        ...config,
     }), { ttl: 1000 });
 };
 
@@ -88,7 +100,7 @@ export const getAllQuizzes = async (classId, axiosConfig = {}) => {
  * @returns {Promise} - 測驗詳情
  */
 export const getQuizById = async (quizId) => {
-    return axios.get(`${API_BASE_URL}/quiz/${quizId}`);
+    return axios.get(`${API_BASE_URL}/quiz/${quizId}`, getAuthConfig());
 };
 
 
@@ -98,7 +110,7 @@ export const getQuizById = async (quizId) => {
  * @returns {Promise} - 刪除結果
  */
 export const deleteQuiz = async (quizId) => {
-    return axios.delete(`${API_BASE_URL}/quiz/${quizId}`);
+    return axios.delete(`${API_BASE_URL}/quiz/${quizId}`, getAuthConfig());
 };
 
 /**
@@ -106,7 +118,7 @@ export const deleteQuiz = async (quizId) => {
  * @param {Object} quiz - 包含 name, questions (array), file_ids (optional), class_id (optional)
  */
 export const createQuiz = async (quiz) => {
-    return axios.post(`${API_BASE_URL}/quiz`, quiz);
+    return axios.post(`${API_BASE_URL}/quiz`, quiz, getAuthConfig());
 };
 
 /**
@@ -115,7 +127,7 @@ export const createQuiz = async (quiz) => {
  * @param {Object} quiz - 同 createQuiz
  */
 export const updateQuiz = async (quizId, quiz) => {
-    return axios.put(`${API_BASE_URL}/quiz/${quizId}`, quiz);
+    return axios.put(`${API_BASE_URL}/quiz/${quizId}`, quiz, getAuthConfig());
 };
 
 /**
@@ -124,9 +136,7 @@ export const updateQuiz = async (quizId, quiz) => {
  * @param {Object} payload - { answers: [], score: number, total_questions: number }
  */
 export const submitQuiz = async (quizId, payload) => {
-    const token = getToken();
-    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-    return axios.post(`${API_BASE_URL}/quiz/${quizId}/submit`, payload, config);
+    return axios.post(`${API_BASE_URL}/quiz/${quizId}/submit`, payload, getAuthConfig());
 };
 
 /**
@@ -135,9 +145,7 @@ export const submitQuiz = async (quizId, payload) => {
  * @param {Object} payload - { score, total_questions, percentage, bloom_summary, questions }
  */
 export const generateQuizFeedback = async (quizId, payload) => {
-    const token = getToken();
-    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-    return axios.post(`${API_BASE_URL}/quiz/${quizId}/feedback`, payload, config);
+    return axios.post(`${API_BASE_URL}/quiz/${quizId}/feedback`, payload, getAuthConfig());
 };
 
 /**
@@ -145,9 +153,7 @@ export const generateQuizFeedback = async (quizId, payload) => {
  * @param {string} quizId
  */
 export const getQuizResults = async (quizId) => {
-    const token = getToken();
-    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-    return axios.get(`${API_BASE_URL}/quiz/${quizId}/results`, config);
+    return axios.get(`${API_BASE_URL}/quiz/${quizId}/results`, getAuthConfig());
 };
 
 /**
@@ -155,7 +161,5 @@ export const getQuizResults = async (quizId) => {
  * @param {string} quizId
  */
 export const getMyQuizResult = async (quizId) => {
-    const token = getToken();
-    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-    return axios.get(`${API_BASE_URL}/quiz/${quizId}/my-result`, config);
+    return axios.get(`${API_BASE_URL}/quiz/${quizId}/my-result`, getAuthConfig());
 };
