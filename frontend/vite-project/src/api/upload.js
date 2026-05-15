@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config.js';
-import { getToken } from './auth';
+import { getToken } from './auth.js';
 
 const authHeaders = (headers = {}) => {
   const token = getToken();

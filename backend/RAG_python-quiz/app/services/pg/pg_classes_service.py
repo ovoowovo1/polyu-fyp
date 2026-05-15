@@ -2,18 +2,24 @@
 from typing import Any, Dict, List, Optional
 
 from app.services.core.exceptions import PermissionDeniedError, ValidationServiceError
-from app.services.pg.pg_db import _get_conn
+from app.services.pg.pg_db import (
+    execute_returning,
+    fetch_bool,
+    fetch_bool_with_cursor,
+    fetch_one,
+    fetch_one_with_cursor,
+    map_rows,
+    with_cursor,
+)
 from app.utils.datetime_utils import iso
 
 
 def is_user_teacher(user_id: str) -> bool:
-    with _get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT app_security.is_teacher(%s::uuid) AS is_teacher",
-            (user_id,),
-        )
-        row = cur.fetchone()
-        return bool(row and row.get("is_teacher"))
+    return fetch_bool(
+        "SELECT app_security.is_teacher(%s::uuid) AS is_teacher",
+        (user_id,),
+        column="is_teacher",
+    )
 
 
 def create_class_for_teacher(
@@ -25,121 +31,105 @@ def create_class_for_teacher(
     if not is_user_teacher(teacher_user_id):
         raise PermissionDeniedError("Only teachers can create classes")
 
-    with _get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO classes (teacher_id, name, code)
-            VALUES (%s, %s, %s)
-            RETURNING id, teacher_id, name, code, created_at
-            """,
-            (teacher_user_id, name.strip(), code),
-        )
-        row = cur.fetchone()
-        conn.commit()
-        return {
-            "id": str(row["id"]),
-            "teacher_id": str(row["teacher_id"]),
-            "name": row["name"],
-            "code": row.get("code"),
-            "created_at": iso(row.get("created_at")),
-        }
+    row = execute_returning(
+        """
+        INSERT INTO classes (teacher_id, name, code)
+        VALUES (%s, %s, %s)
+        RETURNING id, teacher_id, name, code, created_at
+        """,
+        (teacher_user_id, name.strip(), code),
+    )
+    return _format_class(row)
 
 
 def list_classes_by_teacher(teacher_user_id: str) -> List[Dict[str, Any]]:
     if not is_user_teacher(teacher_user_id):
         raise PermissionDeniedError("Only teachers can view their classes")
 
-    with _get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT c.id, c.teacher_id, c.name, c.code, c.created_at,
-                   COUNT(cs.student_id) AS student_count,
-                   COALESCE(
-                     json_agg(
-                       json_build_object(
-                         'id', u.id,
-                         'name', u.full_name,
-                         'email', u.email
-                       )
-                     ) FILTER (WHERE u.id IS NOT NULL),
-                     '[]'
-                   ) AS students
-            FROM classes c
-            LEFT JOIN class_students cs ON cs.class_id = c.id
-            LEFT JOIN users u ON u.id = cs.student_id
-            WHERE c.teacher_id = %s
-            GROUP BY c.id
-            ORDER BY c.created_at DESC
-            """,
-            (teacher_user_id,),
-        )
-        rows = cur.fetchall() or []
-        return [
-            {
-                "id": str(r["id"]),
-                "teacher_id": str(r["teacher_id"]),
-                "name": r["name"],
-                "code": r.get("code"),
-                "created_at": iso(r.get("created_at")),
-                "student_count": int(r.get("student_count") or 0),
-                "students": r.get("students") or [],
-            }
-            for r in rows
-        ]
+    return map_rows(
+        """
+        SELECT c.id, c.teacher_id, c.name, c.code, c.created_at,
+               COUNT(cs.student_id) AS student_count,
+               COALESCE(
+                 json_agg(
+                   json_build_object(
+                     'id', u.id,
+                     'name', u.full_name,
+                     'email', u.email
+                   )
+                 ) FILTER (WHERE u.id IS NOT NULL),
+                 '[]'
+               ) AS students
+        FROM classes c
+        LEFT JOIN class_students cs ON cs.class_id = c.id
+        LEFT JOIN users u ON u.id = cs.student_id
+        WHERE c.teacher_id = %s
+        GROUP BY c.id
+        ORDER BY c.created_at DESC
+        """,
+        (teacher_user_id,),
+        mapper=_format_teacher_class,
+    )
 
 
 def list_classes_for_student(student_user_id: str) -> List[Dict[str, Any]]:
-    with _get_conn() as conn, conn.cursor() as cur:
-        if not _is_student_exists(cur, student_user_id):
-            raise PermissionDeniedError("Only students can view enrolled classes")
+    if not _is_student_exists(student_user_id):
+        raise PermissionDeniedError("Only students can view enrolled classes")
 
-        cur.execute(
-            """
-            SELECT c.id, c.teacher_id, c.name, c.code, c.created_at,
-                   (SELECT COUNT(*) FROM class_students s WHERE s.class_id = c.id) AS student_count
-            FROM class_students cs
-            JOIN classes c ON c.id = cs.class_id
-            WHERE cs.student_id = %s
-            ORDER BY cs.enrolled_at DESC
-            """,
-            (student_user_id,),
-        )
-        rows = cur.fetchall() or []
-        return [
-            {
-                "id": str(r["id"]),
-                "teacher_id": str(r["teacher_id"]),
-                "name": r["name"],
-                "code": r.get("code"),
-                "created_at": iso(r.get("created_at")),
-                "student_count": int(r.get("student_count") or 0),
-            }
-            for r in rows
-        ]
+    return map_rows(
+        """
+        SELECT c.id, c.teacher_id, c.name, c.code, c.created_at,
+               (SELECT COUNT(*) FROM class_students s WHERE s.class_id = c.id) AS student_count
+        FROM class_students cs
+        JOIN classes c ON c.id = cs.class_id
+        WHERE cs.student_id = %s
+        ORDER BY cs.enrolled_at DESC
+        """,
+        (student_user_id,),
+        mapper=_format_class_with_count,
+    )
 
 
-def _get_user_by_email(cur, email: str) -> Optional[Dict[str, Any]]:
-    cur.execute("SELECT * FROM app_security.lookup_student_for_invite(%s)", (email,))
-    row = cur.fetchone()
-    return dict(row) if row else None
+def _format_class(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": str(row["id"]),
+        "teacher_id": str(row["teacher_id"]),
+        "name": row["name"],
+        "code": row.get("code"),
+        "created_at": iso(row.get("created_at")),
+    }
 
 
-def _is_student_exists(cur, user_id: str) -> bool:
-    cur.execute(
+def _format_class_with_count(row: Dict[str, Any]) -> Dict[str, Any]:
+    formatted = _format_class(row)
+    formatted["student_count"] = int(row.get("student_count") or 0)
+    return formatted
+
+
+def _format_teacher_class(row: Dict[str, Any]) -> Dict[str, Any]:
+    formatted = _format_class_with_count(row)
+    formatted["students"] = row.get("students") or []
+    return formatted
+
+
+def _get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
+    return fetch_one("SELECT * FROM app_security.lookup_student_for_invite(%s)", (email,))
+
+
+def _is_student_exists(user_id: str) -> bool:
+    return fetch_bool(
         "SELECT app_security.is_student(%s::uuid) AS exists",
         (user_id,),
+        column="exists",
     )
-    row = cur.fetchone()
-    return bool(row and row.get("exists"))
 
 
-def _is_class_owned_by_teacher(cur, class_id: str, teacher_user_id: str) -> bool:
-    cur.execute(
+def _is_class_owned_by_teacher(class_id: str, teacher_user_id: str) -> bool:
+    return fetch_bool(
         "SELECT app_security.is_class_owned_by_teacher(%s::uuid, %s::uuid) AS owns_class",
         (class_id, teacher_user_id),
+        column="owns_class",
     )
-    row = cur.fetchone()
-    return bool(row and row.get("owns_class"))
 
 
 def invite_student_to_class(
@@ -150,17 +140,31 @@ def invite_student_to_class(
     if not student_email or not student_email.strip():
         raise ValidationServiceError("Student email must not be empty")
 
-    with _get_conn() as conn, conn.cursor() as cur:
-        if not _is_class_owned_by_teacher(cur, class_id, teacher_user_id):
+    with with_cursor(write=True) as cur:
+        if not fetch_bool_with_cursor(
+            cur,
+            "SELECT app_security.is_class_owned_by_teacher(%s::uuid, %s::uuid) AS owns_class",
+            (class_id, teacher_user_id),
+            column="owns_class",
+        ):
             raise PermissionDeniedError("Class not found or not owned by teacher")
 
-        student = _get_user_by_email(cur, student_email.strip())
+        student = fetch_one_with_cursor(
+            cur,
+            "SELECT * FROM app_security.lookup_student_for_invite(%s)",
+            (student_email.strip(),),
+        )
         if not student:
             raise ValidationServiceError("Student does not exist")
         if student.get("role") != "student":
             raise ValidationServiceError("User is not a student")
         student_id = student.get("id")
-        if not _is_student_exists(cur, student_id):
+        if not fetch_bool_with_cursor(
+            cur,
+            "SELECT app_security.is_student(%s::uuid) AS exists",
+            (student_id,),
+            column="exists",
+        ):
             raise ValidationServiceError("Student profile is incomplete")
 
         cur.execute(
@@ -173,7 +177,6 @@ def invite_student_to_class(
             (class_id, student_id),
         )
         row = cur.fetchone()
-        conn.commit()
 
         if not row:
             cur.execute(

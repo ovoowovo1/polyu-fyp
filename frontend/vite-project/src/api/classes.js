@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config.js';
-import { getToken } from './auth';
-import i18n from '../i18n/config';
+import { getToken } from './auth.js';
+import i18n from '../i18n/config.js';
 
 export const listMyClasses = async () => {
     const token = getToken();
@@ -38,5 +38,4 @@ export const inviteStudent = async (classId, email) => {
     });
     return res.data;
 };
-
 

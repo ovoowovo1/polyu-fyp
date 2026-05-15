@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config.js';
-import { dedupe } from '../utils/requestDeduper';
-import { getToken } from './auth';
+import { dedupe } from '../utils/requestDeduper.js';
+import { getToken } from './auth.js';
 
 
 /**

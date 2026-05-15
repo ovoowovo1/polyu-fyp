@@ -239,15 +239,12 @@ def get_exam_submissions(exam_id: str) -> List[Dict[str, Any]]:
         answers_map = _fetch_exam_answers_map(
             cur, submission_ids, include_attachments=True
         )
-        return [
-            map_exam_submission_row(
-                row,
-                answers=answers_map.get(stringify_id(row["id"]), []),
-                include_student=True,
-                include_graded_by=True,
-            )
-            for row in rows
-        ]
+        return _map_submission_rows(
+            rows,
+            answers_map,
+            include_student=True,
+            include_graded_by=True,
+        )
 
 
 def get_student_exam_submissions(exam_id: str, student_id: str) -> List[Dict[str, Any]]:
@@ -263,13 +260,7 @@ def get_student_exam_submissions(exam_id: str, student_id: str) -> List[Dict[str
         rows = cur.fetchall() or []
         submission_ids = [r["id"] for r in rows]
         answers_map = _fetch_exam_answers_map(cur, submission_ids)
-        return [
-            map_exam_submission_row(
-                row,
-                answers=answers_map.get(stringify_id(row["id"]), []),
-            )
-            for row in rows
-        ]
+        return _map_submission_rows(rows, answers_map)
 
 
 def get_submission_with_answers(submission_id: str) -> Optional[Dict[str, Any]]:
@@ -295,6 +286,21 @@ def get_submission_with_answers(submission_id: str) -> Optional[Dict[str, Any]]:
             answers=answers_map.get(submission_id, []),
             include_grading_source=True,
         )
+
+
+def _map_submission_rows(
+    rows: List[Dict[str, Any]],
+    answers_map: Dict[str, List[Dict[str, Any]]],
+    **options: Any,
+) -> List[Dict[str, Any]]:
+    return [
+        map_exam_submission_row(
+            row,
+            answers=answers_map.get(stringify_id(row["id"]), []),
+            **options,
+        )
+        for row in rows
+    ]
 
 
 __all__ = [

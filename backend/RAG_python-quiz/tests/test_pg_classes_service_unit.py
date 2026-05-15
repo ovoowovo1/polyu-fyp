@@ -8,7 +8,7 @@ from tests.support import FakeCursor
 
 
 class PgClassesServiceTests(PgServiceBase):
-    module_path = "app.services.pg.pg_classes_service"
+    module_path = "app.services.pg.pg_db"
 
     def test_is_user_teacher_and_class_creation_cover_validation_and_success(self):
         cursor = FakeCursor(fetchone_results=[{"is_teacher": True}])
@@ -50,13 +50,20 @@ class PgClassesServiceTests(PgServiceBase):
             classes = pg_service.list_classes_by_teacher("teacher-1")
         self.assertEqual(classes[0]["student_count"], 1)
 
-        cursor = FakeCursor(fetchone_results=[{"id": "student-1", "email": "s@example.com", "full_name": "Student", "role": "student"}, {"exists": True}, {"owns_class": True}], fetchall_results=[[row]])
-        self.assertEqual(pg_service._get_user_by_email(cursor, "s@example.com")["email"], "s@example.com")
-        self.assertTrue(pg_service._is_student_exists(cursor, "student-1"))
-        self.assertTrue(pg_service._is_class_owned_by_teacher(cursor, "class-1", "teacher-1"))
+        cursor = FakeCursor(fetchone_results=[{"id": "student-1", "email": "s@example.com"}])
+        with self.patch_conn(cursor):
+            self.assertEqual(pg_service._get_user_by_email("s@example.com")["id"], "student-1")
         self.assertIn("app_security.lookup_student_for_invite", cursor.executed[0][0])
-        self.assertIn("app_security.is_student", cursor.executed[1][0])
-        self.assertIn("app_security.is_class_owned_by_teacher", cursor.executed[2][0])
+
+        cursor = FakeCursor(fetchone_results=[{"exists": True}])
+        with self.patch_conn(cursor):
+            self.assertTrue(pg_service._is_student_exists("student-1"))
+        self.assertIn("app_security.is_student", cursor.executed[0][0])
+
+        cursor = FakeCursor(fetchone_results=[{"owns_class": False}])
+        with self.patch_conn(cursor):
+            self.assertFalse(pg_service._is_class_owned_by_teacher("class-1", "teacher-1"))
+        self.assertIn("app_security.is_class_owned_by_teacher", cursor.executed[0][0])
 
         with self.patch_conn(FakeCursor(fetchone_results=[None])):
             with self.assertRaises(PermissionDeniedError):
@@ -107,6 +114,9 @@ class PgClassesServiceTests(PgServiceBase):
         with patch("app.services.pg.pg_classes_service.is_user_teacher", return_value=True), self.patch_conn(cursor):
             invited = pg_service.invite_student_to_class("teacher-1", "class-1", "s@example.com")
         self.assertEqual(invited["student"]["email"], "s@example.com")
+        self.assertIn("app_security.is_class_owned_by_teacher", cursor.executed[0][0])
+        self.assertIn("app_security.lookup_student_for_invite", cursor.executed[1][0])
+        self.assertIn("app_security.is_student", cursor.executed[2][0])
 
         cursor = FakeCursor(
             fetchone_results=[

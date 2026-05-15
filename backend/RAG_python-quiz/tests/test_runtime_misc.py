@@ -67,6 +67,79 @@ class RuntimeMiscTests(unittest.TestCase):
             [("SELECT set_config('app.user_id', %s, true)", ("user-1",))],
         )
 
+    def test_pg_db_fetch_helpers_execute_and_return_rows(self):
+        cursor = FakeCursor(
+            fetchone_results=[{"id": "one"}],
+            fetchall_results=[[{"id": "many"}]],
+        )
+        conn = FakeConnection(cursor)
+
+        with patch("app.services.pg.pg_db._get_conn", return_value=conn):
+            one = pg_db.fetch_one("SELECT one WHERE id=%s", ("one",))
+            many = pg_db.fetch_all("SELECT many", None)
+
+        self.assertEqual(one, {"id": "one"})
+        self.assertEqual(many, [{"id": "many"}])
+        self.assertEqual(cursor.executed[0], ("SELECT one WHERE id=%s", ("one",)))
+        self.assertEqual(cursor.executed[1], ("SELECT many", None))
+        self.assertFalse(conn.committed)
+
+    def test_pg_db_write_helpers_commit_and_return_rows(self):
+        cursor = FakeCursor(fetchone_results=[{"id": "updated"}])
+        conn = FakeConnection(cursor)
+
+        with patch("app.services.pg.pg_db._get_conn", return_value=conn):
+            row = pg_db.execute_returning("UPDATE x SET y=%s RETURNING id", ("y",))
+            pg_db.execute_write("DELETE FROM x WHERE id=%s", ("updated",))
+
+        self.assertEqual(row, {"id": "updated"})
+        self.assertTrue(conn.committed)
+        self.assertEqual(cursor.executed[0], ("UPDATE x SET y=%s RETURNING id", ("y",)))
+        self.assertEqual(cursor.executed[1], ("DELETE FROM x WHERE id=%s", ("updated",)))
+
+    def test_pg_db_with_cursor_write_controls_commit(self):
+        read_conn = FakeConnection(FakeCursor())
+        with patch("app.services.pg.pg_db._get_conn", return_value=read_conn):
+            with pg_db.with_cursor() as cur:
+                cur.execute("SELECT 1")
+        self.assertFalse(read_conn.committed)
+
+        write_conn = FakeConnection(FakeCursor())
+        with patch("app.services.pg.pg_db._get_conn", return_value=write_conn):
+            with pg_db.with_cursor(write=True) as cur:
+                cur.execute("UPDATE x SET y=1")
+        self.assertTrue(write_conn.committed)
+
+    def test_pg_db_higher_level_helpers_reduce_row_boilerplate(self):
+        cursor = FakeCursor(
+            fetchone_results=[
+                {"id": "required"},
+                None,
+                {"enabled": 1},
+                {"exists": False},
+                {"flag": True},
+                {"active": True},
+            ],
+            fetchall_results=[[{"id": "a"}, {"id": "b"}]],
+        )
+        conn = FakeConnection(cursor)
+
+        with patch("app.services.pg.pg_db._get_conn", return_value=conn):
+            self.assertEqual(pg_db.require_row("SELECT required", error=ValueError("missing"))["id"], "required")
+            with self.assertRaises(ValueError):
+                pg_db.require_row("SELECT missing", error=ValueError("missing"))
+            self.assertTrue(pg_db.fetch_bool("SELECT enabled", column="enabled"))
+            self.assertFalse(pg_db.execute_exists("SELECT exists"))
+            self.assertEqual(pg_db.map_rows("SELECT rows", mapper=lambda row: row["id"].upper()), ["A", "B"])
+
+        self.assertEqual(cursor.executed[0], ("SELECT required", None))
+        self.assertEqual(cursor.executed[4], ("SELECT rows", None))
+
+        direct_cursor = FakeCursor(fetchone_results=[{"id": "cursor-row"}, {"active": True}])
+        self.assertEqual(pg_db.fetch_one_with_cursor(direct_cursor, "SELECT cursor")["id"], "cursor-row")
+        self.assertTrue(pg_db.fetch_bool_with_cursor(direct_cursor, "SELECT active", column="active"))
+        self.assertEqual(direct_cursor.executed, [("SELECT cursor", None), ("SELECT active", None)])
+
     def test_rls_context_tracks_and_clears_user(self):
         rls_context.set_current_rls_user("user-1")
         self.assertEqual(rls_context.get_current_rls_user(), "user-1")

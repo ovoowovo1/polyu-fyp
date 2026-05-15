@@ -100,11 +100,11 @@ class PgQuizServiceTests(PgServiceBase):
         self.assertEqual(quizzes[0]["documents"][0]["id"], "file-1")
 
         cursor = FakeCursor(fetchone_results=[{"id": "quiz-1"}])
-        with self.patch_conn(cursor):
+        with self.patch_conn(cursor, module_path="app.services.pg.pg_db"):
             deleted = pg_service.delete_quiz("quiz-1")
         self.assertEqual(deleted["quiz_id"], "quiz-1")
 
-        with self.patch_conn(FakeCursor(fetchone_results=[None])):
+        with self.patch_conn(FakeCursor(fetchone_results=[None]), module_path="app.services.pg.pg_db"):
             with self.assertRaises(RuntimeError):
                 pg_service.delete_quiz("missing")
 
@@ -156,16 +156,16 @@ class PgQuizServiceTests(PgServiceBase):
             {"id": "sub-2", "student_id": "student-2", "score": 2, "total_questions": 2, "submitted_at": submitted_at, "answers_json": '[{\"answer\":\"B\"}]', "attempt_no": 2, "full_name": "Other", "email": "o@example.com"},
             {"id": "sub-3", "student_id": "student-3", "score": 0, "total_questions": 2, "submitted_at": submitted_at, "answers_json": "not-json", "attempt_no": 3, "full_name": "Third", "email": "t@example.com"},
         ]
-        with self.patch_conn(FakeCursor(fetchall_results=[rows])):
+        with self.patch_conn(FakeCursor(fetchall_results=[rows]), module_path="app.services.pg.pg_db"):
             submissions = pg_service.get_quiz_submissions("quiz-1")
         self.assertEqual(submissions[0]["answers"], [])
         self.assertEqual(submissions[1]["answers"][0]["answer"], "B")
         self.assertEqual(submissions[2]["answers"], [])
 
-        with self.patch_conn(FakeCursor(fetchone_results=[None])):
+        with self.patch_conn(FakeCursor(fetchone_results=[None]), module_path="app.services.pg.pg_db"):
             self.assertIsNone(pg_service.get_student_quiz_submission("quiz-1", "student-1"))
 
         cursor = FakeCursor(fetchone_results=[{"id": "sub-1", "score": 1, "total_questions": 2, "answers_json": '[{\"answer\":\"A\"}]', "submitted_at": submitted_at}])
-        with self.patch_conn(cursor):
+        with self.patch_conn(cursor, module_path="app.services.pg.pg_db"):
             submission = pg_service.get_student_quiz_submission("quiz-1", "student-1")
         self.assertEqual(submission["answers"][0]["answer"], "A")

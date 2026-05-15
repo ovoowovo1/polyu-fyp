@@ -10,7 +10,7 @@ class PgAuthServiceTests(unittest.TestCase):
         cursor = FakeCursor(fetchone_results=[{"id": "user-1", "email": "u@example.com", "role": "teacher", "password_hash": pg_auth_service._hash_password("secret")}])
         conn = FakeConnection(cursor)
 
-        with patch("app.services.pg.pg_auth_service._get_conn", return_value=conn), patch(
+        with patch("app.services.pg.pg_db._get_conn", return_value=conn), patch(
             "app.services.pg.pg_auth_service.create_session_token",
             return_value="jwt-token",
         ):
@@ -23,31 +23,31 @@ class PgAuthServiceTests(unittest.TestCase):
         self.assertIn("app_security.auth_mark_last_login", cursor.executed[1][0])
 
     def test_login_raises_when_user_missing(self):
-        with patch("app.services.pg.pg_auth_service._get_conn", return_value=FakeConnection(FakeCursor(fetchone_results=[None]))):
+        with patch("app.services.pg.pg_db._get_conn", return_value=FakeConnection(FakeCursor(fetchone_results=[None]))):
             with self.assertRaises(ValueError):
                 pg_auth_service.login("u@example.com", "secret")
 
     def test_login_raises_for_invalid_password(self):
         row = {"id": "user-1", "email": "u@example.com", "role": "teacher", "password_hash": pg_auth_service._hash_password("secret")}
-        with patch("app.services.pg.pg_auth_service._get_conn", return_value=FakeConnection(FakeCursor(fetchone_results=[row]))):
+        with patch("app.services.pg.pg_db._get_conn", return_value=FakeConnection(FakeCursor(fetchone_results=[row]))):
             with self.assertRaises(ValueError):
                 pg_auth_service.login("u@example.com", "wrong")
 
     def test_login_rejects_invalid_requested_role(self):
         row = {"id": "user-1", "email": "u@example.com", "role": "teacher", "password_hash": pg_auth_service._hash_password("secret")}
-        with patch("app.services.pg.pg_auth_service._get_conn", return_value=FakeConnection(FakeCursor(fetchone_results=[row]))):
+        with patch("app.services.pg.pg_db._get_conn", return_value=FakeConnection(FakeCursor(fetchone_results=[row]))):
             with self.assertRaises(ValueError):
                 pg_auth_service.login("u@example.com", "secret", "admin")
 
     def test_login_rejects_role_mismatch(self):
         row = {"id": "user-1", "email": "u@example.com", "role": "teacher", "password_hash": pg_auth_service._hash_password("secret")}
-        with patch("app.services.pg.pg_auth_service._get_conn", return_value=FakeConnection(FakeCursor(fetchone_results=[row]))):
+        with patch("app.services.pg.pg_db._get_conn", return_value=FakeConnection(FakeCursor(fetchone_results=[row]))):
             with self.assertRaises(ValueError):
                 pg_auth_service.login("u@example.com", "secret", "student")
 
     def test_login_rejects_missing_user_id(self):
         row = {"id": None, "email": "u@example.com", "role": "teacher", "password_hash": pg_auth_service._hash_password("secret")}
-        with patch("app.services.pg.pg_auth_service._get_conn", return_value=FakeConnection(FakeCursor(fetchone_results=[row]))):
+        with patch("app.services.pg.pg_db._get_conn", return_value=FakeConnection(FakeCursor(fetchone_results=[row]))):
             with self.assertRaises(ValueError):
                 pg_auth_service.login("u@example.com", "secret")
 
@@ -81,7 +81,7 @@ class PgAuthServiceTests(unittest.TestCase):
     def test_register_rejects_existing_email(self):
         cursor = FakeCursor(fetchone_results=[{"exists": True}])
         conn = FakeConnection(cursor)
-        with patch("app.services.pg.pg_auth_service._get_conn", return_value=conn):
+        with patch("app.services.pg.pg_db._get_conn", return_value=conn):
             with self.assertRaises(ValueError):
                 pg_auth_service.register("u@example.com", "secret", "User", "student")
 
@@ -94,7 +94,7 @@ class PgAuthServiceTests(unittest.TestCase):
         )
         conn = FakeConnection(cursor)
 
-        with patch("app.services.pg.pg_auth_service._get_conn", return_value=conn):
+        with patch("app.services.pg.pg_db._get_conn", return_value=conn):
             result = pg_auth_service.register("u@example.com", "secret", "User", "teacher")
 
         self.assertEqual(result["user"]["role"], "teacher")
@@ -111,7 +111,7 @@ class PgAuthServiceTests(unittest.TestCase):
         )
         conn = FakeConnection(cursor)
 
-        with patch("app.services.pg.pg_auth_service._get_conn", return_value=conn):
+        with patch("app.services.pg.pg_db._get_conn", return_value=conn):
             result = pg_auth_service.register("s@example.com", "secret", "Student", "student")
 
         self.assertEqual(result["user"]["role"], "student")
@@ -121,7 +121,7 @@ class PgAuthServiceTests(unittest.TestCase):
         cursor = FakeCursor(fetchone_results=[{"exists": False}, None])
         conn = FakeConnection(cursor)
 
-        with patch("app.services.pg.pg_auth_service._get_conn", return_value=conn):
+        with patch("app.services.pg.pg_db._get_conn", return_value=conn):
             with self.assertRaises(ValueError):
                 pg_auth_service.register("u@example.com", "secret", "User", "student")
 

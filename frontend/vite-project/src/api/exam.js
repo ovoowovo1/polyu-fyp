@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config.js';
-import { getToken } from './auth';
+import { getToken } from './auth.js';
 
 /**
  * 獲取帶認證的 axios 配置
@@ -205,4 +205,3 @@ export const aiGradeSubmission = async (submissionId) => {
     const config = getAuthConfig();
     return axios.post(`${API_BASE_URL}/exam/submission/${submissionId}/ai-grade`, {}, config);
 };
-

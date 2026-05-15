@@ -2,7 +2,7 @@
 from typing import Any, Dict, Optional
 import bcrypt
 
-from app.services.pg.pg_db import _get_conn
+from app.services.pg.pg_db import with_cursor
 from app.logger import get_logger
 from app.utils.jwt_utils import create_session_token, verify_token
 
@@ -22,7 +22,7 @@ def login(email: str, password: str, role: Optional[str] = None) -> Dict[str, An
         Dict containing message, user info, and session_token (JWT) if successful.
         Raises ValueError if login fails.
     """
-    with _get_conn() as conn, conn.cursor() as cur:
+    with with_cursor(write=True) as cur:
         # Query through a security-definer function so login works after users RLS is enabled.
         cur.execute("SELECT * FROM app_security.auth_lookup_user(%s)", (email,))
         row = cur.fetchone()
@@ -54,28 +54,27 @@ def login(email: str, password: str, role: Optional[str] = None) -> Dict[str, An
 
         # Update the last login time
         cur.execute("SELECT app_security.auth_mark_last_login(%s)", (user_id,))
-        conn.commit()
-
-        # Generate a JWT session token.
-        # It is stateless and does not need to be stored in the database.
-        # Use email as the username because JWT usually contains identifiable user information.
-        session_token = create_session_token(
-            user_id=str(user_id),  # Convert UUID to string
-            username=email,
-            expires_in_days=7  # Set the session validity period to 7 days. Adjust as needed.
-        )
-
-        logger.info(f"Session token created for user: {email} (user_id: {user_id})")
 
         # Build user information without including the password hash
         user_info = dict(row)
         user_info.pop("password_hash", None)  # Remove the password hash. Do not return it to the frontend.
 
-        return {
-            "message": "Login successful",
-            "user": user_info,
-            "session_token": session_token
-        }
+    # Generate a JWT session token.
+    # It is stateless and does not need to be stored in the database.
+    # Use email as the username because JWT usually contains identifiable user information.
+    session_token = create_session_token(
+        user_id=str(user_id),  # Convert UUID to string
+        username=email,
+        expires_in_days=7  # Set the session validity period to 7 days. Adjust as needed.
+    )
+
+    logger.info(f"Session token created for user: {email} (user_id: {user_id})")
+
+    return {
+        "message": "Login successful",
+        "user": user_info,
+        "session_token": session_token
+    }
 
 
 def verify_session(session_token: str) -> Optional[Dict[str, Any]]:
@@ -147,7 +146,7 @@ def register(email: str, password: str, full_name: str, role: str) -> Dict[str, 
     if role not in ('teacher', 'student'):
         raise ValueError(f"Invalid role: {role}. Must be 'teacher' or 'student'")
 
-    with _get_conn() as conn, conn.cursor() as cur:
+    with with_cursor(write=True) as cur:
         cur.execute("SELECT app_security.auth_email_exists(%s) AS exists", (email,))
         existing = cur.fetchone()
         if existing and existing.get("exists"):
@@ -166,7 +165,6 @@ def register(email: str, password: str, full_name: str, role: str) -> Dict[str, 
         if not user_row:
             raise ValueError("Registration failed")
 
-        conn.commit()
         user_id = user_row["id"]
 
         logger.info(f"User registered: {email} (role: {role}, user_id: {user_id})")

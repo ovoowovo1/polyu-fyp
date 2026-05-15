@@ -4,7 +4,7 @@ import json as json_lib
 from typing import Any, Dict, List, Optional
 
 from app.services.core.exceptions import NotFoundError, NotReleasedError, PermissionDeniedError
-from app.services.pg.pg_db import _get_conn
+from app.services.pg.pg_db import _get_conn, require_row
 from app.services.pg.pg_shared import (
     fetch_default_document_names,
     fetch_linked_documents,
@@ -126,27 +126,7 @@ def get_exams_by_class(class_id: str) -> List[Dict[str, Any]]:
         exam_ids = [r["id"] for r in rows]
         docs = fetch_linked_documents(cur, "exam_documents", "exam_id", exam_ids)
 
-        return [
-            {
-                "id": stringify_id(r["id"]),
-                "title": r["title"] or "Untitled Exam",
-                "description": r["description"],
-                "difficulty": r["difficulty"],
-                "total_marks": r["total_marks"],
-                "duration_minutes": r["duration_minutes"],
-                "num_questions": r["num_questions"] or 0,
-                "created_at": maybe_iso(r["created_at"]),
-                "updated_at": maybe_iso(r["updated_at"]),
-                "is_published": r["is_published"],
-                "start_at": maybe_iso(r["start_at"]),
-                "end_at": maybe_iso(r["end_at"]),
-                "pdf_path": r["pdf_path"],
-                "owner_id": stringify_id(r["owner_id"]),
-                "file_ids": stringify_id_list(r["file_ids"]),
-                "documents": docs.get(stringify_id(r["id"]), []),
-            }
-            for r in rows
-        ]
+        return [_format_exam_summary(row, docs) for row in rows]
 
 
 def get_exam_by_id(
@@ -214,29 +194,7 @@ def get_exam_by_id(
                 q.pop("marking_scheme", None)
                 q.pop("rationale", None)
 
-        return {
-            "id": stringify_id(r["id"]),
-            "title": r["title"] or "Untitled Exam",
-            "description": r["description"],
-            "questions": questions,
-            "difficulty": r["difficulty"],
-            "total_marks": r["total_marks"],
-            "duration_minutes": r["duration_minutes"],
-            "num_questions": len(questions),
-            "class_id": stringify_id(r["class_id"]),
-            "owner_id": stringify_id(r["owner_id"]),
-            "created_at": maybe_iso(r["created_at"]),
-            "updated_at": maybe_iso(r["updated_at"]),
-            "is_published": r["is_published"],
-            "start_at": maybe_iso(r["start_at"]),
-            "end_at": maybe_iso(r["end_at"]),
-            "pdf_path": r["pdf_path"],
-            "file_ids": linked_document_ids(documents),
-            "documents": [
-                {"id": document["id"], "name": document["name"]}
-                for document in documents
-            ],
-        }
+        return _format_exam_detail(r, questions, documents)
 
 
 def update_exam(
@@ -326,30 +284,76 @@ def update_exam(
 
 
 def delete_exam(exam_id: str) -> Dict[str, Any]:
-    with _get_conn() as conn, conn.cursor() as cur:
-        cur.execute("DELETE FROM exams WHERE id = %s RETURNING id, title", (exam_id,))
-        row = cur.fetchone()
-        if not row:
-            raise NotFoundError("Exam not found")
-        conn.commit()
-        return {"message": "Exam deleted", "exam_id": str(row["id"]), "title": row["title"]}
+    row = require_row(
+        "DELETE FROM exams WHERE id = %s RETURNING id, title",
+        (exam_id,),
+        error=NotFoundError("Exam not found"),
+        write=True,
+    )
+    return {"message": "Exam deleted", "exam_id": str(row["id"]), "title": row["title"]}
 
 
 def publish_exam(exam_id: str, is_published: bool = True) -> Dict[str, Any]:
-    with _get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            "UPDATE exams SET is_published = %s, updated_at = now() WHERE id = %s RETURNING id, title, is_published",
-            (is_published, exam_id),
-        )
-        row = cur.fetchone()
-        if not row:
-            raise NotFoundError("Exam not found")
-        conn.commit()
-        return {
-            "exam_id": str(row["id"]),
-            "title": row["title"],
-            "is_published": row["is_published"],
-        }
+    row = require_row(
+        "UPDATE exams SET is_published = %s, updated_at = now() WHERE id = %s RETURNING id, title, is_published",
+        (is_published, exam_id),
+        error=NotFoundError("Exam not found"),
+        write=True,
+    )
+    return {
+        "exam_id": str(row["id"]),
+        "title": row["title"],
+        "is_published": row["is_published"],
+    }
+
+
+def _format_exam_summary(
+    row: Dict[str, Any], docs: Dict[str, List[Dict[str, Any]]]
+) -> Dict[str, Any]:
+    exam_id = stringify_id(row["id"])
+    return {
+        "id": exam_id,
+        "title": row["title"] or "Untitled Exam",
+        "description": row["description"],
+        "difficulty": row["difficulty"],
+        "total_marks": row["total_marks"],
+        "duration_minutes": row["duration_minutes"],
+        "num_questions": row["num_questions"] or 0,
+        "created_at": maybe_iso(row["created_at"]),
+        "updated_at": maybe_iso(row["updated_at"]),
+        "is_published": row["is_published"],
+        "start_at": maybe_iso(row["start_at"]),
+        "end_at": maybe_iso(row["end_at"]),
+        "pdf_path": row["pdf_path"],
+        "owner_id": stringify_id(row["owner_id"]),
+        "file_ids": stringify_id_list(row["file_ids"]),
+        "documents": docs.get(exam_id, []),
+    }
+
+
+def _format_exam_detail(
+    row: Dict[str, Any], questions: List[Dict[str, Any]], documents: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    return {
+        "id": stringify_id(row["id"]),
+        "title": row["title"] or "Untitled Exam",
+        "description": row["description"],
+        "questions": questions,
+        "difficulty": row["difficulty"],
+        "total_marks": row["total_marks"],
+        "duration_minutes": row["duration_minutes"],
+        "num_questions": len(questions),
+        "class_id": stringify_id(row["class_id"]),
+        "owner_id": stringify_id(row["owner_id"]),
+        "created_at": maybe_iso(row["created_at"]),
+        "updated_at": maybe_iso(row["updated_at"]),
+        "is_published": row["is_published"],
+        "start_at": maybe_iso(row["start_at"]),
+        "end_at": maybe_iso(row["end_at"]),
+        "pdf_path": row["pdf_path"],
+        "file_ids": linked_document_ids(documents),
+        "documents": [{"id": document["id"], "name": document["name"]} for document in documents],
+    }
 
 
 

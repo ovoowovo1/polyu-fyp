@@ -4,7 +4,7 @@ import json as json_lib
 from typing import Any, Dict, List, Optional
 
 from app.services.core.exceptions import NotFoundError, PermissionDeniedError, ValidationServiceError
-from app.services.pg.pg_db import _get_conn
+from app.services.pg.pg_db import _get_conn, fetch_one, map_rows, require_row
 from app.services.pg.pg_shared import (
     fetch_default_document_names,
     fetch_linked_documents,
@@ -160,22 +160,7 @@ def get_all_quizzes(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         quiz_ids = [r["id"] for r in rows]
         docs = fetch_linked_documents(cur, "quiz_documents", "quiz_id", quiz_ids)
 
-        quizzes = []
-        for r in rows:
-            qid = stringify_id(r["id"])
-            quizzes.append(
-                {
-                    "id": qid,
-                    "name": r["name"] or "未命名測驗",
-                    "num_questions": r["num_questions"],
-                    "created_at": maybe_iso(r["created_at"]),
-                    "file_ids": stringify_id_list(r["file_ids"]),
-                    "was_summarized": r["was_summarized"],
-                    "source_text_length": r["source_text_length"],
-                    "documents": [d for d in (docs.get(qid) or []) if d.get("id")],
-                }
-            )
-        return quizzes
+        return [_format_quiz_summary(row, docs) for row in rows]
 
 
 def get_quizzes_by_class(class_id: str) -> List[Dict[str, Any]]:
@@ -196,22 +181,7 @@ def get_quizzes_by_class(class_id: str) -> List[Dict[str, Any]]:
         quiz_ids = [r["id"] for r in rows]
         docs = fetch_linked_documents(cur, "quiz_documents", "quiz_id", quiz_ids)
 
-        quizzes = []
-        for r in rows:
-            qid = stringify_id(r["id"])
-            quizzes.append(
-                {
-                    "id": qid,
-                    "name": r["name"] or "未命名測驗",
-                    "num_questions": r["num_questions"],
-                    "created_at": maybe_iso(r["created_at"]),
-                    "file_ids": stringify_id_list(r["file_ids"]),
-                    "was_summarized": r["was_summarized"],
-                    "source_text_length": r["source_text_length"],
-                    "documents": [d for d in (docs.get(qid) or []) if d.get("id")],
-                }
-            )
-        return quizzes
+        return [_format_quiz_summary(row, docs) for row in rows]
 
 
 def get_quiz_by_id(quiz_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
@@ -261,29 +231,17 @@ def get_quiz_by_id(quiz_id: str, user_id: Optional[str] = None) -> Dict[str, Any
                 raise PermissionDeniedError("Permission denied")
 
         questions = maybe_json_load(r["questions_json"], [])
-        return {
-            "id": stringify_id(r["id"]),
-            "name": r["name"] or "未命名測驗",
-            "questions": questions,
-            "num_questions": r["num_questions"],
-            "created_at": maybe_iso(r["created_at"]),
-            "file_ids": linked_document_ids(documents),
-            "was_summarized": r["was_summarized"],
-            "source_text_length": r["source_text_length"],
-            "documents": [
-                {"id": document["id"], "name": document["name"]}
-                for document in filter_linked_documents(documents)
-            ],
-        }
+        return _format_quiz_detail(r, questions, documents)
 
 
 def delete_quiz(quiz_id: str) -> Dict[str, Any]:
-    with _get_conn() as conn, conn.cursor() as cur:
-        cur.execute("DELETE FROM quizzes WHERE id=%s RETURNING id", (quiz_id,))
-        row = cur.fetchone()
-        if not row:
-            raise NotFoundError("Quiz not found")
-        return {"message": "測驗已成功刪除", "quiz_id": str(quiz_id)}
+    require_row(
+        "DELETE FROM quizzes WHERE id=%s RETURNING id",
+        (quiz_id,),
+        error=NotFoundError("Quiz not found"),
+        write=True,
+    )
+    return {"message": "測驗已成功刪除", "quiz_id": str(quiz_id)}
 
 
 def submit_quiz_result(
@@ -332,20 +290,7 @@ def get_quiz_submissions(quiz_id: str) -> List[dict]:
     WHERE qs.quiz_id = %s
     ORDER BY qs.submitted_at DESC, qs.id DESC
     """
-    with _get_conn() as conn, conn.cursor() as cur:
-        cur.execute(sql, (quiz_id,))
-        rows = cur.fetchall()
-        return [
-            map_quiz_submission_row(
-                {
-                    **row,
-                    "student_name": row.get("full_name"),
-                    "student_email": row.get("email"),
-                },
-                include_student=True,
-            )
-            for row in rows
-        ]
+    return map_rows(sql, (quiz_id,), mapper=_format_quiz_submission_with_student)
 
 
 def get_student_quiz_submission(quiz_id: str, student_id: str) -> Optional[dict]:
@@ -354,13 +299,52 @@ def get_student_quiz_submission(quiz_id: str, student_id: str) -> Optional[dict]
     FROM quiz_submissions
     WHERE quiz_id = %s AND student_id = %s
     """
-    with _get_conn() as conn, conn.cursor() as cur:
-        cur.execute(sql, (quiz_id, student_id))
-        row = cur.fetchone()
-        if not row:
-            return None
+    row = fetch_one(sql, (quiz_id, student_id))
+    return map_quiz_submission_row(row) if row else None
 
-        return map_quiz_submission_row(row)
+
+def _format_quiz_summary(row: Dict[str, Any], docs: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
+    quiz_id = stringify_id(row["id"])
+    return {
+        "id": quiz_id,
+        "name": row["name"] or "未命名測驗",
+        "num_questions": row["num_questions"],
+        "created_at": maybe_iso(row["created_at"]),
+        "file_ids": stringify_id_list(row["file_ids"]),
+        "was_summarized": row["was_summarized"],
+        "source_text_length": row["source_text_length"],
+        "documents": [doc for doc in (docs.get(quiz_id) or []) if doc.get("id")],
+    }
+
+
+def _format_quiz_detail(
+    row: Dict[str, Any], questions: List[Dict[str, Any]], documents: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    return {
+        "id": stringify_id(row["id"]),
+        "name": row["name"] or "未命名測驗",
+        "questions": questions,
+        "num_questions": row["num_questions"],
+        "created_at": maybe_iso(row["created_at"]),
+        "file_ids": linked_document_ids(documents),
+        "was_summarized": row["was_summarized"],
+        "source_text_length": row["source_text_length"],
+        "documents": [
+            {"id": document["id"], "name": document["name"]}
+            for document in filter_linked_documents(documents)
+        ],
+    }
+
+
+def _format_quiz_submission_with_student(row: Dict[str, Any]) -> Dict[str, Any]:
+    return map_quiz_submission_row(
+        {
+            **row,
+            "student_name": row.get("full_name"),
+            "student_email": row.get("email"),
+        },
+        include_student=True,
+    )
 
 
 __all__ = [

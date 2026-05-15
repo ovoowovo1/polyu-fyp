@@ -1,3 +1,6 @@
+from contextlib import contextmanager
+from typing import Any, Callable, Iterator
+
 import psycopg2
 import psycopg2.extras
 
@@ -17,3 +20,80 @@ def _get_conn():
         with conn.cursor() as cur:
             cur.execute("SELECT set_config('app.user_id', %s, true)", (str(user_id),))
     return conn
+
+
+@contextmanager
+def with_cursor(*, write: bool = False) -> Iterator[Any]:
+    with _get_conn() as conn, conn.cursor() as cur:
+        yield cur
+        if write:
+            conn.commit()
+
+
+def fetch_one(sql: str, params: Any = None) -> Any:
+    with with_cursor() as cur:
+        return fetch_one_with_cursor(cur, sql, params)
+
+
+def fetch_all(sql: str, params: Any = None) -> list[Any]:
+    with with_cursor() as cur:
+        cur.execute(sql, params)
+        return cur.fetchall()
+
+
+def execute_returning(sql: str, params: Any = None, *, commit: bool = True) -> Any:
+    with with_cursor(write=commit) as cur:
+        cur.execute(sql, params)
+        return cur.fetchone()
+
+
+def execute_write(sql: str, params: Any = None, *, commit: bool = True) -> None:
+    with with_cursor(write=commit) as cur:
+        cur.execute(sql, params)
+
+
+def fetch_one_with_cursor(cur: Any, sql: str, params: Any = None) -> Any:
+    cur.execute(sql, params)
+    return cur.fetchone()
+
+
+def fetch_bool(sql: str, params: Any = None, *, column: str) -> bool:
+    row = fetch_one(sql, params)
+    return bool(row and row.get(column))
+
+
+def fetch_bool_with_cursor(cur: Any, sql: str, params: Any = None, *, column: str) -> bool:
+    row = fetch_one_with_cursor(cur, sql, params)
+    return bool(row and row.get(column))
+
+
+def execute_exists(sql: str, params: Any = None) -> bool:
+    row = fetch_one(sql, params)
+    return bool(row and next(iter(row.values()), None))
+
+
+def require_row(sql: str, params: Any = None, *, error: Exception, write: bool = False) -> Any:
+    row = execute_returning(sql, params) if write else fetch_one(sql, params)
+    if not row:
+        raise error
+    return row
+
+
+def map_rows(sql: str, params: Any = None, *, mapper: Callable[[Any], Any]) -> list[Any]:
+    return [mapper(row) for row in fetch_all(sql, params)]
+
+
+__all__ = [
+    "_get_conn",
+    "execute_returning",
+    "execute_exists",
+    "execute_write",
+    "fetch_all",
+    "fetch_bool",
+    "fetch_bool_with_cursor",
+    "fetch_one",
+    "fetch_one_with_cursor",
+    "map_rows",
+    "require_row",
+    "with_cursor",
+]

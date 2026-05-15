@@ -6,7 +6,7 @@ from tests.support import FakeCursor
 
 
 class PgFilesServiceTests(PgServiceBase):
-    module_path = "app.services.pg.pg_files_service"
+    module_path = "app.services.pg.pg_db"
 
     def test_file_listing_and_mutations_cover_success_and_missing_rows(self):
         upload_time = datetime(2025, 1, 2, 3, 4, 5)

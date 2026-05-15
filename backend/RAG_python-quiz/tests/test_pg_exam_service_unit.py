@@ -154,20 +154,20 @@ class PgExamServiceTests(PgServiceBase):
         self.assertFalse(execute_values.called)
 
         cursor = FakeCursor(fetchone_results=[{"id": "exam-1", "title": "Exam"}])
-        with self.patch_conn(cursor):
+        with self.patch_conn(cursor, module_path="app.services.pg.pg_db"):
             deleted = pg_service.delete_exam("exam-1")
         self.assertEqual(deleted["exam_id"], "exam-1")
 
-        with self.patch_conn(FakeCursor(fetchone_results=[None])):
+        with self.patch_conn(FakeCursor(fetchone_results=[None]), module_path="app.services.pg.pg_db"):
             with self.assertRaises(RuntimeError):
                 pg_service.delete_exam("missing")
 
         cursor = FakeCursor(fetchone_results=[{"id": "exam-1", "title": "Exam", "is_published": True}])
-        with self.patch_conn(cursor):
+        with self.patch_conn(cursor, module_path="app.services.pg.pg_db"):
             published = pg_service.publish_exam("exam-1")
         self.assertTrue(published["is_published"])
 
-        with self.patch_conn(FakeCursor(fetchone_results=[None])):
+        with self.patch_conn(FakeCursor(fetchone_results=[None]), module_path="app.services.pg.pg_db"):
             with self.assertRaises(RuntimeError):
                 pg_service.publish_exam("missing")
 

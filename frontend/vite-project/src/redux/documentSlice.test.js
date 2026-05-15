@@ -3,11 +3,18 @@ import assert from 'node:assert/strict';
 
 import axios from 'axios';
 
-import {
+import reducer, {
     deleteDocument,
     fetchDocumentContent,
     fetchDocuments,
     renameDocument,
+    resetDocumentState,
+    setCurrentClassId,
+    setSearchTerm,
+    setSelectedShowDocumentContentID,
+    toggleDocumentListCollapse,
+    toggleFileSelection,
+    toggleSelectAll,
 } from './documentSlice.js';
 import { API_BASE_URL } from '../config.js';
 import { clearDedupeCache } from '../utils/requestDeduper.js';
@@ -122,4 +129,111 @@ test('fetchDocumentContent uses the new /files endpoint', async () => {
     } finally {
         axios.get = originalGet;
     }
+});
+
+test('document reducer exposes the expected initial state', () => {
+    assert.deepEqual(reducer(undefined, { type: '@@INIT' }), {
+        items: [],
+        documentsById: {},
+        currentClassId: null,
+        loading: false,
+        contentLoading: false,
+        error: null,
+        selectedFileIds: [],
+        selectedShowDocumentContentID: null,
+        searchTerm: '',
+        isDocumentListCollapsed: false,
+    });
+});
+
+test('document reducer updates simple view state', () => {
+    let state = reducer(undefined, setSearchTerm('lecture'));
+    state = reducer(state, setSelectedShowDocumentContentID('doc-1'));
+    state = reducer(state, setCurrentClassId('class-1'));
+    state = reducer(state, toggleDocumentListCollapse());
+
+    assert.equal(state.searchTerm, 'lecture');
+    assert.equal(state.selectedShowDocumentContentID, 'doc-1');
+    assert.equal(state.currentClassId, 'class-1');
+    assert.equal(state.isDocumentListCollapsed, true);
+});
+
+test('toggleFileSelection selects and deselects one file id', () => {
+    const selected = reducer(undefined, toggleFileSelection('file-1'));
+    const deselected = reducer(selected, toggleFileSelection('file-1'));
+
+    assert.deepEqual(selected.selectedFileIds, ['file-1']);
+    assert.deepEqual(deselected.selectedFileIds, []);
+});
+
+test('toggleSelectAll selects every file and clears when already selected', () => {
+    const allIds = ['file-1', 'file-2'];
+    const selected = reducer(undefined, toggleSelectAll(allIds));
+    const cleared = reducer(selected, toggleSelectAll(allIds));
+
+    assert.deepEqual(selected.selectedFileIds, allIds);
+    assert.deepEqual(cleared.selectedFileIds, []);
+});
+
+test('renameDocument fulfilled updates filename and original name in state', () => {
+    const state = reducer({
+        ...reducer(undefined, { type: '@@INIT' }),
+        items: [
+            { id: 'doc-1', filename: 'old.pdf', original_name: 'old.pdf' },
+            { id: 'doc-2', filename: 'keep.pdf', original_name: 'keep.pdf' },
+        ],
+    }, renameDocument.fulfilled({ docId: 'doc-1', newName: 'new.pdf' }));
+
+    assert.deepEqual(state.items, [
+        { id: 'doc-1', filename: 'new.pdf', original_name: 'new.pdf' },
+        { id: 'doc-2', filename: 'keep.pdf', original_name: 'keep.pdf' },
+    ]);
+});
+
+test('fetchDocumentContent fulfilled stores document content by file id', () => {
+    const payload = {
+        file: { id: 'doc-1', filename: 'notes.pdf' },
+        content: 'document body',
+    };
+    const state = reducer(undefined, fetchDocumentContent.fulfilled(payload));
+
+    assert.equal(state.contentLoading, false);
+    assert.deepEqual(state.documentsById, {
+        'doc-1': payload,
+    });
+});
+
+test('fetchDocuments pending and rejected update loading and error state', () => {
+    const pending = reducer(undefined, fetchDocuments.pending());
+    const rejected = reducer({
+        ...pending,
+        items: [{ id: 'doc-1' }],
+    }, fetchDocuments.rejected(null, 'request-1', 'class-1', 'load failed'));
+
+    assert.equal(pending.loading, true);
+    assert.equal(pending.error, null);
+    assert.equal(rejected.loading, false);
+    assert.equal(rejected.error, 'load failed');
+    assert.deepEqual(rejected.items, []);
+});
+
+test('fetchDocumentContent with no doc id resolves to a null payload', async () => {
+    const harness = createThunkHarness();
+    const result = await fetchDocumentContent(null)(harness.dispatch, harness.getState, undefined);
+
+    assert.equal(result.type, 'document/fetchDocumentContent/fulfilled');
+    assert.equal(result.payload, null);
+});
+
+test('resetDocumentState restores the initial state', () => {
+    const dirtyState = {
+        ...reducer(undefined, { type: '@@INIT' }),
+        items: [{ id: 'doc-1' }],
+        currentClassId: 'class-1',
+        selectedFileIds: ['file-1'],
+        searchTerm: 'lecture',
+        isDocumentListCollapsed: true,
+    };
+
+    assert.deepEqual(reducer(dirtyState, resetDocumentState()), reducer(undefined, { type: '@@INIT' }));
 });
