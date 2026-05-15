@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from typing import Any, Dict, List, Optional
 
-from app.services.core.exceptions import NotFoundError
+from app.services.core.exceptions import NotFoundError, PermissionDeniedError
 from app.services.pg.pg_db import _get_conn
 from app.services.pg.pg_shared import maybe_iso, stringify_id
 
@@ -13,10 +13,20 @@ def grade_exam_submission(
     teacher_comment: Optional[str] = None,
 ) -> Dict[str, Any]:
     with _get_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT id, total_marks FROM exam_submissions WHERE id = %s", (submission_id,))
+        cur.execute(
+            """
+            SELECT es.id, es.total_marks
+            FROM exam_submissions es
+            JOIN exams e ON e.id = es.exam_id
+            LEFT JOIN classes c ON c.id = e.class_id
+            WHERE es.id = %s
+              AND (e.owner_id = %s OR c.teacher_id = %s)
+            """,
+            (submission_id, teacher_id, teacher_id),
+        )
         sub = cur.fetchone()
         if not sub:
-            raise NotFoundError("Submission not found")
+            raise PermissionDeniedError("Permission denied")
 
         if answers_grades:
             for g in answers_grades:

@@ -163,19 +163,36 @@ def get_all_quizzes(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         return [_format_quiz_summary(row, docs) for row in rows]
 
 
-def get_quizzes_by_class(class_id: str) -> List[Dict[str, Any]]:
+def get_quizzes_by_class(class_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
     sql = """
     SELECT q.id, q.name, q.num_questions, q.created_at, q.was_summarized, q.source_text_length,
            ARRAY_AGG(DISTINCT qd.document_id)::uuid[] AS file_ids
     FROM quizzes q
     LEFT JOIN quiz_documents qd ON qd.quiz_id = q.id
     LEFT JOIN documents d ON d.id = qd.document_id
+    LEFT JOIN classes cq ON cq.id = q.class_id
+    LEFT JOIN classes cd ON cd.id = d.class_id
+    LEFT JOIN class_students csq ON csq.class_id = q.class_id AND csq.student_id = %s
+    LEFT JOIN class_students csd ON csd.class_id = d.class_id AND csd.student_id = %s
     WHERE d.class_id = %s
+    """
+    params: list[Any] = [user_id, user_id, class_id]
+    if user_id:
+        sql += """
+      AND (
+        cq.teacher_id = %s
+        OR cd.teacher_id = %s
+        OR csq.student_id IS NOT NULL
+        OR csd.student_id IS NOT NULL
+      )
+        """
+        params.extend([user_id, user_id])
+    sql += """
     GROUP BY q.id
     ORDER BY q.created_at DESC
     """
     with _get_conn() as conn, conn.cursor() as cur:
-        cur.execute(sql, (class_id,))
+        cur.execute(sql, tuple(params))
         rows = cur.fetchall() or []
 
         quiz_ids = [r["id"] for r in rows]
@@ -234,7 +251,9 @@ def get_quiz_by_id(quiz_id: str, user_id: Optional[str] = None) -> Dict[str, Any
         return _format_quiz_detail(r, questions, documents)
 
 
-def delete_quiz(quiz_id: str) -> Dict[str, Any]:
+def delete_quiz(quiz_id: str, teacher_id: Optional[str] = None) -> Dict[str, Any]:
+    if teacher_id:
+        get_quiz_by_id(quiz_id, teacher_id)
     require_row(
         "DELETE FROM quizzes WHERE id=%s RETURNING id",
         (quiz_id,),
@@ -279,7 +298,7 @@ def submit_quiz_result(
         }
 
 
-def get_quiz_submissions(quiz_id: str) -> List[dict]:
+def get_quiz_submissions(quiz_id: str, teacher_id: Optional[str] = None) -> List[dict]:
     sql = """
     SELECT qs.id, qs.student_id, qs.score, qs.total_questions, qs.submitted_at,
            qs.answers_json,
@@ -287,10 +306,23 @@ def get_quiz_submissions(quiz_id: str) -> List[dict]:
            u.full_name, u.email
     FROM quiz_submissions qs
     JOIN users u ON u.id = qs.student_id
+    LEFT JOIN quizzes q ON q.id = qs.quiz_id
+    LEFT JOIN quiz_documents qd ON qd.quiz_id = q.id
+    LEFT JOIN documents d ON d.id = qd.document_id
+    LEFT JOIN classes cq ON cq.id = q.class_id
+    LEFT JOIN classes cd ON cd.id = d.class_id
     WHERE qs.quiz_id = %s
+    """
+    params: list[Any] = [quiz_id]
+    if teacher_id:
+        sql += """
+      AND (cq.teacher_id = %s OR cd.teacher_id = %s)
+        """
+        params.extend([teacher_id, teacher_id])
+    sql += """
     ORDER BY qs.submitted_at DESC, qs.id DESC
     """
-    return map_rows(sql, (quiz_id,), mapper=_format_quiz_submission_with_student)
+    return map_rows(sql, tuple(params), mapper=_format_quiz_submission_with_student)
 
 
 def get_student_quiz_submission(quiz_id: str, student_id: str) -> Optional[dict]:
@@ -364,10 +396,14 @@ class QuizService:
     def get_all_quizzes(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         return get_all_quizzes(user_id)
         
-    def get_quizzes_by_class(self, class_id: str) -> List[Dict[str, Any]]:
-        return get_quizzes_by_class(class_id)
+    def get_quizzes_by_class(self, class_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        if user_id is None:
+            return get_quizzes_by_class(class_id)
+        return get_quizzes_by_class(class_id, user_id)
         
     def get_quiz_by_id(self, quiz_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+        if user_id is None:
+            return get_quiz_by_id(quiz_id)
         return get_quiz_by_id(quiz_id, user_id)
         
     def save_quiz(self, quiz_data: Dict[str, Any], file_ids: List[str], quiz_name: str = None, class_id: str = None) -> Dict[str, Any]:
@@ -376,14 +412,18 @@ class QuizService:
     def update_quiz(self, quiz_id: str, quiz_data: Dict[str, Any], name: Optional[str] = None, file_ids: Optional[List[str]] = None) -> Dict[str, Any]:
         return update_quiz(quiz_id, quiz_data, name, file_ids)
         
-    def delete_quiz(self, quiz_id: str) -> Dict[str, Any]:
-        return delete_quiz(quiz_id)
+    def delete_quiz(self, quiz_id: str, teacher_id: Optional[str] = None) -> Dict[str, Any]:
+        if teacher_id is None:
+            return delete_quiz(quiz_id)
+        return delete_quiz(quiz_id, teacher_id)
         
     def submit_quiz_result(self, quiz_id: str, student_id: str, answers: List[dict], score: float, total_questions: int) -> dict:
         return submit_quiz_result(quiz_id, student_id, answers, score, total_questions)
         
-    def get_quiz_submissions(self, quiz_id: str) -> List[dict]:
-        return get_quiz_submissions(quiz_id)
+    def get_quiz_submissions(self, quiz_id: str, teacher_id: Optional[str] = None) -> List[dict]:
+        if teacher_id is None:
+            return get_quiz_submissions(quiz_id)
+        return get_quiz_submissions(quiz_id, teacher_id)
         
     def get_student_quiz_submission(self, quiz_id: str, student_id: str) -> Optional[dict]:
         return get_student_quiz_submission(quiz_id, student_id)

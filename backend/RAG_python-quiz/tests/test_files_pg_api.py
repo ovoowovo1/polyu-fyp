@@ -12,6 +12,15 @@ class FilesPgApiTests(unittest.TestCase):
         self.app = build_app(files_pg.router)
         with_auth(self.app, files_pg.get_current_user, {"user_id": "user-1", "email": "u@example.com"})
         self.client = TestClient(self.app)
+        self.access_patchers = [
+            patch("app.routers.files_pg.pg_service.is_user_teacher", return_value=True),
+            patch("app.routers.files_pg.pg_service.can_access_class", return_value=True),
+            patch("app.routers.files_pg.pg_service.can_access_document", return_value=True),
+            patch("app.routers.files_pg.pg_service.can_access_chunk", return_value=True),
+        ]
+        for patcher in self.access_patchers:
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def test_files_routes_require_authentication(self):
         self.app.dependency_overrides.clear()

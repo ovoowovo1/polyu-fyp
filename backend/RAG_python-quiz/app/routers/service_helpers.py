@@ -52,6 +52,11 @@ def require_teacher(user: dict[str, Any], detail: str, teacher_checker: Callable
         raise HTTPException(status_code=403, detail=detail)
 
 
+def require_allowed(allowed: bool, detail: str = "Permission denied") -> None:
+    if not allowed:
+        raise HTTPException(status_code=403, detail=detail)
+
+
 def service_error_to_http(error: ServiceError) -> HTTPException:
     return HTTPException(status_code=error.status_code, detail=error.detail)
 

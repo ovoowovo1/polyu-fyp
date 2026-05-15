@@ -40,6 +40,11 @@ class ServiceHelpersTests(unittest.TestCase):
             service_helpers.require_teacher({"user_id": "student-1"}, "forbidden", lambda _user_id: False)
         self.assertEqual(ctx.exception.status_code, 403)
 
+        service_helpers.require_allowed(True)
+        with self.assertRaises(HTTPException) as ctx:
+            service_helpers.require_allowed(False, "blocked")
+        self.assertEqual(ctx.exception.detail, "blocked")
+
     def test_run_service_maps_rule_and_fallback(self):
         async def run_http_exception():
             return await service_helpers.run_service(

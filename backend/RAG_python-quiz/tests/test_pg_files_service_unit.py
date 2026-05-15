@@ -1,4 +1,5 @@
 from datetime import datetime
+from unittest.mock import patch
 
 from app.services.pg import pg_service
 from tests.pg_service_test_support import PgServiceBase
@@ -85,3 +86,31 @@ class PgFilesServiceTests(PgServiceBase):
             content = pg_service.get_files_text_content(["file-1", "file-2"])
         self.assertIn("=== a.pdf ===", content)
         self.assertIn("B1", content)
+
+    def test_access_control_branches_for_file_helpers(self):
+        upload_time = datetime(2025, 1, 2, 3, 4, 5)
+        rows = [{"id": "file-1", "name": "lesson.pdf", "size": 10, "mime_type": "application/pdf", "upload_date": upload_time, "total_chunks": 2}]
+        cursor = FakeCursor(fetchall_results=[rows, rows])
+        with self.patch_conn(cursor):
+            class_files = pg_service.get_files_list("class-1", user_id="teacher-1")
+            visible_files = pg_service.get_files_list(user_id="student-1")
+        self.assertEqual(class_files[0]["id"], "file-1")
+        self.assertEqual(visible_files[0]["filename"], "lesson.pdf")
+
+        cursor = FakeCursor(fetchone_results=[{"id": "file-1", "name": "lesson.pdf"}])
+        with self.patch_conn(cursor), patch("app.services.pg.pg_files_service.require_document_teacher") as require_teacher:
+            pg_service.delete_file("file-1", teacher_id="teacher-1")
+        require_teacher.assert_called_once_with("teacher-1", "file-1")
+
+        cursor = FakeCursor(fetchone_results=[{"id": "file-1", "name": "renamed.pdf"}])
+        with self.patch_conn(cursor), patch("app.services.pg.pg_files_service.require_document_teacher") as require_teacher:
+            pg_service.rename_file("file-1", "renamed.pdf", teacher_id="teacher-1")
+        require_teacher.assert_called_once_with("teacher-1", "file-1")
+
+        with patch("app.services.pg.pg_files_service.can_access_document", return_value=False):
+            with self.assertRaises(RuntimeError):
+                pg_service.get_specific_file("file-1", user_id="student-1")
+
+        with patch("app.services.pg.pg_files_service.can_access_chunk", return_value=False):
+            with self.assertRaises(RuntimeError):
+                pg_service.get_source_details_by_chunk_id("chunk-1", user_id="student-1")

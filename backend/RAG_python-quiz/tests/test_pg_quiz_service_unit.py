@@ -99,10 +99,25 @@ class PgQuizServiceTests(PgServiceBase):
             quizzes = pg_service.get_quizzes_by_class("class-1")
         self.assertEqual(quizzes[0]["documents"][0]["id"], "file-1")
 
+        cursor = FakeCursor(
+            fetchall_results=[
+                [{"id": "quiz-1", "name": None, "num_questions": 2, "created_at": created_at, "was_summarized": True, "source_text_length": 30, "file_ids": ["file-1"]}],
+                [{"quiz_id": "quiz-1", "id": "file-1", "name": "lesson.pdf"}],
+            ]
+        )
+        with self.patch_conn(cursor):
+            visible_quizzes = pg_service.get_quizzes_by_class("class-1", user_id="student-1")
+        self.assertEqual(visible_quizzes[0]["id"], "quiz-1")
+
         cursor = FakeCursor(fetchone_results=[{"id": "quiz-1"}])
         with self.patch_conn(cursor, module_path="app.services.pg.pg_db"):
             deleted = pg_service.delete_quiz("quiz-1")
         self.assertEqual(deleted["quiz_id"], "quiz-1")
+
+        cursor = FakeCursor(fetchone_results=[{"id": "quiz-1"}])
+        with self.patch_conn(cursor, module_path="app.services.pg.pg_db"), patch("app.services.pg.pg_quiz_service.get_quiz_by_id", return_value={"id": "quiz-1"}) as get_quiz:
+            pg_service.delete_quiz("quiz-1", teacher_id="teacher-1")
+        get_quiz.assert_called_once_with("quiz-1", "teacher-1")
 
         with self.patch_conn(FakeCursor(fetchone_results=[None]), module_path="app.services.pg.pg_db"):
             with self.assertRaises(RuntimeError):
@@ -161,6 +176,10 @@ class PgQuizServiceTests(PgServiceBase):
         self.assertEqual(submissions[0]["answers"], [])
         self.assertEqual(submissions[1]["answers"][0]["answer"], "B")
         self.assertEqual(submissions[2]["answers"], [])
+
+        with self.patch_conn(FakeCursor(fetchall_results=[rows]), module_path="app.services.pg.pg_db"):
+            teacher_submissions = pg_service.get_quiz_submissions("quiz-1", teacher_id="teacher-1")
+        self.assertEqual(teacher_submissions[0]["student_email"], "s@example.com")
 
         with self.patch_conn(FakeCursor(fetchone_results=[None]), module_path="app.services.pg.pg_db"):
             self.assertIsNone(pg_service.get_student_quiz_submission("quiz-1", "student-1"))

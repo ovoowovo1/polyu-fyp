@@ -2,28 +2,43 @@
 from typing import Any, Dict, List, Optional
 
 from app.services.core.exceptions import NotFoundError, ValidationServiceError
+from app.services.pg.pg_access_control import (
+    can_access_chunk,
+    can_access_document,
+    require_document_teacher,
+)
 from app.services.pg.pg_db import fetch_all, map_rows, require_row, with_cursor
 from app.utils.datetime_utils import iso
 
 
-def get_files_list(class_id: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_files_list(class_id: Optional[str] = None, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
     base_sql = """
     SELECT d.id, d.name, d.size_bytes AS size, d.mimetype AS mime_type,
            d.created_at AS upload_date, COUNT(c.id) AS total_chunks
     FROM documents d
     LEFT JOIN chunks c ON c.document_id = d.id
+    LEFT JOIN classes cls ON cls.id = d.class_id
+    LEFT JOIN class_students cs ON cs.class_id = d.class_id AND cs.student_id = %s
     """
-    params = []
+    params = [user_id]
     if class_id:
         base_sql += " WHERE d.class_id = %s\n"
         params.append(class_id)
+        if user_id:
+            base_sql += " AND (cls.teacher_id = %s OR cs.student_id IS NOT NULL)\n"
+            params.append(user_id)
+    elif user_id:
+        base_sql += " WHERE d.class_id IS NOT NULL AND (cls.teacher_id = %s OR cs.student_id IS NOT NULL)\n"
+        params.append(user_id)
 
     base_sql += " GROUP BY d.id\n    ORDER BY d.created_at DESC\n"
 
-    return map_rows(base_sql, tuple(params) if params else None, mapper=_format_file_summary)
+    return map_rows(base_sql, tuple(params), mapper=_format_file_summary)
 
 
-def delete_file(file_id: str) -> Dict[str, Any]:
+def delete_file(file_id: str, teacher_id: Optional[str] = None) -> Dict[str, Any]:
+    if teacher_id:
+        require_document_teacher(teacher_id, file_id)
     with with_cursor(write=True) as cur:
         cur.execute("SELECT id, name FROM documents WHERE id=%s", (file_id,))
         row = cur.fetchone()
@@ -37,7 +52,9 @@ def delete_file(file_id: str) -> Dict[str, Any]:
         }
 
 
-def rename_file(file_id: str, new_name: str) -> Dict[str, Any]:
+def rename_file(file_id: str, new_name: str, teacher_id: Optional[str] = None) -> Dict[str, Any]:
+    if teacher_id:
+        require_document_teacher(teacher_id, file_id)
     row = require_row(
         "UPDATE documents SET name=%s WHERE id=%s RETURNING id, name",
         (new_name, file_id),
@@ -50,7 +67,9 @@ def rename_file(file_id: str, new_name: str) -> Dict[str, Any]:
     }
 
 
-def get_specific_file(file_id: str) -> dict:
+def get_specific_file(file_id: str, user_id: Optional[str] = None) -> dict:
+    if user_id and not can_access_document(user_id, file_id):
+        raise NotFoundError("File not found")
     sql_file = "SELECT id, name, size_bytes, mimetype, created_at FROM documents WHERE id=%s"
     sql_chunks = """
     SELECT id, text AS content, page_start, page_end, chunk_index
@@ -72,7 +91,9 @@ def get_specific_file(file_id: str) -> dict:
     return {"file": formatted_file, "chunks": formatted_chunks}
 
 
-def get_source_details_by_chunk_id(chunk_id: str) -> dict:
+def get_source_details_by_chunk_id(chunk_id: str, user_id: Optional[str] = None) -> dict:
+    if user_id and not can_access_chunk(user_id, chunk_id):
+        raise NotFoundError("Chunk not found")
     sql = """
     SELECT d.id AS file_id, d.name AS source_file,
            c.page_start, c.page_end, c.chunk_index, c.id AS chunk_id

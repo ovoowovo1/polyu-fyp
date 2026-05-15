@@ -4,6 +4,7 @@ import json as json_lib
 from typing import Any, Dict, List, Optional
 
 from app.services.core.exceptions import NotFoundError, NotReleasedError, PermissionDeniedError
+from app.services.pg.pg_access_control import require_exam_teacher
 from app.services.pg.pg_db import _get_conn, require_row
 from app.services.pg.pg_shared import (
     fetch_default_document_names,
@@ -106,7 +107,7 @@ def save_exam(
         }
 
 
-def get_exams_by_class(class_id: str) -> List[Dict[str, Any]]:
+def get_exams_by_class(class_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
     sql = """
     SELECT e.id, e.title, e.description, e.difficulty, e.total_marks, e.duration_minutes,
            e.created_at, e.updated_at, e.is_published, e.pdf_path, e.owner_id,
@@ -115,12 +116,26 @@ def get_exams_by_class(class_id: str) -> List[Dict[str, Any]]:
            ARRAY_AGG(DISTINCT ed.document_id)::uuid[] AS file_ids
     FROM exams e
     LEFT JOIN exam_documents ed ON ed.exam_id = e.id
+    LEFT JOIN classes c ON c.id = e.class_id
+    LEFT JOIN class_students cs ON cs.class_id = e.class_id AND cs.student_id = %s
     WHERE e.class_id = %s
+    """
+    params: list[Any] = [user_id, class_id]
+    if user_id:
+        sql += """
+          AND (
+            e.owner_id = %s
+            OR c.teacher_id = %s
+            OR (e.is_published = TRUE AND cs.student_id IS NOT NULL)
+          )
+        """
+        params.extend([user_id, user_id])
+    sql += """
     GROUP BY e.id
     ORDER BY e.created_at DESC
     """
     with _get_conn() as conn, conn.cursor() as cur:
-        cur.execute(sql, (class_id,))
+        cur.execute(sql, tuple(params))
         rows = cur.fetchall() or []
 
         exam_ids = [r["id"] for r in rows]
@@ -177,6 +192,19 @@ def get_exam_by_id(
                     )
                     if not cur.fetchone():
                         raise PermissionDeniedError("Permission denied")
+            elif role == "teacher":
+                if stringify_id(r["owner_id"]) != user_id:
+                    if r["class_id"]:
+                        cur.execute(
+                            "SELECT 1 FROM classes WHERE id = %s AND teacher_id = %s",
+                            (r["class_id"], user_id),
+                        )
+                        if not cur.fetchone():
+                            raise PermissionDeniedError("Permission denied")
+                    else:
+                        raise PermissionDeniedError("Permission denied")
+            else:
+                raise PermissionDeniedError("Permission denied")
 
         if eq_rows:
             questions = []
@@ -199,6 +227,7 @@ def get_exam_by_id(
 
 def update_exam(
     exam_id: str,
+    teacher_id: Optional[str] = None,
     title: Optional[str] = None,
     description: Optional[str] = None,
     questions: Optional[List[Dict[str, Any]]] = None,
@@ -208,6 +237,9 @@ def update_exam(
     start_at: Optional[str] = None,
     end_at: Optional[str] = None,
 ) -> Dict[str, Any]:
+    if teacher_id:
+        require_exam_teacher(teacher_id, exam_id)
+
     with _get_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT id, questions_json FROM exams WHERE id = %s", (exam_id,))
         existing = cur.fetchone()
@@ -283,7 +315,9 @@ def update_exam(
         }
 
 
-def delete_exam(exam_id: str) -> Dict[str, Any]:
+def delete_exam(exam_id: str, teacher_id: Optional[str] = None) -> Dict[str, Any]:
+    if teacher_id:
+        require_exam_teacher(teacher_id, exam_id)
     row = require_row(
         "DELETE FROM exams WHERE id = %s RETURNING id, title",
         (exam_id,),
@@ -293,7 +327,16 @@ def delete_exam(exam_id: str) -> Dict[str, Any]:
     return {"message": "Exam deleted", "exam_id": str(row["id"]), "title": row["title"]}
 
 
-def publish_exam(exam_id: str, is_published: bool = True) -> Dict[str, Any]:
+def publish_exam(
+    exam_id: str,
+    teacher_id: Optional[str] | bool = None,
+    is_published: bool = True,
+) -> Dict[str, Any]:
+    if isinstance(teacher_id, bool):
+        is_published = teacher_id
+        teacher_id = None
+    if teacher_id:
+        require_exam_teacher(teacher_id, exam_id)
     row = require_row(
         "UPDATE exams SET is_published = %s, updated_at = now() WHERE id = %s RETURNING id, title, is_published",
         (is_published, exam_id),

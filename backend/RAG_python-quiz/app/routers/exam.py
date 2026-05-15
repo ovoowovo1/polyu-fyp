@@ -7,7 +7,7 @@ from pydantic import BaseModel, model_validator
 
 from app.agents.schemas import ExamGenerationRequest, ExamGenerationResponse
 from app.logger import get_logger
-from app.routers.service_helpers import require_teacher, run_service
+from app.routers.service_helpers import require_allowed, require_teacher, run_service
 from app.services.assessment import exam_workflow_service
 from app.services.pg import pg_service
 from app.utils.jwt_utils import get_current_user
@@ -63,25 +63,30 @@ IMAGES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file
 @router.post("/generate", response_model=ExamGenerationResponse)
 async def generate_exam(request: ExamGenerationRequest = Body(...), user: dict = Depends(get_current_user)):
     logger.info("[ExamAPI] generate exam user=%s", user.get("email", "unknown"))
+    require_teacher(user, "Only teachers can generate exams", pg_service.is_user_teacher)
+    require_allowed(pg_service.can_manage_documents(user["user_id"], request.file_ids))
     return await exam_workflow_service.generate_exam_with_pdf(request)
 
 
 @router.post("/generate-questions-only")
 async def generate_questions_only(request: ExamGenerationRequest = Body(...), user: dict = Depends(get_current_user)):
     logger.info("[ExamAPI] generate questions only user=%s", user.get("email", "unknown"))
+    require_teacher(user, "Only teachers can generate exams", pg_service.is_user_teacher)
+    require_allowed(pg_service.can_manage_documents(user["user_id"], request.file_ids))
     return await exam_workflow_service.generate_questions_only(request)
 
 
 @router.post("/{exam_id}/regenerate-pdf")
 async def regenerate_pdf(exam_id: str, questions: list = Body(..., embed=True), exam_name: str = Body("Exam", embed=True), user: dict = Depends(get_current_user)):
-    del user
+    require_teacher(user, "Only teachers can regenerate exam PDFs", pg_service.is_user_teacher)
+    require_allowed(pg_service.can_access_exam(user["user_id"], exam_id))
     logger.info("[ExamAPI] regenerate pdf exam_id=%s", exam_id)
     return await exam_workflow_service.regenerate_exam_pdf(exam_id, questions, exam_name)
 
 
 @router.get("/{exam_id}/pdf")
 async def download_exam_pdf(exam_id: str, user: dict = Depends(get_current_user)):
-    del user
+    require_allowed(pg_service.can_access_exam(user["user_id"], exam_id))
     pdf_filename = f"{exam_id}.pdf"
     pdf_path = os.path.join(PDF_DIR, pdf_filename)
     if not os.path.exists(pdf_path):
@@ -90,7 +95,8 @@ async def download_exam_pdf(exam_id: str, user: dict = Depends(get_current_user)
 
 
 @router.get("/{exam_id}/image/{image_name}")
-async def get_exam_image(exam_id: str, image_name: str):
+async def get_exam_image(exam_id: str, image_name: str, user: dict = Depends(get_current_user)):
+    require_allowed(pg_service.can_access_exam(user["user_id"], exam_id))
     if not image_name.startswith(exam_id):
         raise HTTPException(status_code=403, detail="Image does not belong to this exam")
     image_path = os.path.join(IMAGES_DIR, image_name)
@@ -140,10 +146,11 @@ async def get_question_types():
 
 @router.get("/list")
 async def get_exams_list(class_id: str = Query(..., description="Class ID"), user: dict = Depends(get_current_user)):
-    del user
+    require_allowed(pg_service.can_access_class(user["user_id"], class_id))
     exams = await run_service(
         pg_service.get_exams_by_class,
         class_id,
+        user["user_id"],
         logger=logger,
         log_message="[ExamAPI] get exams failed: %s",
         fallback_detail=lambda error: f"Get exams failed: {error}",
@@ -171,9 +178,11 @@ async def get_exam(exam_id: str, include_answers: bool = Query(True, description
 @router.put("/{exam_id}")
 async def update_exam(exam_id: str, request: ExamUpdateRequest = Body(...), user: dict = Depends(get_current_user)):
     require_teacher(user, "Only teachers can update exams", pg_service.is_user_teacher)
+    require_allowed(pg_service.can_access_exam(user["user_id"], exam_id))
     result = await run_service(
         pg_service.update_exam,
         exam_id,
+        user["user_id"],
         request.title,
         request.description,
         request.questions,
@@ -192,9 +201,11 @@ async def update_exam(exam_id: str, request: ExamUpdateRequest = Body(...), user
 @router.delete("/{exam_id}")
 async def delete_exam(exam_id: str, user: dict = Depends(get_current_user)):
     require_teacher(user, "Only teachers can delete exams", pg_service.is_user_teacher)
+    require_allowed(pg_service.can_access_exam(user["user_id"], exam_id))
     return await run_service(
         pg_service.delete_exam,
         exam_id,
+        user["user_id"],
         logger=logger,
         log_message="[ExamAPI] delete exam failed: %s",
         fallback_detail=lambda error: f"Delete exam failed: {error}",
@@ -204,9 +215,11 @@ async def delete_exam(exam_id: str, user: dict = Depends(get_current_user)):
 @router.post("/{exam_id}/publish")
 async def publish_exam(exam_id: str, is_published: bool = Body(True, embed=True), user: dict = Depends(get_current_user)):
     require_teacher(user, "Only teachers can publish exams", pg_service.is_user_teacher)
+    require_allowed(pg_service.can_access_exam(user["user_id"], exam_id))
     result = await run_service(
         pg_service.publish_exam,
         exam_id,
+        user["user_id"],
         is_published,
         logger=logger,
         log_message="[ExamAPI] publish exam failed: %s",
@@ -230,10 +243,11 @@ async def start_exam(exam_id: str, user: dict = Depends(get_current_user)):
 
 @router.post("/submission/{submission_id}/submit")
 async def submit_exam(submission_id: str, request: ExamSubmitRequest = Body(...), user: dict = Depends(get_current_user)):
-    del user
+    await run_service(pg_service.require_submission_owner, user["user_id"], submission_id)
     result = await run_service(
         pg_service.submit_exam,
         submission_id,
+        user["user_id"],
         request.answers,
         request.time_spent_seconds,
         logger=logger,
@@ -259,9 +273,11 @@ async def get_my_exam_submissions(exam_id: str, user: dict = Depends(get_current
 @router.get("/{exam_id}/submissions")
 async def get_exam_submissions(exam_id: str, user: dict = Depends(get_current_user)):
     require_teacher(user, "Only teachers can view all submissions", pg_service.is_user_teacher)
+    require_allowed(pg_service.can_access_exam(user["user_id"], exam_id))
     submissions = await run_service(
         pg_service.get_exam_submissions,
         exam_id,
+        user["user_id"],
         logger=logger,
         log_message="[ExamAPI] get submissions failed: %s",
         fallback_detail=lambda error: f"Get submissions failed: {error}",
@@ -272,6 +288,7 @@ async def get_exam_submissions(exam_id: str, user: dict = Depends(get_current_us
 @router.put("/submission/{submission_id}/grade")
 async def grade_submission(submission_id: str, request: GradeSubmissionRequest = Body(...), user: dict = Depends(get_current_user)):
     require_teacher(user, "Only teachers can grade exams", pg_service.is_user_teacher)
+    await run_service(pg_service.require_submission_teacher, user["user_id"], submission_id)
     answers_grades = [grade.model_dump() for grade in request.answers_grades] if request.answers_grades else None
     result = await run_service(
         pg_service.grade_exam_submission,
@@ -289,5 +306,6 @@ async def grade_submission(submission_id: str, request: GradeSubmissionRequest =
 @router.post("/submission/{submission_id}/ai-grade")
 async def ai_grade_submission(submission_id: str, user: dict = Depends(get_current_user)):
     require_teacher(user, "Only teachers can trigger AI grading", pg_service.is_user_teacher)
+    await run_service(pg_service.require_submission_teacher, user["user_id"], submission_id)
     return await exam_workflow_service.ai_grade_submission(submission_id)
 

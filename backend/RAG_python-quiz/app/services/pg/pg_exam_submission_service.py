@@ -2,7 +2,7 @@
 import json as json_lib
 from typing import Any, Dict, List, Optional
 
-from app.services.core.exceptions import AlreadySubmittedError, NotFoundError, NotReleasedError
+from app.services.core.exceptions import AlreadySubmittedError, NotFoundError, NotReleasedError, PermissionDeniedError
 from app.services.pg.pg_db import _get_conn
 from app.services.pg.pg_shared import (
     insert_submission_with_attempt,
@@ -49,7 +49,7 @@ def start_exam_submission(
 ) -> Dict[str, Any]:
     with _get_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            "SELECT id, is_published, duration_minutes, start_at, end_at FROM exams WHERE id = %s",
+            "SELECT id, class_id, is_published, duration_minutes, start_at, end_at FROM exams WHERE id = %s",
             (exam_id,),
         )
         exam = cur.fetchone()
@@ -57,6 +57,12 @@ def start_exam_submission(
             raise NotFoundError("Exam not found")
         if not exam["is_published"]:
             raise NotReleasedError()
+        cur.execute(
+            "SELECT 1 FROM class_students WHERE class_id = %s AND student_id = %s",
+            (exam["class_id"], student_id),
+        )
+        if not cur.fetchone():
+            raise PermissionDeniedError("Permission denied")
 
         row, _attempt_no = insert_submission_with_attempt(
             cur,
@@ -86,13 +92,22 @@ def start_exam_submission(
 
 def submit_exam(
     submission_id: str,
-    answers: List[Dict[str, Any]],
+    student_id_or_answers: str | List[Dict[str, Any]],
+    answers: Optional[List[Dict[str, Any]]] = None,
     time_spent_seconds: Optional[int] = None,
 ) -> Dict[str, Any]:
+    student_id: Optional[str]
+    if answers is None and isinstance(student_id_or_answers, list):
+        student_id = None
+        answers = student_id_or_answers
+    else:
+        student_id = str(student_id_or_answers)
+        answers = answers or []
+
     with _get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            SELECT es.id, es.exam_id, es.status, e.questions_json, e.total_marks
+            SELECT es.id, es.exam_id, es.student_id, es.status, e.questions_json, e.total_marks
             FROM exam_submissions es
             JOIN exams e ON e.id = es.exam_id
             WHERE es.id = %s
@@ -102,6 +117,8 @@ def submit_exam(
         sub = cur.fetchone()
         if not sub:
             raise NotFoundError("Submission not found")
+        if student_id and str(sub["student_id"]) != student_id:
+            raise PermissionDeniedError("Permission denied")
         if sub["status"] != "in_progress":
             raise AlreadySubmittedError()
 
@@ -221,7 +238,7 @@ def submit_exam(
         }
 
 
-def get_exam_submissions(exam_id: str) -> List[Dict[str, Any]]:
+def get_exam_submissions(exam_id: str, teacher_id: Optional[str] = None) -> List[Dict[str, Any]]:
     sql = """
     SELECT es.id, es.student_id, es.attempt_no, es.score, es.total_marks,
            es.time_spent_seconds, es.status, es.started_at, es.submitted_at,
@@ -229,11 +246,21 @@ def get_exam_submissions(exam_id: str) -> List[Dict[str, Any]]:
            u.full_name AS student_name, u.email AS student_email
     FROM exam_submissions es
     JOIN users u ON u.id = es.student_id
+    JOIN exams e ON e.id = es.exam_id
+    LEFT JOIN classes c ON c.id = e.class_id
     WHERE es.exam_id = %s
+    """
+    params: list[Any] = [exam_id]
+    if teacher_id:
+        sql += """
+      AND (e.owner_id = %s OR c.teacher_id = %s)
+        """
+        params.extend([teacher_id, teacher_id])
+    sql += """
     ORDER BY es.submitted_at DESC NULLS LAST, es.started_at DESC
     """
     with _get_conn() as conn, conn.cursor() as cur:
-        cur.execute(sql, (exam_id,))
+        cur.execute(sql, tuple(params))
         rows = cur.fetchall() or []
         submission_ids = [r["id"] for r in rows]
         answers_map = _fetch_exam_answers_map(

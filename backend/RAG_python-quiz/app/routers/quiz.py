@@ -1,9 +1,9 @@
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Body, Depends, Form, HTTPException, Query
 
 from app.logger import get_logger
-from app.routers.service_helpers import require_teacher, run_async_service, run_service
+from app.routers.service_helpers import require_allowed, require_teacher, run_async_service, run_service
 from app.services.pg import pg_service
 from app.services.ai.ai_service import generate_quiz_feedback_text
 from app.services.pg.pg_quiz_service import QuizService, get_quiz_service
@@ -17,6 +17,14 @@ from app.utils.jwt_utils import get_current_user
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="", tags=["quiz"])
+DIRECT_CALL_USER = {
+    "user_id": "00000000-0000-0000-0000-000000000000",
+    "email": "direct-call@example.invalid",
+}
+
+
+def _coerce_user(user: Any) -> dict:
+    return user if isinstance(user, dict) else DIRECT_CALL_USER
 
 
 def _questions_from_payload(payload: dict, *, required: bool) -> list:
@@ -36,7 +44,11 @@ async def generate_quiz(
     bloom_levels: Optional[List[BloomLevel]] = Form(None),
     difficulty: Optional[Difficulty] = Form(None),
     num_questions: int = Form(5),
+    user: dict = Depends(get_current_user),
 ):
+    user = _coerce_user(user)
+    require_teacher(user, "Only teachers can generate quizzes", pg_service.is_user_teacher)
+    require_allowed(pg_service.can_manage_documents(user["user_id"], file_ids))
     return await generate_quiz_from_files(file_ids, bloom_levels, difficulty, num_questions)
 
 
@@ -65,11 +77,14 @@ async def get_difficulties():
 @router.get("/list")
 async def get_all_quizzes(
     class_id: str = Query(...),
+    user: dict = Depends(get_current_user),
     quiz_service: QuizService = Depends(get_quiz_service),
 ):
+    require_allowed(pg_service.can_access_class(user["user_id"], class_id))
     quizzes = await run_service(
         quiz_service.get_quizzes_by_class,
         class_id,
+        user["user_id"],
         logger=logger,
         log_message="Get quizzes failed: %s",
         fallback_detail=lambda error: f"Get quizzes failed: {error}",
@@ -80,11 +95,13 @@ async def get_all_quizzes(
 @router.get("/{quiz_id}")
 async def get_quiz(
     quiz_id: str,
+    user: dict = Depends(get_current_user),
     quiz_service: QuizService = Depends(get_quiz_service),
 ):
     quiz_payload = await run_service(
         quiz_service.get_quiz_by_id,
         quiz_id,
+        user["user_id"],
         logger=logger,
         log_message="Get quiz failed: %s",
         fallback_detail=lambda error: f"Get quiz failed: {error}",
@@ -95,15 +112,25 @@ async def get_quiz(
 @router.post("/")
 async def create_quiz(
     payload: dict = Body(...),
+    user: dict = Depends(get_current_user),
     quiz_service: QuizService = Depends(get_quiz_service),
 ):
+    require_teacher(user, "Only teachers can create quizzes", pg_service.is_user_teacher)
     questions = _questions_from_payload(payload, required=False)
+    file_ids = payload.get("file_ids") or []
+    class_id = payload.get("class_id")
+    if class_id:
+        require_allowed(pg_service.can_access_class(user["user_id"], class_id))
+    if file_ids:
+        require_allowed(pg_service.can_manage_documents(user["user_id"], file_ids))
+    if not class_id and not file_ids:
+        require_allowed(False)
     saved = await run_service(
         quiz_service.save_quiz,
         {"questions": questions},
-        payload.get("file_ids") or [],
+        file_ids,
         payload.get("name"),
-        payload.get("class_id"),
+        class_id,
         logger=logger,
         log_message="Create quiz failed: %s",
         fallback_detail=lambda error: f"Create quiz failed: {error}",
@@ -115,9 +142,14 @@ async def create_quiz(
 async def update_quiz(
     quiz_id: str,
     payload: dict = Body(...),
+    user: dict = Depends(get_current_user),
     quiz_service: QuizService = Depends(get_quiz_service),
 ):
+    require_teacher(user, "Only teachers can update quizzes", pg_service.is_user_teacher)
+    require_allowed(pg_service.can_access_quiz(user["user_id"], quiz_id))
     questions = _questions_from_payload(payload, required=True)
+    if payload.get("file_ids"):
+        require_allowed(pg_service.can_manage_documents(user["user_id"], payload["file_ids"]))
     updated = await run_service(
         quiz_service.update_quiz,
         quiz_id,
@@ -134,11 +166,15 @@ async def update_quiz(
 @router.delete("/{quiz_id}")
 async def delete_quiz(
     quiz_id: str,
+    user: dict = Depends(get_current_user),
     quiz_service: QuizService = Depends(get_quiz_service),
 ):
+    require_teacher(user, "Only teachers can delete quizzes", pg_service.is_user_teacher)
+    require_allowed(pg_service.can_access_quiz(user["user_id"], quiz_id))
     return await run_service(
         quiz_service.delete_quiz,
         quiz_id,
+        user["user_id"],
         logger=logger,
         log_message="Delete quiz failed: %s",
         fallback_detail=lambda error: f"Delete quiz failed: {error}",
@@ -152,6 +188,8 @@ async def submit_quiz(
     user: dict = Depends(get_current_user),
     quiz_service: QuizService = Depends(get_quiz_service),
 ):
+    require_allowed(pg_service.is_user_student(user["user_id"]), "Only students can submit quizzes")
+    require_allowed(pg_service.can_access_quiz(user["user_id"], quiz_id))
     score = payload.get("score")
     total_questions = payload.get("total_questions")
     if score is None or total_questions is None:
@@ -177,9 +215,11 @@ async def get_quiz_results(
     quiz_service: QuizService = Depends(get_quiz_service),
 ):
     require_teacher(user, "Only teachers can view all results", pg_service.is_user_teacher)
+    require_allowed(pg_service.can_access_quiz(user["user_id"], quiz_id))
     results = await run_service(
         quiz_service.get_quiz_submissions,
         quiz_id,
+        user["user_id"],
         logger=logger,
         log_message="Get quiz results failed: %s",
         fallback_detail=lambda error: str(error),
@@ -193,6 +233,7 @@ async def get_my_quiz_result(
     user: dict = Depends(get_current_user),
     quiz_service: QuizService = Depends(get_quiz_service),
 ):
+    require_allowed(pg_service.can_access_quiz(user["user_id"], quiz_id))
     result = await run_service(
         quiz_service.get_student_quiz_submission,
         quiz_id,
@@ -210,7 +251,7 @@ async def generate_quiz_feedback(
     payload: dict = Body(...),
     user: dict = Depends(get_current_user),
 ):
-    del quiz_id, user
+    require_allowed(pg_service.can_access_quiz(user["user_id"], quiz_id))
     score = payload.get("score")
     total_questions = payload.get("total_questions")
     if score is None or total_questions is None:

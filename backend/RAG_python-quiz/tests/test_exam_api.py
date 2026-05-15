@@ -46,6 +46,17 @@ class ExamApiTests(unittest.TestCase):
         app = build_app(exam.router)
         with_auth(app, exam.get_current_user, {"user_id": "teacher-1", "email": "teacher@example.com"})
         self.client = TestClient(app)
+        self.access_patchers = [
+            patch("app.routers.exam.pg_service.is_user_teacher", return_value=True),
+            patch("app.routers.exam.pg_service.can_access_class", return_value=True),
+            patch("app.routers.exam.pg_service.can_access_exam", return_value=True),
+            patch("app.routers.exam.pg_service.can_manage_documents", return_value=True),
+            patch("app.routers.exam.pg_service.require_submission_owner", return_value=None),
+            patch("app.routers.exam.pg_service.require_submission_teacher", return_value=None),
+        ]
+        for patcher in self.access_patchers:
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def test_grade_answer_item_requires_identifier(self):
         with self.assertRaises(Exception):

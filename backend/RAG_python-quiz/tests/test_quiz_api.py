@@ -37,6 +37,7 @@ class QuizApiTests(unittest.TestCase):
 
         app.include_router(quiz.router, prefix="/quiz")
         with_auth(app, quiz.get_current_user, {"user_id": "teacher-1", "email": "teacher@example.com"})
+        self.user = {"user_id": "teacher-1", "email": "teacher@example.com"}
 
         self.quiz_service = SimpleNamespace(
             get_quizzes_by_class=MagicMock(),
@@ -51,6 +52,16 @@ class QuizApiTests(unittest.TestCase):
 
         app.dependency_overrides[quiz.get_quiz_service] = lambda: self.quiz_service
         self.client = TestClient(app)
+        self.access_patchers = [
+            patch("app.routers.quiz.pg_service.is_user_teacher", return_value=True),
+            patch("app.routers.quiz.pg_service.is_user_student", return_value=True),
+            patch("app.routers.quiz.pg_service.can_access_class", return_value=True),
+            patch("app.routers.quiz.pg_service.can_access_quiz", return_value=True),
+            patch("app.routers.quiz.pg_service.can_manage_documents", return_value=True),
+        ]
+        for patcher in self.access_patchers:
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def test_generate_quiz_happy_path_without_summary(self):
         cursor = FakeCursor(fetchall_results=[[{"class_id": "class-1"}]])
@@ -408,6 +419,7 @@ class QuizApiTests(unittest.TestCase):
         self.assertEqual(created.status_code, 200)
 
         self.assertEqual(self.client.post("/quiz/", json={"questions": []}).status_code, 400)
+        self.assertEqual(self.client.post("/quiz/", json={"questions": [make_question().model_dump()]}).status_code, 403)
 
         self.quiz_service.save_quiz.side_effect = RuntimeError("db")
         self.assertEqual(self.client.post("/quiz/", json=payload).status_code, 500)
@@ -416,6 +428,9 @@ class QuizApiTests(unittest.TestCase):
         self.quiz_service.update_quiz.return_value = {"quiz_id": "quiz-1"}
         updated = self.client.put("/quiz/quiz-1", json={"questions": [make_question().model_dump()]})
         self.assertEqual(updated.status_code, 200)
+
+        updated_with_files = self.client.put("/quiz/quiz-1", json={"questions": [make_question().model_dump()], "file_ids": ["file-1"]})
+        self.assertEqual(updated_with_files.status_code, 200)
 
         self.assertEqual(self.client.put("/quiz/quiz-1", json={}).status_code, 400)
 
@@ -523,9 +538,17 @@ class QuizApiTests(unittest.TestCase):
             self.assertEqual(service.get_quizzes_by_class("class-1"), ["quiz"])
             mocked.assert_called_once_with("class-1")
 
+        with patch("app.services.pg.pg_quiz_service.get_quizzes_by_class", return_value=["quiz"]) as mocked:
+            self.assertEqual(service.get_quizzes_by_class("class-1", "user-1"), ["quiz"])
+            mocked.assert_called_once_with("class-1", "user-1")
+
         with patch("app.services.pg.pg_quiz_service.get_quiz_by_id", return_value={"id": "quiz-1"}) as mocked:
             self.assertEqual(service.get_quiz_by_id("quiz-1", "user-1"), {"id": "quiz-1"})
             mocked.assert_called_once_with("quiz-1", "user-1")
+
+        with patch("app.services.pg.pg_quiz_service.get_quiz_by_id", return_value={"id": "quiz-1"}) as mocked:
+            self.assertEqual(service.get_quiz_by_id("quiz-1"), {"id": "quiz-1"})
+            mocked.assert_called_once_with("quiz-1")
 
         with patch("app.services.pg.pg_quiz_service.save_quiz", return_value={"quiz_id": "quiz-1"}) as mocked:
             self.assertEqual(
@@ -545,6 +568,10 @@ class QuizApiTests(unittest.TestCase):
             self.assertEqual(service.delete_quiz("quiz-1"), {"message": "deleted"})
             mocked.assert_called_once_with("quiz-1")
 
+        with patch("app.services.pg.pg_quiz_service.delete_quiz", return_value={"message": "deleted"}) as mocked:
+            self.assertEqual(service.delete_quiz("quiz-1", "teacher-1"), {"message": "deleted"})
+            mocked.assert_called_once_with("quiz-1", "teacher-1")
+
         with patch("app.services.pg.pg_quiz_service.submit_quiz_result", return_value={"submission_id": "sub-1"}) as mocked:
             self.assertEqual(
                 service.submit_quiz_result("quiz-1", "student-1", [], 1, 1),
@@ -555,6 +582,10 @@ class QuizApiTests(unittest.TestCase):
         with patch("app.services.pg.pg_quiz_service.get_quiz_submissions", return_value=[{"id": "sub-1"}]) as mocked:
             self.assertEqual(service.get_quiz_submissions("quiz-1"), [{"id": "sub-1"}])
             mocked.assert_called_once_with("quiz-1")
+
+        with patch("app.services.pg.pg_quiz_service.get_quiz_submissions", return_value=[{"id": "sub-1"}]) as mocked:
+            self.assertEqual(service.get_quiz_submissions("quiz-1", "teacher-1"), [{"id": "sub-1"}])
+            mocked.assert_called_once_with("quiz-1", "teacher-1")
 
         with patch("app.services.pg.pg_quiz_service.get_student_quiz_submission", return_value={"id": "sub-1"}) as mocked:
             self.assertEqual(service.get_student_quiz_submission("quiz-1", "student-1"), {"id": "sub-1"})
