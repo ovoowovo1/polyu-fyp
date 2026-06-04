@@ -39,6 +39,44 @@ Frontend work is only complete if the relevant frontend tests pass. Full fronten
 
 If you modify both backend and frontend files, you must run both verification command sets. Backend changes must still satisfy 100% coverage.
 
+### Integration Contract Changes
+
+If you modify the frontend/backend integration workflow, integration schema, integration tests, or API behavior covered by the integration workflow, you must run the CI-equivalent integration verification before claiming completion.
+
+This requirement applies to changes involving:
+
+- `.github/workflows/integration-tests.yml`
+- `backend/RAG_python-quiz/tests/integration/**`
+- Backend migrations used by the integration workflow
+- `frontend/vite-project/src/integration/**`
+- Backend or frontend auth/class/quiz/exam API behavior exercised by the integration tests
+
+Run the integration setup and test command sequence from the repository root with a local PostgreSQL database available:
+
+```powershell
+$env:PG_DSN="postgresql://postgres:password@localhost:5432/postgres"
+$env:JWT_SECRET_KEY="integration-test-secret-change-me"
+psql "$env:PG_DSN" -v ON_ERROR_STOP=1 -f backend/RAG_python-quiz/tests/integration/schema.sql
+psql "$env:PG_DSN" -v ON_ERROR_STOP=1 -f backend/RAG_python-quiz/migrations/enable_rls_policies.sql
+psql "$env:PG_DSN" -v ON_ERROR_STOP=1 -f backend/RAG_python-quiz/migrations/add_auth_refresh_tokens.sql
+```
+
+Then start the backend with that same `PG_DSN` and `JWT_SECRET_KEY` from `backend/RAG_python-quiz`:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 3000
+```
+
+With the backend running, run the frontend integration tests from `frontend/vite-project`:
+
+```powershell
+$env:RUN_INTEGRATION_TESTS="1"
+$env:VITE_API_BASE_URL="http://127.0.0.1:3000"
+node --test src/integration/*.test.js
+```
+
+Integration work is only complete if the integration command passes. If local PostgreSQL or `psql` is unavailable, report the exact blocker and do not present the integration path as verified.
+
 ## Final Response Requirements
 
 Your final response must:

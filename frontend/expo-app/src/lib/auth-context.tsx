@@ -1,17 +1,18 @@
 import React, { createContext, PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react';
 
-import { setApiSessionToken, verifyToken } from '@/lib/api';
+import { logoutSession, refreshSession, setApiTokens, verifyToken } from '@/lib/api';
 import { deleteStoredValue, getStoredValue, setStoredValue } from '@/lib/storage';
 import type { User } from '@/lib/types';
 
 const TOKEN_KEY = 'session_token';
+const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_KEY = 'user';
 
 type AuthContextValue = {
   bootstrapping: boolean;
   sessionToken: string | null;
   user: User | null;
-  setSession: (token: string, user: User) => Promise<void>;
+  setSession: (token: string, refreshToken: string, user: User) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -27,28 +28,47 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     async function bootstrap() {
       try {
-        const [storedToken, storedUser] = await Promise.all([
+        const [storedToken, storedRefreshToken, storedUser] = await Promise.all([
           getStoredValue(TOKEN_KEY),
+          getStoredValue(REFRESH_TOKEN_KEY),
           getStoredValue(USER_KEY),
         ]);
 
-        if (!storedToken) {
+        if (!storedToken && !storedRefreshToken) {
           return;
         }
 
-        setApiSessionToken(storedToken);
+        setApiTokens(storedToken, storedRefreshToken);
+        let nextToken = storedToken;
         let nextUser = storedUser ? JSON.parse(storedUser) as User : null;
         try {
-          const verified = await verifyToken(storedToken);
-          nextUser = verified.user || nextUser;
+          if (storedToken) {
+            const verified = await verifyToken(storedToken);
+            nextUser = verified.user || nextUser;
+          } else if (storedRefreshToken) {
+            const refreshed = await refreshSession(storedRefreshToken);
+            await persistSession(refreshed.session_token, refreshed.refresh_token, refreshed.user);
+            nextToken = refreshed.session_token;
+            nextUser = refreshed.user || nextUser;
+          }
         } catch {
-          await Promise.all([deleteStoredValue(TOKEN_KEY), deleteStoredValue(USER_KEY)]);
-          setApiSessionToken(null);
-          return;
+          if (!storedRefreshToken) {
+            await clearSession();
+            return;
+          }
+          try {
+            const refreshed = await refreshSession(storedRefreshToken);
+            await persistSession(refreshed.session_token, refreshed.refresh_token, refreshed.user);
+            nextToken = refreshed.session_token;
+            nextUser = refreshed.user || nextUser;
+          } catch {
+            await clearSession();
+            return;
+          }
         }
 
         if (mounted) {
-          setSessionToken(storedToken);
+          setSessionToken(nextToken);
           setUser(nextUser);
         }
       } finally {
@@ -64,19 +84,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
-  const setSession = useCallback(async (token: string, nextUser: User) => {
-    await Promise.all([
-      setStoredValue(TOKEN_KEY, token),
-      setStoredValue(USER_KEY, JSON.stringify(nextUser)),
-    ]);
-    setApiSessionToken(token);
+  const setSession = useCallback(async (token: string, refreshToken: string, nextUser: User) => {
+    await persistSession(token, refreshToken, nextUser);
     setSessionToken(token);
     setUser(nextUser);
   }, []);
 
   const logout = useCallback(async () => {
-    await Promise.all([deleteStoredValue(TOKEN_KEY), deleteStoredValue(USER_KEY)]);
-    setApiSessionToken(null);
+    const storedRefreshToken = await getStoredValue(REFRESH_TOKEN_KEY);
+    if (storedRefreshToken) {
+      try {
+        await logoutSession(storedRefreshToken);
+      } catch {
+        // Local logout should still succeed even if the server revoke call fails.
+      }
+    }
+    await clearSession();
     setSessionToken(null);
     setUser(null);
   }, []);
@@ -90,6 +113,24 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }), [bootstrapping, logout, sessionToken, setSession, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+async function persistSession(token: string, refreshToken: string, user: User) {
+  await Promise.all([
+    setStoredValue(TOKEN_KEY, token),
+    setStoredValue(REFRESH_TOKEN_KEY, refreshToken),
+    setStoredValue(USER_KEY, JSON.stringify(user)),
+  ]);
+  setApiTokens(token, refreshToken);
+}
+
+async function clearSession() {
+  await Promise.all([
+    deleteStoredValue(TOKEN_KEY),
+    deleteStoredValue(REFRESH_TOKEN_KEY),
+    deleteStoredValue(USER_KEY),
+  ]);
+  setApiTokens(null, null);
 }
 
 export function useAuth() {

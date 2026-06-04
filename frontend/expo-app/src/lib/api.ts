@@ -1,5 +1,6 @@
 import EventSource, { type EventSourceListener } from 'react-native-sse';
 
+import { setStoredValue } from '@/lib/storage';
 import type {
   ClassesResponse,
   DocumentDetails,
@@ -21,15 +22,28 @@ import type {
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:3000';
 const QUERY_TIMEOUT_MS = 120_000;
+const TOKEN_KEY = 'session_token';
+const REFRESH_TOKEN_KEY = 'refresh_token';
+const USER_KEY = 'user';
 type QueryStreamEvent = 'retrieval' | 'router' | 'generation' | 'progress' | 'result';
 
 let sessionToken: string | null = null;
+let refreshTokenValue: string | null = null;
 
 export function setApiSessionToken(token: string | null) {
   sessionToken = token;
 }
 
-async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+export function setApiRefreshToken(token: string | null) {
+  refreshTokenValue = token;
+}
+
+export function setApiTokens(accessToken: string | null, refreshToken: string | null) {
+  setApiSessionToken(accessToken);
+  setApiRefreshToken(refreshToken);
+}
+
+async function requestJson<T>(path: string, init: RequestInit = {}, retryOnUnauthorized = true): Promise<T> {
   const headers = new Headers(init.headers);
   if (!headers.has('Content-Type') && init.body) {
     headers.set('Content-Type', 'application/json');
@@ -43,6 +57,10 @@ async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> 
   const payload = text ? safeJsonParse(text) : null;
 
   if (!response.ok) {
+    if (response.status === 401 && retryOnUnauthorized && refreshTokenValue && !path.startsWith('/auth/')) {
+      await refreshSession(refreshTokenValue);
+      return requestJson<T>(path, init, false);
+    }
     throw new Error(extractErrorMessage(payload, response.status));
   }
 
@@ -54,6 +72,51 @@ export function login(email: string, password: string, role: LoginRole) {
     method: 'POST',
     body: JSON.stringify({ email, password, role }),
   });
+}
+
+export async function refreshSession(refreshToken: string = refreshTokenValue || '') {
+  if (!refreshToken) {
+    throw new Error('Refresh token missing.');
+  }
+
+  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+  const text = await response.text();
+  const payload = text ? safeJsonParse(text) : null;
+
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(payload, response.status));
+  }
+
+  const loginResponse = payload as LoginResponse;
+  setApiTokens(loginResponse.access_token || loginResponse.session_token, loginResponse.refresh_token);
+  await Promise.all([
+    setStoredValue(TOKEN_KEY, loginResponse.access_token || loginResponse.session_token),
+    setStoredValue(REFRESH_TOKEN_KEY, loginResponse.refresh_token),
+    setStoredValue(USER_KEY, JSON.stringify(loginResponse.user)),
+  ]);
+  return loginResponse;
+}
+
+export async function logoutSession(refreshToken: string = refreshTokenValue || '') {
+  if (!refreshToken) {
+    return;
+  }
+
+  const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    const payload = text ? safeJsonParse(text) : null;
+    throw new Error(extractErrorMessage(payload, response.status));
+  }
 }
 
 export function verifyToken(token: string) {

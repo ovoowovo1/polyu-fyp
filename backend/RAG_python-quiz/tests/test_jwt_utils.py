@@ -1,9 +1,11 @@
 import unittest
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
+from jose import jwt
 
 from app.services.pg import rls_context
 from app.utils import jwt_utils
@@ -20,10 +22,48 @@ class JwtUtilsTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(payload["sub"], "user-1")
         self.assertEqual(payload["username"], "u@example.com")
+        self.assertEqual(payload["type"], "access")
+
+    def test_create_access_token_and_verify_token_round_trip(self):
+        with patch("app.utils.jwt_utils.get_settings", return_value=self.settings):
+            token = jwt_utils.create_access_token("user-1", "u@example.com")
+            payload = jwt_utils.verify_token(token)
+
+        self.assertEqual(payload["sub"], "user-1")
+        self.assertEqual(payload["username"], "u@example.com")
+
+    def test_create_session_token_rejects_placeholder_secret(self):
+        settings = SimpleNamespace(jwt_secret_key="change-me")
+
+        with patch("app.utils.jwt_utils.get_settings", return_value=settings):
+            with self.assertRaisesRegex(RuntimeError, "JWT_SECRET_KEY must be configured"):
+                jwt_utils.create_session_token("user-1", "u@example.com")
+
+    def test_verify_token_returns_none_for_placeholder_secret(self):
+        settings = SimpleNamespace(jwt_secret_key="123456789")
+
+        with patch("app.utils.jwt_utils.get_settings", return_value=settings):
+            with self.assertLogs("app.utils.jwt_utils", level="WARNING") as logs:
+                self.assertIsNone(jwt_utils.verify_token("token"))
+
+        self.assertIn("JWT_SECRET_KEY must be configured", logs.output[0])
 
     def test_verify_token_returns_none_for_invalid_token(self):
         with patch("app.utils.jwt_utils.get_settings", return_value=self.settings):
             self.assertIsNone(jwt_utils.verify_token("not-a-token"))
+
+    def test_verify_token_rejects_non_access_token_type(self):
+        payload = {
+            "sub": "user-1",
+            "username": "u@example.com",
+            "iat": datetime.utcnow(),
+            "exp": datetime.utcnow() + timedelta(minutes=5),
+            "type": "refresh",
+        }
+        token = jwt.encode(payload, self.settings.jwt_secret_key, algorithm="HS256")
+
+        with patch("app.utils.jwt_utils.get_settings", return_value=self.settings):
+            self.assertIsNone(jwt_utils.verify_token(token))
 
     def test_verify_token_returns_none_for_unexpected_decode_error(self):
         with patch("app.utils.jwt_utils.get_settings", return_value=self.settings), patch(

@@ -3,8 +3,19 @@ from typing import Any, Dict, List, Optional
 
 import psycopg2.extras
 
+from app.config import get_settings
 from app.services.pg.pg_db import _get_conn
 from app.services.pg.pg_shared import _get_embedding_column, _to_pgvector
+
+
+FULLTEXT_SEARCH_BACKENDS = {"pg_search", "postgres"}
+
+
+def _get_fulltext_search_backend() -> str:
+    backend = getattr(get_settings(), "fulltext_search_backend", "pg_search")
+    if backend not in FULLTEXT_SEARCH_BACKENDS:
+        raise ValueError(f"Unsupported fulltext search backend: {backend}")
+    return backend
 
 
 def find_document_by_hash(file_hash: str) -> Optional[Dict[str, Any]]:
@@ -198,20 +209,49 @@ def update_chunk_embeddings(
 def retrieve_context_by_keywords(
     keywords: str, selected_file_ids: list[str] = [], k: int = 10
 ) -> list[dict]:
+    backend = _get_fulltext_search_backend()
     with _get_conn() as conn, conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-        base_sql = """
-            SELECT
-                c.text,
-                paradedb.score(c.id) AS score,
-                d.name AS source,
-                c.page_start,
-                c.document_id AS fileid,
-                c.id AS chunkid
-            FROM public.chunks AS c
-            JOIN public.documents AS d ON d.id = c.document_id
-            WHERE c.text @@@ %s
-        """
-        params = [keywords]
+        if backend == "postgres":
+            base_sql = """
+                WITH query AS (
+                    SELECT websearch_to_tsquery('simple', %s) AS ts_query,
+                           %s::text AS raw_query
+                )
+                SELECT
+                    c.text,
+                    (
+                        ts_rank_cd(c.tsv, query.ts_query)
+                        + GREATEST(
+                            similarity(COALESCE(c.text, ''), query.raw_query),
+                            similarity(COALESCE(c.entities_json::text, ''), query.raw_query)
+                        )
+                    ) AS score,
+                    d.name AS source,
+                    c.page_start,
+                    c.document_id AS fileid,
+                    c.id AS chunkid
+                FROM public.chunks AS c
+                JOIN public.documents AS d ON d.id = c.document_id
+                CROSS JOIN query
+                WHERE c.tsv @@ query.ts_query
+                   OR similarity(COALESCE(c.text, ''), query.raw_query) > 0
+                   OR similarity(COALESCE(c.entities_json::text, ''), query.raw_query) > 0
+            """
+            params = [keywords, keywords]
+        else:
+            base_sql = """
+                SELECT
+                    c.text,
+                    paradedb.score(c.id) AS score,
+                    d.name AS source,
+                    c.page_start,
+                    c.document_id AS fileid,
+                    c.id AS chunkid
+                FROM public.chunks AS c
+                JOIN public.documents AS d ON d.id = c.document_id
+                WHERE c.text @@@ %s
+            """
+            params = [keywords]
 
         if selected_file_ids:
             base_sql += " AND c.document_id = ANY(%s::uuid[]) "
@@ -240,6 +280,7 @@ __all__ = [
     "create_graph_from_document",
     "find_document_by_hash",
     "get_chunks_missing_embeddings",
+    "_get_fulltext_search_backend",
     "retrieve_context_by_keywords",
     "retrieve_graph_context",
     "update_chunk_embeddings",

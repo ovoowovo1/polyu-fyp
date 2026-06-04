@@ -124,6 +124,32 @@ Before running the project locally, install:
 - PostgreSQL
 - Provider API keys for Google Gemini/OpenRouter-compatible services
 
+## Database Setup with Neon Postgres
+
+This public repository does not include a real database connection string, JWT secret, or provider API keys. Create those values in your own environment and never commit live secrets to Git.
+
+1. Create a Neon project and database from the [Neon Dashboard](https://console.neon.tech/) or Neon CLI.
+2. Open the Neon connection guide in the dashboard and copy the standard PostgreSQL connection string. For first-time schema setup, the direct connection string is the simplest option.
+3. From the repository root, initialize the application schema:
+
+```powershell
+psql "<your-neon-connection-string>" -f backend/RAG_python-quiz/migrations/000_init_database.sql
+```
+
+The SQL file creates the application tables, indexes, extensions, Row-Level Security policies, and `app_security` helper functions inside the current database. It does not create the Neon project/database itself and does not seed users; create users through `/auth/register` or the app UI.
+
+4. Configure `backend/RAG_python-quiz/.env`:
+
+```dotenv
+PG_DSN=<your-neon-connection-string>
+FULLTEXT_SEARCH_BACKEND=pg_search
+JWT_SECRET_KEY=<generate-a-long-random-secret>
+```
+
+Neon deployments should use `FULLTEXT_SEARCH_BACKEND=pg_search` for BM25 retrieval. For local PostgreSQL instances that do not have the Neon `pg_search` extension, use `FULLTEXT_SEARCH_BACKEND=postgres` and rely on the PostgreSQL full-text/trigram fallback instead.
+
+If login fails with `function app_security.auth_store_refresh_token(...) does not exist`, confirm the current database has run either `backend/RAG_python-quiz/migrations/add_auth_refresh_tokens.sql` or the full `backend/RAG_python-quiz/migrations/000_init_database.sql` initializer.
+
 ## Backend Setup
 
 From the repository root:
@@ -271,6 +297,7 @@ Optional variables with documented defaults:
 | `EMBEDDING_ACTIVE_COLUMN` | `embedding` | Primary PostgreSQL embedding column. |
 | `EMBEDDING_FALLBACK_MODEL` | `google/gemini-embedding-2-preview` | Fallback embeddings model. |
 | `EMBEDDING_FALLBACK_COLUMN` | `embedding_v2` | Fallback PostgreSQL embedding column. |
+| `FULLTEXT_SEARCH_BACKEND` | `pg_search` | Use `pg_search` for Neon BM25, or `postgres` for Windows local PostgreSQL full-text/trigram retrieval. |
 
 The minimal `.env.example` intentionally omits unused legacy `NEO4J_*`, `AURA_*`, `JINA_API_KEY`, and deprecated provider-specific configuration names.
 

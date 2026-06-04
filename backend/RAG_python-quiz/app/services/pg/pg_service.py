@@ -72,6 +72,7 @@ from app.services.pg.pg_quiz_service import (
     get_quiz_service,
 )
 from app.services.pg.pg_retrieval_service import (
+    _get_fulltext_search_backend,
     create_graph_from_document,
     find_document_by_hash,
     get_chunks_missing_embeddings,
@@ -97,6 +98,7 @@ __all__ = [
     "_default_quiz_name",
     "_get_conn",
     "_get_embedding_column",
+    "_get_fulltext_search_backend",
     "_get_user_by_email",
     "_is_class_owned_by_teacher",
     "_is_student_exists",

@@ -5,6 +5,7 @@ import axios from 'axios';
 
 import {
     getCurrentUser,
+    getRefreshToken,
     getToken,
     isAuthenticated,
     login,
@@ -14,7 +15,7 @@ import {
 } from './auth.js';
 import { API_BASE_URL } from '../config.js';
 
-test('login stores session token and user when authentication succeeds', async () => {
+test('login stores access token, refresh token, and user when authentication succeeds', async () => {
     const originalPost = axios.post;
     const storage = installLocalStorage();
     const calls = [];
@@ -24,7 +25,9 @@ test('login stores session token and user when authentication succeeds', async (
         calls.push({ url, body });
         return {
             data: {
-                session_token: 'token-123',
+                session_token: 'access-token-123',
+                access_token: 'access-token-123',
+                refresh_token: 'refresh-token-123',
                 user,
             },
         };
@@ -33,10 +36,7 @@ test('login stores session token and user when authentication succeeds', async (
     try {
         const result = await login('student@example.com', 'secret', 'student');
 
-        assert.deepEqual(result, {
-            session_token: 'token-123',
-            user,
-        });
+        assert.equal(result.session_token, 'access-token-123');
         assert.deepEqual(calls, [
             {
                 url: `${API_BASE_URL}/auth/login`,
@@ -47,7 +47,8 @@ test('login stores session token and user when authentication succeeds', async (
                 },
             },
         ]);
-        assert.equal(localStorage.getItem('session_token'), 'token-123');
+        assert.equal(localStorage.getItem('session_token'), 'access-token-123');
+        assert.equal(localStorage.getItem('refresh_token'), 'refresh-token-123');
         assert.equal(localStorage.getItem('user'), JSON.stringify(user));
     } finally {
         axios.post = originalPost;
@@ -85,7 +86,7 @@ test('login converts request errors into a network message', async () => {
     try {
         await assert.rejects(
             () => login('student@example.com', 'secret'),
-            { message: '無法連接到服務器，請檢查網絡連接' },
+            { message: 'Network connection failed. Please check your server connection.' },
         );
     } finally {
         axios.post = originalPost;
@@ -139,10 +140,11 @@ test('register uses backend error messages when registration fails', async () =>
     }
 });
 
-test('verifyToken sends the stored token and returns verified user data', async () => {
+test('verifyToken sends the stored access token and returns verified user data', async () => {
     const originalGet = axios.get;
     const storage = installLocalStorage({
-        session_token: 'token-456',
+        session_token: 'access-token-456',
+        refresh_token: 'refresh-token-456',
         user: JSON.stringify({ id: 'user-1' }),
     });
     const calls = [];
@@ -161,7 +163,7 @@ test('verifyToken sends the stored token and returns verified user data', async 
                 url: `${API_BASE_URL}/auth/verify`,
                 config: {
                     headers: {
-                        Authorization: 'Bearer token-456',
+                        Authorization: 'Bearer access-token-456',
                     },
                 },
             },
@@ -172,61 +174,163 @@ test('verifyToken sends the stored token and returns verified user data', async 
     }
 });
 
-test('verifyToken logs out and exposes backend errors when verification fails', async () => {
+test('verifyToken refreshes and stores new tokens when access token verification fails', async () => {
     const originalGet = axios.get;
+    const originalPost = axios.post;
     const storage = installLocalStorage({
-        session_token: 'expired-token',
+        session_token: 'expired-access',
+        refresh_token: 'refresh-token-456',
         user: JSON.stringify({ id: 'user-1' }),
     });
+    const postCalls = [];
 
     axios.get = async () => {
         throw { response: { data: { detail: { error: 'Token expired' } } } };
+    };
+    axios.post = async (url, body) => {
+        postCalls.push({ url, body });
+        return {
+            data: {
+                session_token: 'new-access',
+                access_token: 'new-access',
+                refresh_token: 'new-refresh',
+                user: { id: 'user-1', role: 'student' },
+            },
+        };
+    };
+
+    try {
+        const result = await verifyToken();
+
+        assert.equal(result.session_token, 'new-access');
+        assert.deepEqual(postCalls, [
+            {
+                url: `${API_BASE_URL}/auth/refresh`,
+                body: { refresh_token: 'refresh-token-456' },
+            },
+        ]);
+        assert.equal(localStorage.getItem('session_token'), 'new-access');
+        assert.equal(localStorage.getItem('refresh_token'), 'new-refresh');
+        assert.equal(localStorage.getItem('user'), JSON.stringify({ id: 'user-1', role: 'student' }));
+    } finally {
+        axios.get = originalGet;
+        axios.post = originalPost;
+        storage.restore();
+    }
+});
+
+test('verifyToken logs out when access verification and refresh both fail', async () => {
+    const originalGet = axios.get;
+    const originalPost = axios.post;
+    const storage = installLocalStorage({
+        session_token: 'expired-token',
+        refresh_token: 'bad-refresh',
+        user: JSON.stringify({ id: 'user-1' }),
+    });
+    const postCalls = [];
+
+    axios.get = async () => {
+        throw { response: { data: { detail: { error: 'Token expired' } } } };
+    };
+    axios.post = async (url, body) => {
+        postCalls.push({ url, body });
+        throw { response: { data: { detail: { error: 'Invalid refresh token' } } } };
     };
 
     try {
         await assert.rejects(
             () => verifyToken(),
-            { message: 'Token expired' },
+            { message: 'Invalid refresh token' },
         );
         assert.equal(localStorage.getItem('session_token'), null);
+        assert.equal(localStorage.getItem('refresh_token'), null);
         assert.equal(localStorage.getItem('user'), null);
+        assert.deepEqual(postCalls[0], {
+            url: `${API_BASE_URL}/auth/refresh`,
+            body: { refresh_token: 'bad-refresh' },
+        });
+        assert.deepEqual(postCalls[1], {
+            url: `${API_BASE_URL}/auth/logout`,
+            body: { refresh_token: 'bad-refresh' },
+        });
     } finally {
         axios.get = originalGet;
+        axios.post = originalPost;
         storage.restore();
     }
 });
 
-test('logout clears stored authentication data', () => {
+test('verifyToken uses refresh token when access token is missing', async () => {
+    const originalPost = axios.post;
+    const storage = installLocalStorage({ refresh_token: 'refresh-only' });
+
+    axios.post = async () => ({ data: { session_token: 'new-access', refresh_token: 'new-refresh' } });
+
+    try {
+        const result = await verifyToken();
+
+        assert.equal(result.session_token, 'new-access');
+        assert.equal(localStorage.getItem('session_token'), 'new-access');
+        assert.equal(localStorage.getItem('refresh_token'), 'new-refresh');
+    } finally {
+        axios.post = originalPost;
+        storage.restore();
+    }
+});
+
+test('logout clears stored authentication data and revokes refresh token', () => {
+    const originalPost = axios.post;
     const storage = installLocalStorage({
         session_token: 'token-789',
+        refresh_token: 'refresh-789',
         user: JSON.stringify({ id: 'user-1' }),
     });
+    const calls = [];
+
+    axios.post = async (url, body) => {
+        calls.push({ url, body });
+        return { data: { message: 'ok' } };
+    };
 
     try {
         logout();
 
         assert.equal(localStorage.getItem('session_token'), null);
+        assert.equal(localStorage.getItem('refresh_token'), null);
         assert.equal(localStorage.getItem('user'), null);
+        assert.deepEqual(calls, [
+            {
+                url: `${API_BASE_URL}/auth/logout`,
+                body: { refresh_token: 'refresh-789' },
+            },
+        ]);
     } finally {
+        axios.post = originalPost;
         storage.restore();
     }
 });
 
-test('auth localStorage helpers expose token, user, and auth status', () => {
+test('auth localStorage helpers expose tokens, user, and auth status', () => {
     const storage = installLocalStorage({
         session_token: 'token-abc',
+        refresh_token: 'refresh-abc',
         user: JSON.stringify({ id: 'user-1', role: 'student' }),
     });
 
     try {
         assert.equal(getToken(), 'token-abc');
+        assert.equal(getRefreshToken(), 'refresh-abc');
         assert.deepEqual(getCurrentUser(), { id: 'user-1', role: 'student' });
         assert.equal(isAuthenticated(), true);
 
         localStorage.removeItem('session_token');
+        assert.equal(isAuthenticated(), true);
+
+        localStorage.removeItem('refresh_token');
         localStorage.setItem('user', '{not valid json');
 
         assert.equal(getToken(), null);
+        assert.equal(getRefreshToken(), null);
         assert.equal(getCurrentUser(), null);
         assert.equal(isAuthenticated(), false);
     } finally {

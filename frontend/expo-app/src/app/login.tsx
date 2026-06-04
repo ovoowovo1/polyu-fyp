@@ -35,7 +35,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const result = await login(email.trim(), password, role);
-      await setSession(result.session_token, result.user);
+      await setSession(result.session_token, result.refresh_token, result.user);
       router.replace('/classes');
     } catch (error) {
       Alert.alert(t('login.failed'), error instanceof Error ? error.message : t('common.unknownError'));

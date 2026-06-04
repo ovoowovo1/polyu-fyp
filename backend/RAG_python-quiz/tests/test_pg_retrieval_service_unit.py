@@ -6,6 +6,15 @@ from tests.pg_service_test_support import PgServiceBase
 from tests.support import FakeCursor
 
 
+def make_settings(**overrides):
+    values = {
+        "embedding_active_column": "embedding",
+        "fulltext_search_backend": "pg_search",
+    }
+    values.update(overrides)
+    return type("Settings", (), values)()
+
+
 class PgRetrievalServiceTests(PgServiceBase):
     module_path = "app.services.pg.pg_retrieval_service"
 
@@ -15,7 +24,7 @@ class PgRetrievalServiceTests(PgServiceBase):
     def test_get_embedding_column_uses_settings_and_rejects_invalid_values(self):
         with patch(
             "app.services.pg.pg_shared.get_settings",
-            return_value=type("Settings", (), {"embedding_active_column": "embedding_v2"})(),
+            return_value=make_settings(embedding_active_column="embedding_v2"),
         ):
             self.assertEqual(pg_service._get_embedding_column(), "embedding_v2")
 
@@ -65,7 +74,7 @@ class PgRetrievalServiceTests(PgServiceBase):
 
         with self.patch_conn(cursor), patch(
             "app.services.pg.pg_shared.get_settings",
-            return_value=type("Settings", (), {"embedding_active_column": "embedding"})(),
+            return_value=make_settings(),
         ), patch("app.services.pg.pg_retrieval_service.psycopg2.extras.execute_values") as execute_values:
             pg_service.create_graph_from_document(document, chunks)
 
@@ -77,7 +86,7 @@ class PgRetrievalServiceTests(PgServiceBase):
         cursor = FakeCursor(fetchall_results=[rows])
         with self.patch_conn(cursor), patch(
             "app.services.pg.pg_shared.get_settings",
-            return_value=type("Settings", (), {"embedding_active_column": "embedding"})(),
+            return_value=make_settings(),
         ):
             result = pg_service.retrieve_graph_context([0.1], selected_file_ids=["file-1"])
 
@@ -124,3 +133,32 @@ class PgRetrievalServiceTests(PgServiceBase):
         self.assertIn("ANY", cursor.executed[1][0])
         self.assertIn("JOIN public.documents AS d ON d.id = c.document_id", cursor.executed[0][0])
         self.assertNotIn("NULL::text AS source", cursor.executed[0][0])
+
+    def test_retrieve_context_by_keywords_can_use_postgres_fulltext_backend(self):
+        cursor = FakeCursor(
+            fetchall_results=[
+                [{"text": "chunk", "score": 0.5, "source": "lesson.pdf", "page_start": 1, "fileid": "file-1", "chunkid": "chunk-1"}],
+            ]
+        )
+
+        with self.patch_conn(cursor), patch(
+            "app.services.pg.pg_retrieval_service.get_settings",
+            return_value=make_settings(fulltext_search_backend="postgres"),
+        ):
+            result = pg_service.retrieve_context_by_keywords("sql injection", selected_file_ids=["file-1"], k=3)
+
+        self.assertEqual(result[0]["score"], 0.5)
+        sql, params = cursor.executed[0]
+        self.assertIn("websearch_to_tsquery('simple', %s)", sql)
+        self.assertIn("similarity(COALESCE(c.entities_json::text, ''), query.raw_query)", sql)
+        self.assertNotIn("paradedb.score", sql)
+        self.assertNotIn("@@@", sql)
+        self.assertEqual(params, ["sql injection", "sql injection", ["file-1"], 3])
+
+    def test_get_fulltext_search_backend_rejects_unknown_backend(self):
+        with patch(
+            "app.services.pg.pg_retrieval_service.get_settings",
+            return_value=make_settings(fulltext_search_backend="bad"),
+        ):
+            with self.assertRaises(ValueError):
+                pg_service._get_fulltext_search_backend()

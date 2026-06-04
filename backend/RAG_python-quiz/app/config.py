@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 EmbeddingColumn = Literal["embedding", "embedding_v2"]
+FullTextSearchBackend = Literal["pg_search", "postgres"]
 
 
 class Settings(BaseSettings):
@@ -25,6 +26,7 @@ class Settings(BaseSettings):
     embedding_active_column: EmbeddingColumn = "embedding"
     embedding_fallback_model: str = "google/gemini-embedding-2-preview"
     embedding_fallback_column: EmbeddingColumn = "embedding_v2"
+    fulltext_search_backend: FullTextSearchBackend = "pg_search"
     eval_llm_api_key: str = ""
     eval_llm_base_url: str = "https://www.chataiapi.com/v1"
     eval_llm_model: str = "gemini-2.5-flash"
@@ -36,7 +38,7 @@ class Settings(BaseSettings):
 
     pg_dsn: str = "postgresql://postgres:password@localhost:5432/postgres"
 
-    jwt_secret_key: str = "123456789"
+    jwt_secret_key: str = ""
 
 
 @lru_cache

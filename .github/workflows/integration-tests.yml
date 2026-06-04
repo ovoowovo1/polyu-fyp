@@ -1,0 +1,101 @@
+name: Integration Tests
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/RAG_python-quiz/**"
+      - "frontend/vite-project/**"
+      - ".github/workflows/integration-tests.yml"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "backend/RAG_python-quiz/**"
+      - "frontend/vite-project/**"
+      - ".github/workflows/integration-tests.yml"
+
+jobs:
+  api-contract:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PG_DSN: postgresql://postgres:password@localhost:5432/postgres
+      JWT_SECRET_KEY: test-secret
+      PORT: 3000
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/vite-project/package-lock.json
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Install backend dependencies
+        working-directory: backend/RAG_python-quiz
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Install frontend dependencies
+        working-directory: frontend/vite-project
+        run: npm ci
+
+      - name: Initialize integration database
+        working-directory: backend/RAG_python-quiz
+        run: |
+          psql "$PG_DSN" -v ON_ERROR_STOP=1 -f tests/integration/schema.sql
+          psql "$PG_DSN" -v ON_ERROR_STOP=1 -f migrations/enable_rls_policies.sql
+          psql "$PG_DSN" -v ON_ERROR_STOP=1 -f migrations/add_auth_refresh_tokens.sql
+
+      - name: Start backend
+        working-directory: backend/RAG_python-quiz
+        run: |
+          python -m uvicorn main:app --host 127.0.0.1 --port 3000 > ../../backend-integration.log 2>&1 &
+          echo $! > ../../backend-integration.pid
+
+      - name: Wait for backend
+        run: |
+          for i in {1..30}; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/auth/verify || true)
+            if [ "$code" != "000" ]; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat backend-integration.log
+          exit 1
+
+      - name: Run frontend/backend API contract tests
+        working-directory: frontend/vite-project
+        env:
+          RUN_INTEGRATION_TESTS: "1"
+          VITE_API_BASE_URL: http://127.0.0.1:3000
+        run: node --test src/integration/*.test.js
+
+      - name: Print backend log on failure
+        if: failure()
+        run: cat backend-integration.log || true
