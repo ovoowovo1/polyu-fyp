@@ -5,7 +5,7 @@ import dayjs from 'dayjs';
 import {
   getExamSubmissions,
   getMyExamSubmissions,
-} from '../../api/exam';
+} from '../../../api/exam';
 
 export default function ExamSubmissionList({ examId, mode = 'teacher', onGrade }) {
   const { t } = useTranslation();
@@ -117,4 +117,3 @@ export default function ExamSubmissionList({ examId, mode = 'teacher', onGrade }
     />
   );
 }
-

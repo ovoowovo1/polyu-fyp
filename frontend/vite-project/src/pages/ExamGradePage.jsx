@@ -4,8 +4,8 @@ import { Card, Button, Space, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 
-import ExamSubmissionList from '../components/Studio/ExamSubmissionList';
-import ExamGradeModal from '../components/Studio/ExamGradeModal';
+import ExamSubmissionList from '../components/Studio/Exam/ExamSubmissionList';
+import ExamGradeModal from '../components/Studio/Exam/ExamGradeModal';
 import DocumentsTopBar from '../components/DocumentsTopBar';
 import { getCurrentUser } from '../api/auth';
 
@@ -96,4 +96,3 @@ export default function ExamGradePage() {
     </>
   );
 }
-

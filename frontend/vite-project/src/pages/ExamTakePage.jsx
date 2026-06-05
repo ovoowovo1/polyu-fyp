@@ -4,7 +4,7 @@ import { Card, Spin, message, Button, Space, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 
-import ExamReader from '../components/Studio/ExamReader';
+import ExamReader from '../components/Studio/Exam/ExamReader';
 import { startExam } from '../api/exam';
 
 const { Title, Text } = Typography;
@@ -72,4 +72,3 @@ export default function ExamTakePage() {
     </div>
   );
 }
-

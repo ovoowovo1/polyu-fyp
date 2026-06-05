@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Table, message, Button, Typography, Space, Tooltip } from 'antd';
 import { EyeOutlined } from '@ant-design/icons';
-import { getQuizResults, getQuizById } from '../../api/quiz';
+import { getQuizResults, getQuizById } from '../../../api/quiz';
 import SubmissionDetailModal from './SubmissionDetailModal';
 
 const { Title } = Typography;
@@ -124,4 +124,3 @@ export default function QuizResultList({ quizId, visible, onClose }) {
         </>
     );
 }
-

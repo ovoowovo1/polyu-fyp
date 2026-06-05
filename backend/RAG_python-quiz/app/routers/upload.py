@@ -7,96 +7,32 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.logger import get_logger
-from app.routers.service_helpers import error_detail, run_async_service, success_payload
+from app.routers import upload_helpers
+from app.routers.service_helpers import error_detail, run_async_service
 from app.services.documents.document_service import ingest_document, ingest_website
 from app.services.realtime.progress_bus import publish_progress
-from app.utils.ingest_errors import DocumentIngestError, EmbeddingProviderError
 from app.utils.jwt_utils import get_current_user
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="", tags=["upload"])
 
-
-def _build_success_result(filename: str, payload: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "filename": filename,
-        "status": "success",
-        "message": payload.get("message") or f"Uploaded {filename}",
-        **{
-            key: payload[key]
-            for key in ("fileId", "isNew", "chunksCount")
-            if payload.get(key) is not None
-        },
-    }
+_build_success_result = upload_helpers.build_success_result
+_build_failure_result = upload_helpers.build_failure_result
+_summarize_results = upload_helpers.summarize_results
+_batch_status = upload_helpers.batch_status
+_http_status_for_batch = upload_helpers.http_status_for_batch
+_progress_payload = upload_helpers.progress_payload
+_upload_batch_payload = upload_helpers.upload_batch_payload
 
 
-def _build_failure_result(filename: str, error: Exception) -> dict[str, Any]:
-    if isinstance(error, EmbeddingProviderError):
-        error_payload = error.to_dict()
-    elif isinstance(error, DocumentIngestError):
-        error_payload = error.to_dict()
-    else:
-        error_payload = DocumentIngestError(
-            code="INGEST_FAILED",
-            message="Unexpected ingest failure.",
-            details=str(error),
-        ).to_dict()
-
-    return {
-        "filename": filename,
-        "status": "failed",
-        "message": error_payload["message"],
-        "error": error_payload,
-    }
-
-
-def _summarize_results(results: list[dict[str, Any]]) -> dict[str, int]:
-    succeeded = sum(1 for result in results if result["status"] == "success")
-    failed = len(results) - succeeded
-    return {"total": len(results), "succeeded": succeeded, "failed": failed}
-
-
-def _batch_status(summary: dict[str, int]) -> str:
-    return "success" if summary["failed"] == 0 else "failed" if summary["succeeded"] == 0 else "partial"
-
-
-def _http_status_for_batch(batch_status: str) -> int:
-    return {"success": 200, "partial": 207}.get(batch_status, 502)
-
-
-def _progress_payload(
-    *,
-    event_type: str,
-    done: int | None = None,
-    total: int | None = None,
-    current_file: str | None = None,
-    last_file_status: str | None = None,
-    extra: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    payload = {
-        "type": event_type,
-        "done": done,
-        "total": total,
-        "currentFile": current_file,
-        "lastFileStatus": last_file_status,
-    }
-    if extra:
-        payload.update(extra)
-    return payload
-
-
-def _upload_batch_payload(results: list[dict[str, Any]]) -> dict[str, Any]:
-    summary = _summarize_results(results)
-    status = _batch_status(summary)
-    return success_payload(
-        f"Upload batch {status}",
-        {
-            "status": status,
-            "summary": summary,
-            "results": results,
-        },
-        include_root_fields=True,
+async def _process_upload_file(upload_file: UploadFile, index: int, class_id: str | None) -> dict[str, Any]:
+    return await upload_helpers.process_upload_file(
+        upload_file=upload_file,
+        index=index,
+        class_id=class_id,
+        ingest_document_func=ingest_document,
+        logger=logger,
     )
 
 
@@ -121,21 +57,7 @@ async def upload_multiple(
     )
 
     for index, upload_file in enumerate(files, start=1):
-        filename = upload_file.filename or f"file-{index}"
-        try:
-            data = await upload_file.read()
-            payload = await ingest_document(
-                filename=filename,
-                content=data,
-                size=upload_file.size or len(data),
-                mimetype=upload_file.content_type or "application/octet-stream",
-                class_id=class_id,
-            )
-            result = _build_success_result(filename, payload)
-        except Exception as error:
-            logger.warning("[Upload] File failed filename=%s error=%s", filename, error)
-            result = _build_failure_result(filename, error)
-
+        result = await _process_upload_file(upload_file, index, class_id)
         results.append(result)
         await publish_progress(
             clientId,
@@ -199,11 +121,6 @@ async def upload_link(
             ),
         )
     except HTTPException as error:
-        return JSONResponse(status_code=error.status_code, content=error.detail)
+        return upload_helpers.http_exception_response(error)
 
-    return success_payload(
-        "Link upload completed.",
-        result,
-        include_root_fields=False,
-        result=result,
-    )
+    return upload_helpers.upload_link_payload(result)

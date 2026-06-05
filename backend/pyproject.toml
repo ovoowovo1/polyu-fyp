@@ -1,7 +1,7 @@
 [project]
-name = "repl-nix-workspace"
+name = "polyu-fyp-backend"
 version = "0.1.0"
-description = "Add your description here"
+description = "Backend services for the PolyU FYP RAG quiz and exam platform."
 requires-python = ">=3.12"
 dependencies = [
     "bcrypt==5.0.0",

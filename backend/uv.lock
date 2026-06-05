@@ -2831,7 +2831,7 @@ wheels = [
 ]
 
 [[package]]
-name = "repl-nix-workspace"
+name = "polyu-fyp-backend"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

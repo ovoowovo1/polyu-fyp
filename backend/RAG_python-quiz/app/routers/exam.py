@@ -1,13 +1,13 @@
 import os
 from typing import List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Body, Depends, Query
 from pydantic import BaseModel, model_validator
 
 from app.agents.schemas import ExamGenerationRequest, ExamGenerationResponse
 from app.logger import get_logger
-from app.routers.service_helpers import require_allowed, require_teacher, run_service
+from app.routers import exam_helpers
+from app.routers.service_helpers import require_allowed, run_service
 from app.services.assessment import exam_workflow_service
 from app.services.pg.pg_access_control import (
     can_access_class,
@@ -83,30 +83,23 @@ IMAGES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file
 
 
 def _require_teacher(user: dict, detail: str) -> None:
-    require_teacher(user, detail, is_user_teacher)
+    exam_helpers.require_teacher_user(user, detail, is_user_teacher)
 
 
 def _require_exam_access(user: dict, exam_id: str) -> None:
-    require_allowed(can_access_exam(user["user_id"], exam_id))
+    exam_helpers.require_exam_access(user, exam_id, can_access_exam)
 
 
 def _require_teacher_exam_access(user: dict, exam_id: str, detail: str) -> None:
-    _require_teacher(user, detail)
-    _require_exam_access(user, exam_id)
+    exam_helpers.require_teacher_exam_access(user, exam_id, detail, is_user_teacher, can_access_exam)
 
 
 def _require_document_access(user: dict, file_ids: List[str]) -> None:
-    require_allowed(can_manage_documents(user["user_id"], file_ids))
+    exam_helpers.require_document_access(user, file_ids, can_manage_documents)
 
 
 async def _run_exam_service(func, *args, action: str):
-    return await run_service(
-        func,
-        *args,
-        logger=logger,
-        log_message=f"[ExamAPI] {action.lower()} failed: %s",
-        fallback_detail=lambda error: f"{action} failed: {error}",
-    )
+    return await exam_helpers.run_exam_service(func, *args, action=action, logger=logger)
 
 
 @router.post("/generate", response_model=ExamGenerationResponse)
@@ -135,22 +128,13 @@ async def regenerate_pdf(exam_id: str, questions: list = Body(..., embed=True), 
 @router.get("/{exam_id}/pdf")
 async def download_exam_pdf(exam_id: str, user: dict = Depends(get_current_user)):
     _require_exam_access(user, exam_id)
-    pdf_filename = f"{exam_id}.pdf"
-    pdf_path = os.path.join(PDF_DIR, pdf_filename)
-    if not os.path.exists(pdf_path):
-        raise HTTPException(status_code=404, detail="PDF not found")
-    return FileResponse(path=pdf_path, filename=pdf_filename, media_type="application/pdf")
+    return exam_helpers.exam_pdf_response(PDF_DIR, exam_id)
 
 
 @router.get("/{exam_id}/image/{image_name}")
 async def get_exam_image(exam_id: str, image_name: str, user: dict = Depends(get_current_user)):
     _require_exam_access(user, exam_id)
-    if not image_name.startswith(exam_id):
-        raise HTTPException(status_code=403, detail="Image does not belong to this exam")
-    image_path = os.path.join(IMAGES_DIR, image_name)
-    if not os.path.exists(image_path):
-        raise HTTPException(status_code=404, detail="Image not found")
-    return FileResponse(path=image_path, media_type="image/png")
+    return exam_helpers.exam_image_response(IMAGES_DIR, exam_id, image_name)
 
 
 @router.get("/difficulties")
@@ -315,7 +299,7 @@ async def get_exam_submissions(exam_id: str, user: dict = Depends(get_current_us
 async def grade_submission(submission_id: str, request: GradeSubmissionRequest = Body(...), user: dict = Depends(get_current_user)):
     _require_teacher(user, "Only teachers can grade exams")
     await run_service(require_submission_teacher, user["user_id"], submission_id)
-    answers_grades = [grade.model_dump() for grade in request.answers_grades] if request.answers_grades else None
+    answers_grades = exam_helpers.dump_grade_items(request.answers_grades)
     result = await _run_exam_service(
         grade_exam_submission,
         submission_id,

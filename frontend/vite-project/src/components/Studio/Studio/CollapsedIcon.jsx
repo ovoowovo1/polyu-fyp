@@ -1,7 +1,7 @@
 import React, { memo } from "react";
 import { useDispatch } from "react-redux";
 // Update the import path below to wherever your action lives
-import { toggleStudioCardCollapse } from '../../redux/studioSlice'
+import { toggleStudioCardCollapse } from '../../../redux/studioSlice'
 import { RobotOutlined } from "@ant-design/icons";
 
 const IconPill = memo(function IconPill({ bg, color, icon, label, onClick }) {

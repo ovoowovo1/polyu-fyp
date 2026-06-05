@@ -6,7 +6,7 @@ import { selectClassAndLoadDocuments } from '../redux/documentSlice';
 import DocumentList from '../components/DocumentList/DocumentList.jsx';
 import DocumentsTabs from '../components/DocumentsTabs.jsx';
 import Chat from '../components/Chat.jsx';
-import StudioCard from '../components/Studio/StudioCard.jsx';
+import StudioCard from '../components/Studio/Studio/StudioCard.jsx';
 import DocumentsTopBar from '../components/DocumentsTopBar.jsx';
 
 import useMediaQuery from '../hooks/useMediaQuery';

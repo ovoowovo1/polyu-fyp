@@ -1,8 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import axios from 'axios';
-
 import reducer, {
     deleteDocument,
     fetchDocumentContent,
@@ -18,6 +16,7 @@ import reducer, {
 } from './documentSlice.js';
 import { API_BASE_URL } from '../config.js';
 import { clearDedupeCache } from '../utils/requestDeduper.js';
+import { installAxiosMock } from '../testing/mockRuntime.js';
 
 function createThunkHarness(state = { documents: { currentClassId: null } }) {
     const actions = [];
@@ -36,12 +35,9 @@ function createThunkHarness(state = { documents: { currentClassId: null } }) {
 test('fetchDocuments uses the new /files endpoint', async () => {
     clearDedupeCache('docs:list:class-1');
 
-    const originalGet = axios.get;
-    const calls = [];
-    axios.get = async (url, config) => {
-        calls.push({ url, config });
-        return { data: { files: [{ id: 'doc-1' }] } };
-    };
+    const axiosMock = installAxiosMock({
+        get: async () => ({ data: { files: [{ id: 'doc-1' }] } }),
+    });
 
     try {
         const harness = createThunkHarness();
@@ -49,25 +45,22 @@ test('fetchDocuments uses the new /files endpoint', async () => {
 
         assert.equal(result.type, 'documents/fetchDocuments/fulfilled');
         assert.deepEqual(result.payload, [{ id: 'doc-1' }]);
-        assert.deepEqual(calls, [
+        assert.deepEqual(axiosMock.calls.map(({ args }) => ({ url: args[0], config: args[1] })), [
             {
                 url: `${API_BASE_URL}/files`,
                 config: { params: { class_id: 'class-1' } },
             },
         ]);
     } finally {
-        axios.get = originalGet;
+        axiosMock.restore();
         clearDedupeCache('docs:list:class-1');
     }
 });
 
 test('deleteDocument uses the new /files endpoint', async () => {
-    const originalDelete = axios.delete;
-    const calls = [];
-    axios.delete = async (url) => {
-        calls.push(url);
-        return { data: {} };
-    };
+    const axiosMock = installAxiosMock({
+        delete: async () => ({ data: {} }),
+    });
 
     try {
         const harness = createThunkHarness();
@@ -75,19 +68,16 @@ test('deleteDocument uses the new /files endpoint', async () => {
 
         assert.equal(result.type, 'documents/deleteDocument/fulfilled');
         assert.equal(result.payload, 'doc-2');
-        assert.deepEqual(calls, [`${API_BASE_URL}/files/doc-2`]);
+        assert.deepEqual(axiosMock.calls.map(({ args }) => args[0]), [`${API_BASE_URL}/files/doc-2`]);
     } finally {
-        axios.delete = originalDelete;
+        axiosMock.restore();
     }
 });
 
 test('renameDocument uses the new /files endpoint', async () => {
-    const originalPut = axios.put;
-    const calls = [];
-    axios.put = async (url, body, config) => {
-        calls.push({ url, body, config });
-        return { data: {} };
-    };
+    const axiosMock = installAxiosMock({
+        put: async () => ({ data: {} }),
+    });
 
     try {
         const harness = createThunkHarness();
@@ -99,7 +89,7 @@ test('renameDocument uses the new /files endpoint', async () => {
 
         assert.equal(result.type, 'documents/renameDocument/fulfilled');
         assert.deepEqual(result.payload, { docId: 'doc-3', newName: 'renamed.pdf' });
-        assert.deepEqual(calls, [
+        assert.deepEqual(axiosMock.calls.map(({ args }) => ({ url: args[0], body: args[1], config: args[2] })), [
             {
                 url: `${API_BASE_URL}/files/doc-3`,
                 body: null,
@@ -107,17 +97,14 @@ test('renameDocument uses the new /files endpoint', async () => {
             },
         ]);
     } finally {
-        axios.put = originalPut;
+        axiosMock.restore();
     }
 });
 
 test('fetchDocumentContent uses the new /files endpoint', async () => {
-    const originalGet = axios.get;
-    const calls = [];
-    axios.get = async (url) => {
-        calls.push(url);
-        return { data: { file: { id: 'doc-4' }, content: 'hello' } };
-    };
+    const axiosMock = installAxiosMock({
+        get: async () => ({ data: { file: { id: 'doc-4' }, content: 'hello' } }),
+    });
 
     try {
         const harness = createThunkHarness();
@@ -125,9 +112,9 @@ test('fetchDocumentContent uses the new /files endpoint', async () => {
 
         assert.equal(result.type, 'document/fetchDocumentContent/fulfilled');
         assert.deepEqual(result.payload, { file: { id: 'doc-4' }, content: 'hello' });
-        assert.deepEqual(calls, [`${API_BASE_URL}/files/doc-4`]);
+        assert.deepEqual(axiosMock.calls.map(({ args }) => args[0]), [`${API_BASE_URL}/files/doc-4`]);
     } finally {
-        axios.get = originalGet;
+        axiosMock.restore();
     }
 });
 

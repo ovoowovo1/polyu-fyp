@@ -1,7 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildExamGenerationPayload, getExamProgressStage } from './examGeneratorLogic.js';
+import {
+    buildExamGenerationPayload,
+    examGenerationTotals,
+    examQuestionTypeColor,
+    examQuestionTypeLabel,
+    examResultQuestionPreview,
+    getExamProgressStage,
+} from './examGeneratorLogic.js';
 
 test('buildExamGenerationPayload maps form state into backend request shape', () => {
     assert.deepEqual(
@@ -41,4 +48,23 @@ test('getExamProgressStage returns the next progress milestone', () => {
         s: 'exam.generator.generating',
     });
     assert.equal(getExamProgressStage(90, t), undefined);
+});
+
+test('exam generation helpers derive labels, totals, and preview slices', () => {
+    const t = (key) => key;
+
+    assert.equal(examQuestionTypeLabel('multiple_choice', t), 'exam.generator.questionTypeMultipleChoice');
+    assert.equal(examQuestionTypeLabel('short_answer', t), 'exam.generator.questionTypeShortAnswer');
+    assert.equal(examQuestionTypeLabel('essay', t), 'exam.generator.questionTypeEssay');
+    assert.equal(examQuestionTypeColor('multiple_choice'), 'blue');
+    assert.equal(examQuestionTypeColor('short_answer'), 'orange');
+    assert.equal(examQuestionTypeColor('essay'), 'purple');
+    assert.deepEqual(examGenerationTotals({ mcCount: 3, shortAnswerCount: 2, essayCount: 1 }), {
+        questions: 6,
+        marks: 12,
+    });
+    assert.deepEqual(examResultQuestionPreview([{ id: 1 }, { id: 2 }, { id: 3 }], 2), {
+        questions: [{ id: 1 }, { id: 2 }],
+        remainingCount: 1,
+    });
 });

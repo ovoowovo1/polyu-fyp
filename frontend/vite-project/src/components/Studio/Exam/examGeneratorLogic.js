@@ -34,3 +34,29 @@ export function getExamProgressStage(progress, translate) {
         { p: 85, s: translate('exam.generator.generatingPdf') },
     ].find((stage) => stage.p > progress);
 }
+
+export function examQuestionTypeLabel(questionType, translate) {
+    if (questionType === 'multiple_choice') return translate('exam.generator.questionTypeMultipleChoice');
+    if (questionType === 'short_answer') return translate('exam.generator.questionTypeShortAnswer');
+    return translate('exam.generator.questionTypeEssay');
+}
+
+export function examQuestionTypeColor(questionType) {
+    if (questionType === 'multiple_choice') return 'blue';
+    if (questionType === 'short_answer') return 'orange';
+    return 'purple';
+}
+
+export function examGenerationTotals({ mcCount, shortAnswerCount, essayCount }) {
+    return {
+        questions: mcCount + shortAnswerCount + essayCount,
+        marks: mcCount + shortAnswerCount * 2 + essayCount * 5,
+    };
+}
+
+export function examResultQuestionPreview(questions = [], limit = 5) {
+    return {
+        questions: questions.slice(0, limit),
+        remainingCount: Math.max(0, questions.length - limit),
+    };
+}
