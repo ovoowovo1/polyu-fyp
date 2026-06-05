@@ -1,38 +1,26 @@
-import unittest
 from unittest.mock import patch
 
-from app.services.pg import pg_service
+from app.services.pg import pg_retrieval_service as pg_service
+from app.services.pg import pg_shared
 from tests.pg_service_test_support import PgServiceBase
-from tests.support import FakeCursor
-
-
-def make_settings(**overrides):
-    values = {
-        "embedding_active_column": "embedding",
-        "fulltext_search_backend": "pg_search",
-    }
-    values.update(overrides)
-    return type("Settings", (), values)()
+from tests.support import FakeCursor, make_settings
 
 
 class PgRetrievalServiceTests(PgServiceBase):
     module_path = "app.services.pg.pg_retrieval_service"
 
     def test_to_pgvector_formats_float_sequence(self):
-        self.assertEqual(pg_service._to_pgvector([1, 2.5]), "[1.00000000,2.50000000]")
+        self.assertEqual(pg_shared._to_pgvector([1, 2.5]), "[1.00000000,2.50000000]")
 
     def test_get_embedding_column_uses_settings_and_rejects_invalid_values(self):
         with patch(
             "app.services.pg.pg_shared.get_settings",
             return_value=make_settings(embedding_active_column="embedding_v2"),
         ):
-            self.assertEqual(pg_service._get_embedding_column(), "embedding_v2")
+            self.assertEqual(pg_shared._get_embedding_column(), "embedding_v2")
 
         with self.assertRaises(ValueError):
-            pg_service._get_embedding_column("invalid")
-
-    def test_setup_vector_index_is_noop(self):
-        self.assertIsNone(pg_service.setup_vector_index())
+            pg_shared._get_embedding_column("invalid")
 
     def test_find_document_by_hash_returns_document_or_none(self):
         cursor = FakeCursor(fetchone_results=[{"id": "doc-1"}])

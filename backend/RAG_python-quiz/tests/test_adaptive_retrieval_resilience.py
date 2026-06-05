@@ -2,17 +2,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from app.services.rag import adaptive_retrieval_service
-
-
-def make_doc(text, *, chunk_id="chunk-1", source="doc.pdf", page=1, file_id="file-1", score=0.12):
-    return {
-        "text": text,
-        "source": source,
-        "page": page,
-        "fileId": file_id,
-        "chunkId": chunk_id,
-        "score": score,
-    }
+from tests.support import make_retrieval_doc as make_doc
 
 
 class AdaptiveRetrievalResilienceTests(unittest.IsolatedAsyncioTestCase):
@@ -67,7 +57,7 @@ class AdaptiveRetrievalResilienceTests(unittest.IsolatedAsyncioTestCase):
             raise AssertionError(query)
 
         with patch(
-            "app.services.rag.adaptive_retrieval_service._retrieve_vector_context",
+            "app.services.rag.adaptive_retrieval_service.retrieve_vector_context",
             AsyncMock(side_effect=vector_side_effect),
         ), patch(
             "app.services.rag.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",

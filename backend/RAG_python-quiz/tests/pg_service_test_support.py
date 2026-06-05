@@ -29,6 +29,6 @@ class PgServiceBase(unittest.TestCase):
 
     def patch_conn(self, cursor: FakeCursor, module_path: str | None = None):
         target = module_path or self.module_path
-        if target == "app.services.pg.pg_exam_service":
+        if target == "exam_service_split":
             return self._patch_exam_service_split(cursor)
         return patch(f"{target}._get_conn", return_value=FakeConnection(cursor))

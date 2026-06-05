@@ -5,7 +5,7 @@ import psycopg2.extras
 
 from app.config import get_settings
 from app.services.pg.pg_db import _get_conn
-from app.services.pg.pg_shared import _get_embedding_column, _to_pgvector
+from app.services.pg import pg_retrieval_documents, pg_retrieval_keywords, pg_retrieval_vectors
 
 
 FULLTEXT_SEARCH_BACKENDS = {"pg_search", "postgres"}
@@ -19,11 +19,7 @@ def _get_fulltext_search_backend() -> str:
 
 
 def find_document_by_hash(file_hash: str) -> Optional[Dict[str, Any]]:
-    sql = "SELECT id FROM documents WHERE hash=%s"
-    with _get_conn() as conn, conn.cursor() as cur:
-        cur.execute(sql, (file_hash,))
-        row = cur.fetchone()
-        return {"id": str(row["id"])} if row else None
+    return pg_retrieval_documents.find_document_by_hash(_get_conn, file_hash)
 
 
 def create_graph_from_document(
@@ -38,78 +34,13 @@ def create_graph_from_document(
     - page_start/page_end: from metadata.pageNumber (or 1 if missing)
     - chunk_index: 0-based order within this document
     """
-    target_embedding_column = _get_embedding_column(embedding_column)
-    insert_columns: list[str]
-    if any("embedding_v2" in chunk for chunk in chunks):
-        insert_columns = ["embedding", "embedding_v2"]
-    else:
-        insert_columns = [target_embedding_column]
-
-    with _get_conn() as conn, conn.cursor() as cur:
-        # Upsert document. If a class_id is provided, include it in the INSERT.
-        if document.get("class_id"):
-            cur.execute(
-                """
-                INSERT INTO documents (hash, name, size_bytes, mimetype, class_id)
-                VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (hash) DO UPDATE SET name = EXCLUDED.name
-                RETURNING id
-            """,
-                (
-                    document.get("hash"),
-                    document.get("name"),
-                    document.get("size"),
-                    document.get("mimetype"),
-                    document.get("class_id"),
-                ),
-            )
-        else:
-            cur.execute(
-                """
-                INSERT INTO documents (hash, name, size_bytes, mimetype)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (hash) DO UPDATE SET name = EXCLUDED.name
-                RETURNING id
-            """,
-                (
-                    document.get("hash"),
-                    document.get("name"),
-                    document.get("size"),
-                    document.get("mimetype"),
-                ),
-            )
-        doc_id = str(cur.fetchone()["id"])
-
-        rows = []
-        for i, ch in enumerate(chunks):
-            meta = ch.get("metadata") or {}
-            pn = int(meta.get("pageNumber") or 1)
-            row = [
-                doc_id,
-                pn,
-                pn,
-                i,
-                ch.get("text") or "",
-            ]
-            for column_name in insert_columns:
-                vector = ch.get(column_name)
-                row.append(_to_pgvector(vector) if vector is not None else None)
-            rows.append(tuple(row))
-
-        insert_column_sql = ", ".join(insert_columns)
-        value_placeholders = ",".join(["%s"] * 5 + ["%s::vector"] * len(insert_columns))
-
-        psycopg2.extras.execute_values(
-            cur,
-            f"""
-            INSERT INTO chunks (document_id, page_start, page_end, chunk_index, text, {insert_column_sql})
-            VALUES %s
-            """,
-            rows,
-            template=f"({value_placeholders})",
-        )
-        conn.commit()
-        return {"fileId": doc_id}
+    return pg_retrieval_documents.create_graph_from_document(
+        get_conn=_get_conn,
+        execute_values=psycopg2.extras.execute_values,
+        document=document,
+        chunks=chunks,
+        embedding_column=embedding_column,
+    )
 
 
 def retrieve_graph_context(
@@ -119,45 +50,13 @@ def retrieve_graph_context(
     *,
     embedding_column: Optional[str] = None,
 ) -> list[dict]:
-    target_embedding_column = _get_embedding_column(embedding_column)
-    vec_txt = _to_pgvector(query_vector)
-    null_filter = ""
-    if target_embedding_column == "embedding_v2":
-        null_filter = f"      c.{target_embedding_column} IS NOT NULL AND\n"
-    sql = f"""
-    SELECT
-      c.text,
-      d.name AS source,
-      d.id   AS fileId,
-      c.page_start,
-      c.page_end,
-      c.chunk_index,
-      c.id   AS chunkId,
-      (c.{target_embedding_column} <=> %s::vector) AS score
-    FROM chunks c
-    JOIN documents d ON d.id = c.document_id
-    WHERE (
-{null_filter}      (%s::uuid[] IS NULL OR d.id = ANY(%s::uuid[]))
+    return pg_retrieval_vectors.retrieve_graph_context(
+        get_conn=_get_conn,
+        query_vector=query_vector,
+        k=k,
+        selected_file_ids=selected_file_ids,
+        embedding_column=embedding_column,
     )
-    ORDER BY c.{target_embedding_column} <=> %s::vector
-    LIMIT %s
-    """
-    params = (vec_txt, selected_file_ids or None, selected_file_ids or None, vec_txt, k)
-    with _get_conn() as conn, conn.cursor() as cur:
-        cur.execute(sql, params)
-        rows = cur.fetchall()
-        return [
-            {
-                "text": r["text"],
-                "score": float(r["score"]) if r["score"] is not None else None,
-                "source": r["source"],
-                "page": r["page_start"],
-                "fileId": str(r["fileid"]),
-                "chunkId": str(r["chunkid"]),
-                "mentionedEntities": [],
-            }
-            for r in rows
-        ]
 
 
 def get_chunks_missing_embeddings(
@@ -165,18 +64,11 @@ def get_chunks_missing_embeddings(
     embedding_column: str = "embedding_v2",
     limit: int = 100,
 ) -> List[Dict[str, Any]]:
-    target_embedding_column = _get_embedding_column(embedding_column)
-    sql = f"""
-    SELECT c.id, c.text
-    FROM chunks c
-    WHERE c.{target_embedding_column} IS NULL
-    ORDER BY c.document_id ASC, c.chunk_index ASC
-    LIMIT %s
-    """
-    with _get_conn() as conn, conn.cursor() as cur:
-        cur.execute(sql, (limit,))
-        rows = cur.fetchall()
-        return [{"id": str(row["id"]), "text": row["text"]} for row in rows]
+    return pg_retrieval_vectors.get_chunks_missing_embeddings(
+        get_conn=_get_conn,
+        embedding_column=embedding_column,
+        limit=limit,
+    )
 
 
 def update_chunk_embeddings(
@@ -184,104 +76,23 @@ def update_chunk_embeddings(
     *,
     embedding_column: str = "embedding_v2",
 ) -> int:
-    if not chunk_vectors:
-        return 0
-
-    target_embedding_column = _get_embedding_column(embedding_column)
-    rows = [(item["id"], _to_pgvector(item["embedding"] or [])) for item in chunk_vectors]
-
-    with _get_conn() as conn, conn.cursor() as cur:
-        psycopg2.extras.execute_values(
-            cur,
-            f"""
-            UPDATE chunks AS c
-            SET {target_embedding_column} = payload.embedding::vector
-            FROM (VALUES %s) AS payload (id, embedding)
-            WHERE c.id = payload.id::uuid
-            """,
-            rows,
-            template="(%s,%s)",
-        )
-        conn.commit()
-    return len(rows)
+    return pg_retrieval_vectors.update_chunk_embeddings(
+        get_conn=_get_conn,
+        execute_values=psycopg2.extras.execute_values,
+        chunk_vectors=chunk_vectors,
+        embedding_column=embedding_column,
+    )
 
 
 def retrieve_context_by_keywords(
     keywords: str, selected_file_ids: list[str] = [], k: int = 10
 ) -> list[dict]:
     backend = _get_fulltext_search_backend()
-    with _get_conn() as conn, conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-        if backend == "postgres":
-            base_sql = """
-                WITH query AS (
-                    SELECT websearch_to_tsquery('simple', %s) AS ts_query,
-                           %s::text AS raw_query
-                )
-                SELECT
-                    c.text,
-                    (
-                        ts_rank_cd(c.tsv, query.ts_query)
-                        + GREATEST(
-                            similarity(COALESCE(c.text, ''), query.raw_query),
-                            similarity(COALESCE(c.entities_json::text, ''), query.raw_query)
-                        )
-                    ) AS score,
-                    d.name AS source,
-                    c.page_start,
-                    c.document_id AS fileid,
-                    c.id AS chunkid
-                FROM public.chunks AS c
-                JOIN public.documents AS d ON d.id = c.document_id
-                CROSS JOIN query
-                WHERE c.tsv @@ query.ts_query
-                   OR similarity(COALESCE(c.text, ''), query.raw_query) > 0
-                   OR similarity(COALESCE(c.entities_json::text, ''), query.raw_query) > 0
-            """
-            params = [keywords, keywords]
-        else:
-            base_sql = """
-                SELECT
-                    c.text,
-                    paradedb.score(c.id) AS score,
-                    d.name AS source,
-                    c.page_start,
-                    c.document_id AS fileid,
-                    c.id AS chunkid
-                FROM public.chunks AS c
-                JOIN public.documents AS d ON d.id = c.document_id
-                WHERE c.text @@@ %s
-            """
-            params = [keywords]
+    return pg_retrieval_keywords.retrieve_context_by_keywords(
+        get_conn=_get_conn,
+        backend=backend,
+        keywords=keywords,
+        selected_file_ids=selected_file_ids,
+        k=k,
+    )
 
-        if selected_file_ids:
-            base_sql += " AND c.document_id = ANY(%s::uuid[]) "
-            params.append(selected_file_ids)
-
-        base_sql += " ORDER BY score DESC NULLS LAST LIMIT %s "
-        params.append(k)
-
-        cur.execute(base_sql, params)
-        rows = cur.fetchall()
-        return [
-            {
-                "text": r["text"],
-                "score": float(r["score"]) if r["score"] is not None else None,
-                "source": r["source"],
-                "page": r["page_start"],
-                "fileId": str(r["fileid"]),
-                "chunkId": str(r["chunkid"]),
-                "mentionedEntities": [],
-            }
-            for r in rows
-        ]
-
-
-__all__ = [
-    "create_graph_from_document",
-    "find_document_by_hash",
-    "get_chunks_missing_embeddings",
-    "_get_fulltext_search_backend",
-    "retrieve_context_by_keywords",
-    "retrieve_graph_context",
-    "update_chunk_embeddings",
-]

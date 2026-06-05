@@ -13,7 +13,7 @@ from app.agents.nodes.generator import generator_node
 from app.agents.nodes.visualizer import visualizer_node
 from app.agents.nodes.reviewer import reviewer_node
 from app.agents.schemas import ExamGenerationRequest, ExamGenerationResponse
-from app.services.pg import pg_service
+from app.services.pg import pg_exam_crud as pg_service
 from app.logger import get_logger
 
 logger = get_logger(__name__)

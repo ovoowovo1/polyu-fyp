@@ -1,12 +1,8 @@
-from typing import List
-from pypdf import PdfReader
 from io import BytesIO
 
+from pypdf import PdfReader
 
-async def extract_text_by_page(buffer: bytes) -> List[str]:
+
+async def extract_text_by_page(buffer: bytes) -> list[str]:
     reader = PdfReader(BytesIO(buffer))
-    pages = []
-    for page in reader.pages:
-        text = page.extract_text() or ""
-        pages.append(text)
-    return pages
+    return [page.extract_text() or "" for page in reader.pages]

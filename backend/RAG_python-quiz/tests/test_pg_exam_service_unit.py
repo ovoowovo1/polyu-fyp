@@ -1,25 +1,47 @@
 from datetime import datetime
 from unittest.mock import patch
 
-from app.services.pg import pg_service
+from app.services.pg import pg_exam_crud
+from app.services.pg.pg_exam_crud import (
+    delete_exam,
+    get_exam_by_id,
+    get_exams_by_class,
+    publish_exam,
+    save_exam,
+    update_exam,
+)
+from app.services.pg.pg_exam_submission_answers import find_exam_question
+from app.services.pg.pg_exam_grading_service import ai_grade_exam_submission, grade_exam_submission
+from app.services.pg.pg_exam_submission_service import (
+    get_exam_submissions,
+    get_student_exam_submissions,
+    get_submission_with_answers,
+    start_exam_submission,
+    submit_exam,
+)
 from app.services.core.exceptions import NotReleasedError, PermissionDeniedError
 from tests.pg_service_test_support import FixedDateTime, PgServiceBase
 from tests.support import FakeCursor
 
 
 class PgExamServiceTests(PgServiceBase):
-    module_path = "app.services.pg.pg_exam_service"
+    module_path = "exam_service_split"
+
+    def assert_service_raises(self, exception_type, func, fetchone_results, *args, module_path=None, **kwargs):
+        with self.patch_conn(FakeCursor(fetchone_results=fetchone_results), module_path=module_path):
+            with self.assertRaises(exception_type):
+                func(*args, **kwargs)
 
     def test_default_exam_title_and_save_exam_cover_generated_and_manual_titles(self):
         with patch("app.services.pg.pg_exam_crud.datetime", FixedDateTime):
             cursor = FakeCursor(fetchall_results=[[{"name": "lesson.pdf"}]])
-            self.assertIn("lesson -", pg_service._default_exam_title(cursor, ["file-1"]))
+            self.assertIn("lesson -", pg_exam_crud._default_exam_title(cursor, ["file-1"]))
 
             cursor = FakeCursor(fetchall_results=[[{"name": "a.pdf"}, {"name": "b.pdf"}]])
-            self.assertIn("2", pg_service._default_exam_title(cursor, ["a", "b"]))
+            self.assertIn("2", pg_exam_crud._default_exam_title(cursor, ["a", "b"]))
 
             cursor = FakeCursor(fetchall_results=[[]])
-            self.assertIn("(01/02 03:04)", pg_service._default_exam_title(cursor, []))
+            self.assertIn("(01/02 03:04)", pg_exam_crud._default_exam_title(cursor, []))
 
         created_at = datetime(2025, 1, 2, 3, 4, 5)
         row = {"id": "exam-1", "created_at": created_at}
@@ -29,7 +51,7 @@ class PgExamServiceTests(PgServiceBase):
         ]
         cursor = FakeCursor(fetchone_results=[row])
         with self.patch_conn(cursor), patch("app.services.pg.pg_shared.psycopg2.extras.execute_values") as execute_values:
-            result = pg_service.save_exam(
+            result = save_exam(
                 "exam-1",
                 "Database Exam",
                 questions,
@@ -48,7 +70,7 @@ class PgExamServiceTests(PgServiceBase):
         with self.patch_conn(cursor), patch("app.services.pg.pg_exam_crud.datetime", FixedDateTime), patch(
             "app.services.pg.pg_shared.psycopg2.extras.execute_values"
         ) as execute_values:
-            generated = pg_service.save_exam("exam-2", "", questions[:1], [])
+            generated = save_exam("exam-2", "", questions[:1], [])
         self.assertIn("lesson -", generated["title"])
         self.assertFalse(execute_values.called)
 
@@ -74,18 +96,16 @@ class PgExamServiceTests(PgServiceBase):
         }
         cursor = FakeCursor(fetchall_results=[[row], [{"exam_id": "exam-1", "id": "file-1", "name": "lesson.pdf"}]])
         with self.patch_conn(cursor):
-            exams = pg_service.get_exams_by_class("class-1")
+            exams = get_exams_by_class("class-1")
         self.assertEqual(exams[0]["documents"][0]["name"], "lesson.pdf")
         self.assertEqual(exams[0]["title"], "Untitled Exam")
 
         cursor = FakeCursor(fetchall_results=[[row], [{"exam_id": "exam-1", "id": "file-1", "name": "lesson.pdf"}]])
         with self.patch_conn(cursor):
-            filtered_exams = pg_service.get_exams_by_class("class-1", user_id="student-1")
+            filtered_exams = get_exams_by_class("class-1", user_id="student-1")
         self.assertEqual(filtered_exams[0]["id"], "exam-1")
 
-        with self.patch_conn(FakeCursor(fetchone_results=[None])):
-            with self.assertRaises(RuntimeError):
-                pg_service.get_exam_by_id("missing")
+        self.assert_service_raises(RuntimeError, get_exam_by_id, [None], "missing")
 
         exam_row = {
             "id": "exam-1",
@@ -108,68 +128,61 @@ class PgExamServiceTests(PgServiceBase):
         eq_rows = [{"id": "eq-1", "position": 0, "question_snapshot": '{"question_type":"multiple_choice","question_text":"What?","correct_answer_index":1,"model_answer":"A","marking_scheme":[],"rationale":"Because","question_id":"q-1"}', "max_marks": 2}]
         cursor = FakeCursor(fetchone_results=[exam_row, {"role": "student"}, {"ok": 1}], fetchall_results=[docs_rows, eq_rows])
         with self.patch_conn(cursor):
-            student_exam = pg_service.get_exam_by_id("exam-1", user_id="student-1", include_answers=False)
+            student_exam = get_exam_by_id("exam-1", user_id="student-1", include_answers=False)
         self.assertNotIn("correct_answer_index", student_exam["questions"][0])
         self.assertEqual(student_exam["documents"][0]["id"], "file-1")
 
         unpublished_row = dict(exam_row)
         unpublished_row["is_published"] = False
         cursor = FakeCursor(fetchone_results=[unpublished_row, {"role": "student"}], fetchall_results=[docs_rows, eq_rows])
-        with self.patch_conn(cursor):
-            with self.assertRaises(NotReleasedError):
-                pg_service.get_exam_by_id("exam-1", user_id="student-1")
+        with self.patch_conn(cursor), self.assertRaises(NotReleasedError):
+            get_exam_by_id("exam-1", user_id="student-1")
 
         cursor = FakeCursor(fetchone_results=[exam_row, {"role": "student"}, None], fetchall_results=[docs_rows, eq_rows])
-        with self.patch_conn(cursor):
-            with self.assertRaises(PermissionDeniedError):
-                pg_service.get_exam_by_id("exam-1", user_id="student-1")
+        with self.patch_conn(cursor), self.assertRaises(PermissionDeniedError):
+            get_exam_by_id("exam-1", user_id="student-1")
 
         cursor = FakeCursor(fetchone_results=[exam_row, {"role": "teacher"}], fetchall_results=[docs_rows, eq_rows])
         with self.patch_conn(cursor):
-            teacher_exam = pg_service.get_exam_by_id("exam-1", user_id="teacher-1")
+            teacher_exam = get_exam_by_id("exam-1", user_id="teacher-1")
         self.assertEqual(teacher_exam["id"], "exam-1")
 
         delegated_row = dict(exam_row)
         delegated_row["owner_id"] = "teacher-2"
         cursor = FakeCursor(fetchone_results=[delegated_row, {"role": "teacher"}, {"ok": 1}], fetchall_results=[docs_rows, eq_rows])
         with self.patch_conn(cursor):
-            delegated_exam = pg_service.get_exam_by_id("exam-1", user_id="teacher-1")
+            delegated_exam = get_exam_by_id("exam-1", user_id="teacher-1")
         self.assertEqual(delegated_exam["id"], "exam-1")
 
         cursor = FakeCursor(fetchone_results=[delegated_row, {"role": "teacher"}, None], fetchall_results=[docs_rows, eq_rows])
-        with self.patch_conn(cursor):
-            with self.assertRaises(PermissionDeniedError):
-                pg_service.get_exam_by_id("exam-1", user_id="teacher-1")
+        with self.patch_conn(cursor), self.assertRaises(PermissionDeniedError):
+            get_exam_by_id("exam-1", user_id="teacher-1")
 
         cursor = FakeCursor(fetchone_results=[exam_row, {"role": "other"}], fetchall_results=[docs_rows, eq_rows])
-        with self.patch_conn(cursor):
-            with self.assertRaises(PermissionDeniedError):
-                pg_service.get_exam_by_id("exam-1", user_id="assistant-1")
+        with self.patch_conn(cursor), self.assertRaises(PermissionDeniedError):
+            get_exam_by_id("exam-1", user_id="assistant-1")
 
         orphan_row = dict(exam_row)
         orphan_row["owner_id"] = "teacher-2"
         orphan_row["class_id"] = None
         cursor = FakeCursor(fetchone_results=[orphan_row, {"role": "teacher"}], fetchall_results=[docs_rows, eq_rows])
-        with self.patch_conn(cursor):
-            with self.assertRaises(PermissionDeniedError):
-                pg_service.get_exam_by_id("exam-1", user_id="teacher-1")
+        with self.patch_conn(cursor), self.assertRaises(PermissionDeniedError):
+            get_exam_by_id("exam-1", user_id="teacher-1")
 
         fallback_row = dict(exam_row)
         fallback_row["questions_json"] = '[{"question_text":"Fallback","correct_answer_index":2}]'
         cursor = FakeCursor(fetchone_results=[fallback_row], fetchall_results=[docs_rows, []])
         with self.patch_conn(cursor):
-            fallback_exam = pg_service.get_exam_by_id("exam-1")
+            fallback_exam = get_exam_by_id("exam-1")
         self.assertEqual(fallback_exam["questions"][0]["question_text"], "Fallback")
 
     def test_update_delete_publish_and_start_exam_cover_success_and_failure(self):
-        with self.patch_conn(FakeCursor(fetchone_results=[None])):
-            with self.assertRaises(RuntimeError):
-                pg_service.update_exam("missing")
+        self.assert_service_raises(RuntimeError, update_exam, [None], "missing")
 
         existing = {"id": "exam-1", "questions_json": "[]"}
         cursor = FakeCursor(fetchone_results=[existing, {"id": "exam-1", "title": "Updated", "total_marks": 3}])
         with self.patch_conn(cursor), patch("app.services.pg.pg_shared.psycopg2.extras.execute_values") as execute_values:
-            updated = pg_service.update_exam(
+            updated = update_exam(
                 "exam-1",
                 title="Updated",
                 description="Desc",
@@ -185,67 +198,69 @@ class PgExamServiceTests(PgServiceBase):
 
         cursor = FakeCursor(fetchone_results=[existing, {"id": "exam-1", "title": "Updated", "total_marks": 0}])
         with self.patch_conn(cursor), patch("app.services.pg.pg_shared.psycopg2.extras.execute_values") as execute_values:
-            pg_service.update_exam("exam-1", duration_minutes=0, file_ids=[], start_at="", end_at="")
+            update_exam("exam-1", duration_minutes=0, file_ids=[], start_at="", end_at="")
         self.assertFalse(execute_values.called)
 
         cursor = FakeCursor(fetchone_results=[existing, {"id": "exam-1", "title": "Updated", "total_marks": 0}])
         with self.patch_conn(cursor), patch("app.services.pg.pg_exam_crud.require_exam_teacher") as require_teacher:
-            pg_service.update_exam("exam-1", teacher_id="teacher-1")
+            update_exam("exam-1", teacher_id="teacher-1")
         require_teacher.assert_called_once_with("teacher-1", "exam-1")
 
         cursor = FakeCursor(fetchone_results=[{"id": "exam-1", "title": "Exam"}])
         with self.patch_conn(cursor, module_path="app.services.pg.pg_db"):
-            deleted = pg_service.delete_exam("exam-1")
+            deleted = delete_exam("exam-1")
         self.assertEqual(deleted["exam_id"], "exam-1")
 
         cursor = FakeCursor(fetchone_results=[{"id": "exam-1", "title": "Exam"}])
         with self.patch_conn(cursor, module_path="app.services.pg.pg_db"), patch("app.services.pg.pg_exam_crud.require_exam_teacher") as require_teacher:
-            pg_service.delete_exam("exam-1", teacher_id="teacher-1")
+            delete_exam("exam-1", teacher_id="teacher-1")
         require_teacher.assert_called_once_with("teacher-1", "exam-1")
 
-        with self.patch_conn(FakeCursor(fetchone_results=[None]), module_path="app.services.pg.pg_db"):
-            with self.assertRaises(RuntimeError):
-                pg_service.delete_exam("missing")
+        self.assert_service_raises(RuntimeError, delete_exam, [None], "missing", module_path="app.services.pg.pg_db")
 
         cursor = FakeCursor(fetchone_results=[{"id": "exam-1", "title": "Exam", "is_published": True}])
         with self.patch_conn(cursor, module_path="app.services.pg.pg_db"):
-            published = pg_service.publish_exam("exam-1")
+            published = publish_exam("exam-1")
         self.assertTrue(published["is_published"])
 
         cursor = FakeCursor(fetchone_results=[{"id": "exam-1", "title": "Exam", "is_published": False}])
         with self.patch_conn(cursor, module_path="app.services.pg.pg_db"):
-            unpublished = pg_service.publish_exam("exam-1", False)
+            unpublished = publish_exam("exam-1", is_published=False)
         self.assertFalse(unpublished["is_published"])
 
         cursor = FakeCursor(fetchone_results=[{"id": "exam-1", "title": "Exam", "is_published": True}])
         with self.patch_conn(cursor, module_path="app.services.pg.pg_db"), patch("app.services.pg.pg_exam_crud.require_exam_teacher") as require_teacher:
-            pg_service.publish_exam("exam-1", teacher_id="teacher-1")
+            publish_exam("exam-1", teacher_id="teacher-1")
         require_teacher.assert_called_once_with("teacher-1", "exam-1")
 
-        with self.patch_conn(FakeCursor(fetchone_results=[None]), module_path="app.services.pg.pg_db"):
-            with self.assertRaises(RuntimeError):
-                pg_service.publish_exam("missing")
+        self.assert_service_raises(RuntimeError, publish_exam, [None], "missing", module_path="app.services.pg.pg_db")
 
-        with self.patch_conn(FakeCursor(fetchone_results=[None])):
-            with self.assertRaises(RuntimeError):
-                pg_service.start_exam_submission("exam-1", "student-1")
+        self.assert_service_raises(RuntimeError, start_exam_submission, [None], "exam-1", "student-1")
 
-        cursor = FakeCursor(fetchone_results=[{"id": "exam-1", "is_published": False, "duration_minutes": 30, "start_at": None, "end_at": None}])
-        with self.patch_conn(cursor):
-            with self.assertRaises(RuntimeError):
-                pg_service.start_exam_submission("exam-1", "student-1")
+        self.assert_service_raises(
+            RuntimeError,
+            start_exam_submission,
+            [{"id": "exam-1", "is_published": False, "duration_minutes": 30, "start_at": None, "end_at": None}],
+            "exam-1",
+            "student-1",
+        )
 
-        cursor = FakeCursor(fetchone_results=[{"id": "exam-1", "class_id": "class-1", "is_published": True, "duration_minutes": 30, "start_at": None, "end_at": None}, None])
-        with self.patch_conn(cursor):
-            with self.assertRaises(PermissionDeniedError):
-                pg_service.start_exam_submission("exam-1", "student-1")
+        self.assert_service_raises(
+            PermissionDeniedError,
+            start_exam_submission,
+            [{"id": "exam-1", "class_id": "class-1", "is_published": True, "duration_minutes": 30, "start_at": None, "end_at": None}, None],
+            "exam-1",
+            "student-1",
+        )
 
         cursor = FakeCursor(fetchone_results=[{"id": "exam-1", "class_id": "class-1", "is_published": True, "duration_minutes": 30, "start_at": None, "end_at": None}, {"ok": 1}, {"max_attempt": 1}, {"id": "sub-1", "started_at": datetime(2025, 1, 2, 3, 4, 5), "attempt_no": 2}])
         with self.patch_conn(cursor):
-            started = pg_service.start_exam_submission("exam-1", "student-1", meta={"source": "web"})
+            started = start_exam_submission("exam-1", "student-1", meta={"source": "web"})
         self.assertEqual(started["attempt_no"], 2)
 
     def test_submit_exam_and_submission_queries_cover_multiple_paths(self):
+        self.assertIsNone(find_exam_question({"answer_text": "No id"}, {}, {}))
+
         submission_row = {"id": "sub-1", "exam_id": "exam-1", "status": "in_progress", "questions_json": [], "total_marks": 5}
         eq_rows = [
             {"id": "eq-1", "position": 0, "question_snapshot": '{"question_id":"q-1","question_type":"multiple_choice","correct_answer_index":1}', "max_marks": 2},
@@ -259,25 +274,32 @@ class PgExamServiceTests(PgServiceBase):
             {"question_id": "unknown", "answer_text": "Ignored"},
         ]
         with self.patch_conn(cursor):
-            result = pg_service.submit_exam("sub-1", answers, time_spent_seconds=20)
+            result = submit_exam("sub-1", answers, time_spent_seconds=20)
         self.assertEqual(result["score"], 2)
 
         cursor = FakeCursor(fetchone_results=[submission_row, submit_row], fetchall_results=[eq_rows])
         with self.patch_conn(cursor):
-            result = pg_service.submit_exam("sub-1", [{"exam_question_id": "eq-1", "selected_options": [1]}])
+            result = submit_exam("sub-1", [{"exam_question_id": "eq-1", "selected_options": [1]}])
         self.assertEqual(result["status"], "submitted")
 
-        with self.patch_conn(FakeCursor(fetchone_results=[None])):
-            with self.assertRaises(RuntimeError):
-                pg_service.submit_exam("missing", [])
+        self.assert_service_raises(RuntimeError, submit_exam, [None], "missing", [])
 
-        with self.patch_conn(FakeCursor(fetchone_results=[{"id": "sub-1", "exam_id": "exam-1", "status": "submitted", "questions_json": [], "total_marks": 1}])):
-            with self.assertRaises(RuntimeError):
-                pg_service.submit_exam("sub-1", [])
+        self.assert_service_raises(
+            RuntimeError,
+            submit_exam,
+            [{"id": "sub-1", "exam_id": "exam-1", "status": "submitted", "questions_json": [], "total_marks": 1}],
+            "sub-1",
+            [],
+        )
 
-        with self.patch_conn(FakeCursor(fetchone_results=[{"id": "sub-1", "exam_id": "exam-1", "student_id": "student-2", "status": "in_progress", "questions_json": [], "total_marks": 1}])):
-            with self.assertRaises(PermissionDeniedError):
-                pg_service.submit_exam("sub-1", "student-1", [])
+        self.assert_service_raises(
+            PermissionDeniedError,
+            submit_exam,
+            [{"id": "sub-1", "exam_id": "exam-1", "student_id": "student-2", "status": "in_progress", "questions_json": [], "total_marks": 1}],
+            "sub-1",
+            "student-1",
+            [],
+        )
 
         submitted_at = datetime(2025, 1, 2, 3, 4, 5)
         graded_at = datetime(2025, 1, 3, 3, 4, 5)
@@ -317,18 +339,18 @@ class PgExamServiceTests(PgServiceBase):
         ]
         cursor = FakeCursor(fetchall_results=[rows, answer_rows])
         with self.patch_conn(cursor):
-            submissions = pg_service.get_exam_submissions("exam-1")
+            submissions = get_exam_submissions("exam-1")
         self.assertEqual(submissions[0]["answers"][0]["attachments"][0], "file.png")
         self.assertEqual(submissions[0]["meta"]["browser"], "chrome")
 
         cursor = FakeCursor(fetchall_results=[rows, answer_rows])
         with self.patch_conn(cursor):
-            teacher_submissions = pg_service.get_exam_submissions("exam-1", teacher_id="teacher-1")
+            teacher_submissions = get_exam_submissions("exam-1", teacher_id="teacher-1")
         self.assertEqual(teacher_submissions[0]["student_email"], "s@example.com")
 
         cursor = FakeCursor(fetchall_results=[[]])
         with self.patch_conn(cursor):
-            self.assertEqual(pg_service.get_exam_submissions("exam-1"), [])
+            self.assertEqual(get_exam_submissions("exam-1"), [])
 
         student_rows = [
             {
@@ -361,23 +383,21 @@ class PgExamServiceTests(PgServiceBase):
         ]
         cursor = FakeCursor(fetchall_results=[student_rows, student_answers])
         with self.patch_conn(cursor):
-            mine = pg_service.get_student_exam_submissions("exam-1", "student-1")
+            mine = get_student_exam_submissions("exam-1", "student-1")
         self.assertEqual(mine[0]["answers"][0]["selected_options"], [1])
         self.assertEqual(mine[0]["meta"]["source"], "mobile")
 
         cursor = FakeCursor(fetchall_results=[[]])
         with self.patch_conn(cursor):
-            self.assertEqual(pg_service.get_student_exam_submissions("exam-1", "student-1"), [])
+            self.assertEqual(get_student_exam_submissions("exam-1", "student-1"), [])
 
     def test_manual_and_ai_grading_helpers_cover_all_update_modes(self):
         graded_at = datetime(2025, 1, 2, 3, 4, 5)
-        with self.patch_conn(FakeCursor(fetchone_results=[None])):
-            with self.assertRaises(RuntimeError):
-                pg_service.grade_exam_submission("sub-1", "teacher-1")
+        self.assert_service_raises(RuntimeError, grade_exam_submission, [None], "sub-1", "teacher-1")
 
         cursor = FakeCursor(fetchone_results=[{"id": "sub-1", "total_marks": 5}, {"total_score": 4}, {"id": "sub-1", "score": 4, "graded_at": graded_at}])
         with self.patch_conn(cursor):
-            graded = pg_service.grade_exam_submission(
+            graded = grade_exam_submission(
                 "sub-1",
                 "teacher-1",
                 answers_grades=[
@@ -390,10 +410,10 @@ class PgExamServiceTests(PgServiceBase):
 
         cursor = FakeCursor(fetchone_results=[{"id": "sub-1", "total_marks": 5}, {"total_score": 0}, {"id": "sub-1", "score": 0, "graded_at": graded_at}])
         with self.patch_conn(cursor):
-            pg_service.grade_exam_submission("sub-1", "teacher-1")
+            grade_exam_submission("sub-1", "teacher-1")
 
         with self.patch_conn(FakeCursor(fetchone_results=[None])):
-            self.assertIsNone(pg_service.get_submission_with_answers("missing"))
+            self.assertIsNone(get_submission_with_answers("missing"))
 
         sub_row = {
             "id": "sub-1",
@@ -425,16 +445,14 @@ class PgExamServiceTests(PgServiceBase):
         ]
         cursor = FakeCursor(fetchone_results=[sub_row], fetchall_results=[answers])
         with self.patch_conn(cursor):
-            submission = pg_service.get_submission_with_answers("sub-1")
+            submission = get_submission_with_answers("sub-1")
         self.assertEqual(submission["answers"][0]["question_snapshot"]["question_text"], "What?")
 
-        with self.patch_conn(FakeCursor(fetchone_results=[None])):
-            with self.assertRaises(RuntimeError):
-                pg_service.ai_grade_exam_submission("missing", [])
+        self.assert_service_raises(RuntimeError, ai_grade_exam_submission, [None], "missing", [])
 
         cursor = FakeCursor(fetchone_results=[{"id": "sub-1", "total_marks": 5}, {"total_score": 3}, {"id": "sub-1", "score": 3, "graded_at": graded_at, "status": "ai_graded", "teacher_comment": "AI comment"}])
         with self.patch_conn(cursor):
-            ai_result = pg_service.ai_grade_exam_submission(
+            ai_result = ai_grade_exam_submission(
                 "sub-1",
                 [
                     {"answer_id": "answer-1", "marks_earned": 1, "teacher_feedback": "A", "is_correct": False},
@@ -446,6 +464,7 @@ class PgExamServiceTests(PgServiceBase):
 
         cursor = FakeCursor(fetchone_results=[{"id": "sub-1", "total_marks": 5}, {"total_score": 2}, {"id": "sub-1", "score": 2, "graded_at": graded_at, "status": "ai_graded", "teacher_comment": None}])
         with self.patch_conn(cursor):
-            ai_result = pg_service.ai_grade_exam_submission("sub-1", [{"exam_question_id": "eq-1", "marks_earned": 2, "teacher_feedback": None, "is_correct": True}])
+            ai_result = ai_grade_exam_submission("sub-1", [{"exam_question_id": "eq-1", "marks_earned": 2, "teacher_feedback": None, "is_correct": True}])
         self.assertEqual(ai_result["status"], "ai_graded")
+
 

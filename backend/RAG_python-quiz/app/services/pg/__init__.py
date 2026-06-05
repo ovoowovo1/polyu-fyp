@@ -1,1 +1,0 @@
-"""PostgreSQL persistence service package."""

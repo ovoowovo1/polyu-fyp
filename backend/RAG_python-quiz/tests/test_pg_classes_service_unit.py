@@ -1,7 +1,7 @@
 from datetime import datetime
 from unittest.mock import patch
 
-from app.services.pg import pg_service
+from app.services.pg import pg_classes_service as pg_service
 from app.services.core.exceptions import PermissionDeniedError
 from tests.pg_service_test_support import PgServiceBase
 from tests.support import FakeCursor
@@ -50,20 +50,10 @@ class PgClassesServiceTests(PgServiceBase):
             classes = pg_service.list_classes_by_teacher("teacher-1")
         self.assertEqual(classes[0]["student_count"], 1)
 
-        cursor = FakeCursor(fetchone_results=[{"id": "student-1", "email": "s@example.com"}])
-        with self.patch_conn(cursor):
-            self.assertEqual(pg_service._get_user_by_email("s@example.com")["id"], "student-1")
-        self.assertIn("app_security.lookup_student_for_invite", cursor.executed[0][0])
-
         cursor = FakeCursor(fetchone_results=[{"exists": True}])
         with self.patch_conn(cursor):
             self.assertTrue(pg_service._is_student_exists("student-1"))
         self.assertIn("app_security.is_student", cursor.executed[0][0])
-
-        cursor = FakeCursor(fetchone_results=[{"owns_class": False}])
-        with self.patch_conn(cursor):
-            self.assertFalse(pg_service._is_class_owned_by_teacher("class-1", "teacher-1"))
-        self.assertIn("app_security.is_class_owned_by_teacher", cursor.executed[0][0])
 
         with self.patch_conn(FakeCursor(fetchone_results=[None])):
             with self.assertRaises(PermissionDeniedError):

@@ -1,27 +1,11 @@
-from types import SimpleNamespace
 from unittest.mock import patch
 import unittest
 
 from app.agents.nodes.reviewer import _build_review_prompt, _run_review
-from app.agents.schemas import ExamQuestion, MarkingCriterion
-
-
-def make_response(*, choices, model="test-model"):
-    return SimpleNamespace(model=model, choices=choices)
-
-
-def make_choice(*, content=None, finish_reason="stop", refusal=None):
-    return SimpleNamespace(
-        message=SimpleNamespace(content=content, refusal=refusal),
-        finish_reason=finish_reason,
-    )
-
-
-class _FakeClient:
-    def __init__(self, response):
-        self.chat = SimpleNamespace(
-            completions=SimpleNamespace(create=lambda **kwargs: response)
-        )
+from app.agents.schemas import MarkingCriterion
+from tests.support import make_chat_client, make_exam_question
+from tests.support import make_openai_choice as make_choice
+from tests.support import make_openai_response as make_response
 
 
 class ReviewerRegressionTests(unittest.IsolatedAsyncioTestCase):
@@ -34,7 +18,7 @@ class ReviewerRegressionTests(unittest.IsolatedAsyncioTestCase):
             ]
         )
 
-        with patch("app.agents.nodes.reviewer.get_llm_client", return_value=_FakeClient(response)):
+        with patch("app.agents.nodes.reviewer.get_llm_client", return_value=make_chat_client(response)):
             result = await _run_review("test-key", "prompt", "model-name")
 
         self.assertEqual(result["overall_score"], 88)
@@ -45,7 +29,7 @@ class ReviewerRegressionTests(unittest.IsolatedAsyncioTestCase):
     async def test_run_review_raises_descriptive_runtime_error_for_malformed_response(self):
         response = make_response(choices=None)
 
-        with patch("app.agents.nodes.reviewer.get_llm_client", return_value=_FakeClient(response)):
+        with patch("app.agents.nodes.reviewer.get_llm_client", return_value=make_chat_client(response)):
             with self.assertRaises(RuntimeError) as ctx:
                 await _run_review("test-key", "prompt", "model-name")
 
@@ -54,7 +38,7 @@ class ReviewerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("'NoneType' object is not subscriptable", message)
 
     def test_build_review_prompt_includes_open_response_context_and_rubric(self):
-        question = ExamQuestion(
+        question = make_exam_question(
             question_id="q_short_1",
             question_type="short_answer",
             bloom_level="analyze",
@@ -69,9 +53,6 @@ class ReviewerRegressionTests(unittest.IsolatedAsyncioTestCase):
                 )
             ],
             rationale="Tests understanding of distributed transaction trade-offs.",
-            image_description=None,
-            image_path=None,
-            source_chunk_ids=[],
         )
 
         prompt = _build_review_prompt("Course context", [question])

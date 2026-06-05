@@ -157,13 +157,3 @@ def _format_file_detail(row: Dict[str, Any], *, total_chunks: int) -> Dict[str, 
         "status": "completed",
         "total_chunks": total_chunks,
     }
-
-
-__all__ = [
-    "delete_file",
-    "get_files_list",
-    "get_files_text_content",
-    "get_source_details_by_chunk_id",
-    "get_specific_file",
-    "rename_file",
-]

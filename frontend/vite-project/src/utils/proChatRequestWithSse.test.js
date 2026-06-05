@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import axios from 'axios';
+
 import { handleProChatRequestWithSse } from './proChatRequestWithSse.js';
+import { API_BASE_URL } from '../config.js';
 
 const encoder = new TextEncoder();
 
@@ -104,6 +107,63 @@ test('handleProChatRequestWithSse returns backend 400 detail for fetch responses
   }
 });
 
+test('handleProChatRequestWithSse refreshes and retries when the stream request starts with 401', async () => {
+  const originalFetch = global.fetch;
+  const originalPost = axios.post;
+  const storage = installLocalStorage({
+    session_token: 'expired-access',
+    refresh_token: 'refresh-123',
+  });
+  const fetchCalls = [];
+  const refreshCalls = [];
+
+  global.fetch = async (url, init) => {
+    fetchCalls.push({ url, auth: init.headers.get('Authorization') });
+    if (fetchCalls.length === 1) {
+      return new Response(JSON.stringify({ detail: { error: 'Token expired' } }), { status: 401 });
+    }
+    return createResponse([
+      'event: result\ndata: {"type":"result","answer":"Fresh answer.","answer_with_citations":[],"raw_sources":[]}\n\n',
+    ]);
+  };
+  axios.post = async (url, body) => {
+    refreshCalls.push({ url, body });
+    return {
+      data: {
+        session_token: 'new-access',
+        access_token: 'new-access',
+        refresh_token: 'new-refresh',
+      },
+    };
+  };
+
+  try {
+    const response = await handleProChatRequestWithSse([{ content: 'Explain normalization' }]);
+
+    assert.equal(JSON.parse(await response.text())[0].value, 'Fresh answer.');
+    assert.deepEqual(refreshCalls, [
+      {
+        url: `${API_BASE_URL}/auth/refresh`,
+        body: { refresh_token: 'refresh-123' },
+      },
+    ]);
+    assert.deepEqual(fetchCalls, [
+      {
+        url: `${API_BASE_URL}/api/query-stream`,
+        auth: 'Bearer expired-access',
+      },
+      {
+        url: `${API_BASE_URL}/api/query-stream`,
+        auth: 'Bearer new-access',
+      },
+    ]);
+  } finally {
+    global.fetch = originalFetch;
+    axios.post = originalPost;
+    storage.restore();
+  }
+});
+
 test('handleProChatRequestWithSse returns a service unavailable message for 503 responses', async () => {
   const originalFetch = global.fetch;
 
@@ -163,3 +223,30 @@ test('handleProChatRequestWithSse returns a network error message for fetch fail
     global.fetch = originalFetch;
   }
 });
+
+function installLocalStorage(initialValues = {}) {
+  const originalLocalStorage = global.localStorage;
+  const map = new Map(Object.entries(initialValues));
+
+  global.localStorage = {
+    getItem(key) {
+      return map.has(key) ? map.get(key) : null;
+    },
+    setItem(key, value) {
+      map.set(key, String(value));
+    },
+    removeItem(key) {
+      map.delete(key);
+    },
+  };
+
+  return {
+    restore() {
+      if (originalLocalStorage === undefined) {
+        delete global.localStorage;
+      } else {
+        global.localStorage = originalLocalStorage;
+      }
+    },
+  };
+}

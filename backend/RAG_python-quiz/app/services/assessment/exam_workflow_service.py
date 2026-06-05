@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from app.agents.graph import run_exam_generation, run_exam_generation_with_pdf
 from app.agents.schemas import ExamGenerationRequest, ExamQuestion
 from app.logger import get_logger
-from app.services.ai.ai_service import ai_generate_exam_overall_comment, ai_grade_answer
+from app.services.ai.exam_ai_grading_service import ai_generate_exam_overall_comment, ai_grade_answer
 from app.services.pg.pg_exam_grading_service import ai_grade_exam_submission as persist_ai_grade_exam_submission
 from app.services.pg.pg_exam_submission_service import get_submission_with_answers
 from app.utils.pdf_generator import generate_exam_pdf
@@ -149,9 +149,3 @@ async def ai_grade_submission(submission_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"AI grading failed: {error}") from error
 
 
-__all__ = [
-    "ai_grade_submission",
-    "generate_exam_with_pdf",
-    "generate_questions_only",
-    "regenerate_exam_pdf",
-]

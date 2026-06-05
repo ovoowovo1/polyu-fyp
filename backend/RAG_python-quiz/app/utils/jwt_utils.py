@@ -79,14 +79,6 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def get_user_id_from_token(token: str) -> Optional[str]:
-    """Extract the user id from a valid JWT session token."""
-    payload = verify_token(token)
-    if payload and "sub" in payload:
-        return str(payload["sub"])
-    return None
-
-
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(_http_bearer),
 ) -> Dict[str, Any]:

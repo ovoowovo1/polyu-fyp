@@ -1,1 +1,0 @@
-"""Realtime progress service package."""

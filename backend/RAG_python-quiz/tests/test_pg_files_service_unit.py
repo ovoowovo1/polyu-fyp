@@ -1,7 +1,7 @@
 from datetime import datetime
 from unittest.mock import patch
 
-from app.services.pg import pg_service
+from app.services.pg import pg_files_service as pg_service
 from tests.pg_service_test_support import PgServiceBase
 from tests.support import FakeCursor
 

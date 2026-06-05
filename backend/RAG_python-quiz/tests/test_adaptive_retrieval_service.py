@@ -2,35 +2,13 @@ import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch
 
+from app.services.rag import adaptive_grading
 from app.services.rag import adaptive_retrieval_service
+from app.services.rag import retrieval_fusion
 from app.services.rag import retrieval_intent
-from app.utils.ingest_errors import EmbeddingProviderError
-
-
-def make_retryable_error():
-    return EmbeddingProviderError(
-        code="EMBEDDING_UPSTREAM_FAILED",
-        message="Embedding upstream failed: No successful provider responses.",
-        retryable=True,
-        provider="openrouter",
-        model="google/gemini-embedding-001",
-        base_url="https://openrouter.ai/api/v1",
-        http_status=200,
-        upstream_code=404,
-        upstream_message="No successful provider responses.",
-        raw_preview='{"error":{"message":"No successful provider responses.","code":404}}',
-    )
-
-
-def make_doc(text, *, chunk_id="chunk-1", source="doc.pdf", page=1, file_id="file-1", score=0.12):
-    return {
-        "text": text,
-        "source": source,
-        "page": page,
-        "fileId": file_id,
-        "chunkId": chunk_id,
-        "score": score,
-    }
+from tests.support import EventRecorder
+from tests.support import make_embedding_error as make_retryable_error
+from tests.support import make_retrieval_doc as make_doc
 
 
 async def collect_result(question="hello", selected_file_ids=None, **kwargs):
@@ -100,7 +78,7 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fallback_without_intent["mode"], "single")
         self.assertEqual(fallback_without_intent["search_queries"][0]["query"], "better query")
 
-    async def test_rrf_and_vector_wrapper_helpers(self):
+    async def test_rrf_helper_normalizes_documents(self):
         fused = adaptive_retrieval_service._reciprocal_rank_fusion(
             [
                 [{"chunkId": None, "text": "ignored"}],
@@ -112,25 +90,17 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
             [{"chunkId": "chunk-1", "text": "kept", "content": "kept", "source": "Unknown source", "page": "Unknown page", "fileId": None, "rrf_score": 0.0164}],
         )
 
-        with patch(
-            "app.services.rag.adaptive_retrieval_service.retrieve_vector_context",
-            AsyncMock(return_value=([], "primary")),
-        ) as retrieve_vector_context:
-            rows, mode = await adaptive_retrieval_service._retrieve_vector_context(
-                "hello",
-                ["file-1"],
-                k=9,
-                log_prefix="ExamRetriever",
-            )
-
-        self.assertEqual(rows, [])
-        self.assertEqual(mode, "primary")
-        retrieve_vector_context.assert_awaited_once_with(
-            "hello",
-            ["file-1"],
-            k=9,
-            log_prefix="ExamRetriever",
+    async def test_document_grader_uses_optional_semaphore(self):
+        generator = AsyncMock(return_value={"relevant": "yes"})
+        result = await adaptive_grading.run_document_grader(
+            "prompt",
+            {"type": "object"},
+            asyncio.Semaphore(1),
+            generate_structured_json_func=generator,
         )
+
+        self.assertEqual(result, {"relevant": "yes"})
+        generator.assert_awaited_once()
 
     async def test_run_adaptive_retrieval_handles_empty_selection(self):
         result = await collect_result(selected_file_ids=[])
@@ -142,6 +112,30 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["query_intent"]["intent_type"], "single")
         self.assertEqual(result["covered_concepts"], [])
         self.assertEqual(result["missing_concepts"], [])
+
+    def test_result_from_state_compatibility_wrapper(self):
+        result = adaptive_retrieval_service._result_from_state(
+            {
+                "filtered_documents": [make_doc("kept")],
+                "candidate_documents": [make_doc("candidate")],
+                "current_query": "better query",
+                "rewrite_count": 1,
+                "retrieval_mode_summary": {"vector_hits": 1},
+                "vector_retrieval_degraded": True,
+                "covered_concepts": ["SQL"],
+                "missing_concepts": ["NoSQL"],
+            },
+            "original",
+            {"required_concepts": ["SQL", "NoSQL"]},
+            fallback_reason="fallback",
+        )
+
+        self.assertEqual(result["documents"][0]["text"], "kept")
+        self.assertEqual(result["candidate_documents"][0]["text"], "candidate")
+        self.assertEqual(result["current_query"], "better query")
+        self.assertEqual(result["rewrite_count"], 1)
+        self.assertEqual(result["fallback_reason"], "fallback")
+        self.assertTrue(result["vector_retrieval_degraded"])
 
     def test_merge_candidate_documents_tracks_retrieval_hints_only(self):
         merged = adaptive_retrieval_service._merge_candidate_documents(
@@ -188,6 +182,28 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual([doc["chunkId"] for doc in merged], ["chunk-1"])
 
+    def test_retrieval_fusion_ignores_global_docs_without_chunk_ids(self):
+        merged = retrieval_fusion.merge_candidate_documents(
+            [
+                {
+                    "query_spec": {"label": "original question", "query": "hello", "concept": None},
+                    "vector_results": [{"text": "ignored"}],
+                    "fulltext_results": [],
+                    "fused": [],
+                }
+            ],
+            max_docs_to_grade=2,
+            normalize_doc=adaptive_retrieval_service._normalize_doc,
+            reciprocal_rank_fusion_func=lambda _inputs, k: [
+                {"text": "missing chunk"},
+                make_doc("kept", chunk_id="chunk-1", score=0.4),
+            ],
+            rrf_k=60,
+            reserved_candidates_per_subquery=2,
+        )
+
+        self.assertEqual([doc["chunkId"] for doc in merged], ["chunk-1"])
+
     def test_merge_candidate_documents_skips_duplicate_reserved_chunks(self):
         merged = adaptive_retrieval_service._merge_candidate_documents(
             [
@@ -210,10 +226,7 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([doc["chunkId"] for doc in merged], ["shared-1"])
 
     async def test_retrieve_documents_node_tracks_failures_and_candidate_summary(self):
-        emitted = []
-
-        async def emit(message, data=None, event_type="retrieval"):
-            emitted.append((message, data, event_type))
+        recorder = EventRecorder()
 
         state = {
             "question": "hello",
@@ -223,25 +236,22 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
         }
 
         with patch(
-            "app.services.rag.adaptive_retrieval_service._retrieve_vector_context",
+            "app.services.rag.adaptive_retrieval_service.retrieve_vector_context",
             AsyncMock(side_effect=make_retryable_error()),
         ), patch(
             "app.services.rag.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
             side_effect=RuntimeError("fts failed"),
         ):
-            updated = await adaptive_retrieval_service.retrieve_documents_node(state, emit)
+            updated = await adaptive_retrieval_service.retrieve_documents_node(state, recorder.emit)
 
         self.assertEqual(updated["candidate_documents"], [])
         self.assertTrue(updated["vector_retrieval_degraded"])
         self.assertTrue(updated["retrieval_mode_summary"]["vector_failed"])
         self.assertTrue(updated["retrieval_mode_summary"]["fulltext_failed"])
-        self.assertTrue(emitted)
+        self.assertTrue(recorder.events)
 
     async def test_grade_documents_and_rewrite_fallback_branches(self):
-        emitted = []
-
-        async def emit(message, data=None, event_type="retrieval"):
-            emitted.append((message, data, event_type))
+        recorder = EventRecorder()
 
         with patch(
             "app.services.rag.adaptive_retrieval_service.generate_structured_json",
@@ -252,7 +262,7 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
                     "question": "hello",
                     "candidate_documents": [make_doc("ctx")],
                 },
-                emit,
+                recorder.emit,
             )
         self.assertEqual(len(graded["filtered_documents"]), 1)
         self.assertEqual(graded["filtered_documents"][0]["covered_concepts"], [])
@@ -268,19 +278,16 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
                     "current_query": "what is the different in SQL and NOsql",
                     "query_intent": retrieval_intent.analyze_query_intent("what is the different in SQL and NOsql"),
                 },
-                emit,
+                recorder.emit,
                 max_rewrite_attempts=2,
             )
         self.assertEqual(rewritten["current_query"], "what is the different in SQL and NOsql")
         self.assertEqual(rewritten["rewrite_count"], 1)
         self.assertEqual(rewritten["query_intent"]["intent_type"], "comparison")
-        self.assertTrue(emitted)
+        self.assertTrue(recorder.events)
 
     async def test_grade_documents_tracks_covered_and_missing_concepts(self):
-        emitted = []
-
-        async def emit(message, data=None, event_type="retrieval"):
-            emitted.append((message, data, event_type))
+        recorder = EventRecorder()
 
         with patch(
             "app.services.rag.adaptive_retrieval_service.generate_structured_json",
@@ -306,14 +313,14 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
                         "search_queries": [],
                     },
                 },
-                emit,
+                recorder.emit,
             )
 
         self.assertEqual([doc["chunkId"] for doc in graded["filtered_documents"]], ["sql-1", "nosql-1"])
         self.assertEqual(graded["covered_concepts"], ["SQL", "NoSQL"])
         self.assertEqual(graded["missing_concepts"], [])
         self.assertEqual(graded["filtered_documents"][0]["covered_concepts"], ["SQL"])
-        self.assertTrue(emitted)
+        self.assertTrue(recorder.events)
 
     async def test_retrieved_for_concepts_do_not_count_as_covered_or_force_keep(self):
         with patch(
@@ -397,7 +404,7 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
             raise AssertionError(operation_name)
 
         with patch(
-            "app.services.rag.adaptive_retrieval_service._retrieve_vector_context",
+            "app.services.rag.adaptive_retrieval_service.retrieve_vector_context",
             AsyncMock(side_effect=make_retryable_error()),
         ), patch(
             "app.services.rag.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
@@ -424,7 +431,7 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
 
         retrieve_vector_context = AsyncMock(side_effect=[([], "primary"), ([doc], "primary")])
         with patch(
-            "app.services.rag.adaptive_retrieval_service._retrieve_vector_context",
+            "app.services.rag.adaptive_retrieval_service.retrieve_vector_context",
             retrieve_vector_context,
         ), patch(
             "app.services.rag.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
@@ -449,7 +456,7 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
             raise AssertionError(operation_name)
 
         with patch(
-            "app.services.rag.adaptive_retrieval_service._retrieve_vector_context",
+            "app.services.rag.adaptive_retrieval_service.retrieve_vector_context",
             AsyncMock(return_value=([], "primary")),
         ), patch(
             "app.services.rag.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
@@ -499,7 +506,7 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
             raise AssertionError(operation_name)
 
         with patch(
-            "app.services.rag.adaptive_retrieval_service._retrieve_vector_context",
+            "app.services.rag.adaptive_retrieval_service.retrieve_vector_context",
             AsyncMock(side_effect=vector_side_effect),
         ), patch(
             "app.services.rag.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",

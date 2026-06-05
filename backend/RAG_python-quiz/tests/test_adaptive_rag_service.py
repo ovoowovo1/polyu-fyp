@@ -2,60 +2,14 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from app.services.rag import adaptive_rag_service
+from tests.support import EventRecorder
 
 
 class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
-    async def test_helper_functions_and_wrapper_nodes_delegate_correctly(self):
-        normalized = adaptive_rag_service._normalize_doc(
-            {
-                "content": "chunk",
-                "document_name": "doc.pdf",
-                "pageStart": 3,
-                "fileid": "file-1",
-                "chunkid": "chunk-1",
-            }
-        )
-        self.assertEqual(normalized["source"], "doc.pdf")
-        self.assertEqual(normalized["page"], 3)
-        self.assertEqual(normalized["fileId"], "file-1")
-        self.assertEqual(normalized["chunkId"], "chunk-1")
-
-        formatted, file_ids, chunk_ids = adaptive_rag_service._format_docs_for_answer([normalized])
-        self.assertIn('source_file: "doc.pdf"', formatted)
-        self.assertEqual(file_ids, ["file-1"])
-        self.assertEqual(chunk_ids, ["chunk-1"])
-
-        extracted = adaptive_rag_service._extract_answer_text(
-            [{"content_segments": [{"segment_text": "One"}, {"segment_text": "Two"}]}]
-        )
-        self.assertEqual(extracted, "One\n\nTwo")
-        self.assertEqual(adaptive_rag_service._extract_answer_text("bad"), "")
-        self.assertEqual(
-            adaptive_rag_service._sanitize_answer_with_citations(
-                [{"content_segments": [{"segment_text": "One", "source_references": [{"file_chunk_id": "chunk-1"}]}]}],
-                ["chunk-1"],
-            ),
-            [{"content_segments": [{"segment_text": "One", "source_references": [{"file_chunk_id": "chunk-1"}]}]}],
-        )
-        self.assertEqual(
-            adaptive_rag_service._sanitize_answer_with_citations(
-                [{"content_segments": [{"segment_text": "One", "source_references": [{"file_chunk_id": "missing"}]}]}],
-                ["chunk-1"],
-            ),
-            [],
-        )
-        self.assertEqual(adaptive_rag_service._sanitize_answer_with_citations("bad", ["chunk-1"]), [])
-
-        async def emit(message, data=None, event_type="retrieval"):
-            del message, data, event_type
+    async def test_helper_functions_and_node_delegates_work(self):
+        recorder = EventRecorder()
 
         with patch(
-            "app.services.rag.adaptive_rag_service.adaptive_retrieval_service._reciprocal_rank_fusion",
-            return_value=[{"chunkId": "chunk-1"}],
-        ) as reciprocal_rank_fusion, patch(
-            "app.services.rag.adaptive_rag_service.adaptive_retrieval_service._retrieve_vector_context",
-            AsyncMock(return_value=([], "primary")),
-        ) as retrieve_vector_context, patch(
             "app.services.rag.adaptive_rag_service.adaptive_retrieval_service.retrieve_documents_node",
             AsyncMock(return_value={"step": "retrieve"}),
         ) as retrieve_documents_node, patch(
@@ -65,31 +19,19 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             "app.services.rag.adaptive_rag_service.adaptive_retrieval_service.rewrite_query_node",
             AsyncMock(return_value={"step": "rewrite"}),
         ) as rewrite_query_node:
-            self.assertEqual(adaptive_rag_service._reciprocal_rank_fusion([[]]), [{"chunkId": "chunk-1"}])
             self.assertEqual(
-                await adaptive_rag_service._retrieve_vector_context("question", ["file-1"]),
-                ([], "primary"),
-            )
-            self.assertEqual(
-                await adaptive_rag_service.retrieve_documents_node({"question": "q"}, emit),
+                await adaptive_rag_service.retrieve_documents_node({"question": "q"}, recorder.emit),
                 {"step": "retrieve"},
             )
             self.assertEqual(
-                await adaptive_rag_service.grade_documents_node({"question": "q"}, emit),
+                await adaptive_rag_service.grade_documents_node({"question": "q"}, recorder.emit),
                 {"step": "grade"},
             )
             self.assertEqual(
-                await adaptive_rag_service.rewrite_query_node({"question": "q"}, emit),
+                await adaptive_rag_service.rewrite_query_node({"question": "q"}, recorder.emit),
                 {"step": "rewrite"},
             )
 
-        reciprocal_rank_fusion.assert_called_once()
-        retrieve_vector_context.assert_awaited_once_with(
-            "question",
-            ["file-1"],
-            k=adaptive_rag_service.RETRIEVAL_K,
-            log_prefix="vector retrieval",
-        )
         retrieve_documents_node.assert_awaited_once()
         grade_documents_node.assert_awaited_once()
         rewrite_query_node.assert_awaited_once()
@@ -108,8 +50,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             ],
         }
 
-        async def emit(message, data=None, event_type="retrieval"):
-            del message, data, event_type
+        recorder = EventRecorder()
 
         with patch(
             "app.services.rag.adaptive_rag_service.citation_evidence_service.generate_citation_evidence",
@@ -155,7 +96,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
                 }
             ),
         ) as generate_citation_evidence:
-            result = await adaptive_rag_service.generate_answer_node(state, emit)
+            result = await adaptive_rag_service.generate_answer_node(state, recorder.emit)
 
         generate_citation_evidence.assert_awaited_once_with(
             "What is CAP theorem?",
@@ -208,10 +149,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_route_question_node_and_grade_generation_cover_key_branches(self):
-        events = []
-
-        async def emit(message, data=None, event_type="retrieval"):
-            events.append((message, data, event_type))
+        recorder = EventRecorder()
 
         with patch(
             "app.services.rag.adaptive_rag_service.generate_structured_json",
@@ -219,11 +157,11 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
         ):
             routed = await adaptive_rag_service.route_question_node(
                 {"question": "weather today", "selected_file_ids": ["file-1"]},
-                emit,
+                recorder.emit,
             )
 
         self.assertEqual(routed["route_decision"], "reject")
-        self.assertEqual(events[0][2], "router")
+        self.assertEqual(recorder.events[0][2], "router")
 
         with patch(
             "app.services.rag.adaptive_rag_service.generate_structured_json",
@@ -231,14 +169,14 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
         ):
             fallback_route = await adaptive_rag_service.route_question_node(
                 {"question": "course notes", "selected_file_ids": ["file-1"]},
-                emit,
+                recorder.emit,
             )
 
         self.assertEqual(fallback_route["route_decision"], "retrieve")
 
         missing_answer_state = await adaptive_rag_service.grade_generation_node(
             {"answer": "", "answer_with_citations": [], "filtered_documents": []},
-            emit,
+            recorder.emit,
         )
         self.assertEqual(missing_answer_state["result_reason"], adaptive_rag_service.UNRELIABLE_RESULT_REASON)
 
@@ -257,7 +195,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
                     "covered_concepts": [],
                     "missing_concepts": [],
                 },
-                emit,
+                recorder.emit,
             )
         self.assertNotEqual(citation_only_state.get("result_reason"), adaptive_rag_service.UNRELIABLE_RESULT_REASON)
 
@@ -274,7 +212,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             "app.services.rag.adaptive_rag_service.generate_structured_json",
             AsyncMock(return_value={"grounded": "yes", "coverage_status": "full", "reason": "ok"}),
         ):
-            accepted = await adaptive_rag_service.grade_generation_node(accepted_state, emit)
+            accepted = await adaptive_rag_service.grade_generation_node(accepted_state, recorder.emit)
         self.assertIsNone(accepted["result_reason"])
 
         partial_state = {
@@ -290,7 +228,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             "app.services.rag.adaptive_rag_service.generate_structured_json",
             AsyncMock(return_value={"grounded": "yes", "coverage_status": "partial", "reason": "limited but honest"}),
         ):
-            partial = await adaptive_rag_service.grade_generation_node(partial_state, emit)
+            partial = await adaptive_rag_service.grade_generation_node(partial_state, recorder.emit)
         self.assertEqual(partial["result_reason"], adaptive_rag_service.PARTIAL_COVERAGE_RESULT_REASON)
 
         rejected_state = {
@@ -306,7 +244,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             "app.services.rag.adaptive_rag_service.generate_structured_json",
             AsyncMock(return_value={"grounded": "no", "coverage_status": "insufficient", "reason": "hallucinated"}),
         ):
-            rejected = await adaptive_rag_service.grade_generation_node(rejected_state, emit)
+            rejected = await adaptive_rag_service.grade_generation_node(rejected_state, recorder.emit)
         self.assertEqual(rejected["result_reason"], adaptive_rag_service.UNRELIABLE_RESULT_REASON)
 
         with patch(
@@ -323,7 +261,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
                     "covered_concepts": [],
                     "missing_concepts": [],
                 },
-                emit,
+                recorder.emit,
             )
         self.assertNotIn("result_reason", accepted_on_error)
 

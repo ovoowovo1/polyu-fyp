@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
 import json
+from typing import Any
 
 
 _RAW_PREVIEW_LIMIT = 400
 
 
-def _compact_text(value: Any, limit: int = _RAW_PREVIEW_LIMIT) -> Optional[str]:
+def _compact_text(value: Any, limit: int = _RAW_PREVIEW_LIMIT) -> str | None:
     if value is None:
         return None
 
@@ -20,11 +20,7 @@ def _compact_text(value: Any, limit: int = _RAW_PREVIEW_LIMIT) -> Optional[str]:
         text = str(value)
 
     text = " ".join(text.split())
-    if not text:
-        return None
-    if len(text) > limit:
-        return text[: limit - 3] + "..."
-    return text
+    return None if not text else text[: limit - 3] + "..." if len(text) > limit else text
 
 
 class EmbeddingProviderError(RuntimeError):
@@ -37,10 +33,10 @@ class EmbeddingProviderError(RuntimeError):
         provider: str,
         model: str,
         base_url: str,
-        http_status: Optional[int] = None,
-        upstream_code: Optional[Any] = None,
-        upstream_message: Optional[str] = None,
-        raw_preview: Optional[str] = None,
+        http_status: int | None = None,
+        upstream_code: Any | None = None,
+        upstream_message: str | None = None,
+        raw_preview: str | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
@@ -54,7 +50,7 @@ class EmbeddingProviderError(RuntimeError):
         self.upstream_message = upstream_message
         self.raw_preview = _compact_text(raw_preview)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "code": self.code,
             "message": self.message,
@@ -75,18 +71,16 @@ class DocumentIngestError(RuntimeError):
         *,
         code: str,
         message: str,
-        details: Optional[str] = None,
+        details: str | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.details = _compact_text(details)
 
-    def to_dict(self) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {
+    def to_dict(self) -> dict[str, Any]:
+        return {
             "code": self.code,
             "message": self.message,
+            **({"details": self.details} if self.details else {}),
         }
-        if self.details:
-            payload["details"] = self.details
-        return payload

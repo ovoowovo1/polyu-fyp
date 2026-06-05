@@ -1,43 +1,14 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config.js';
-
-const TOKEN_KEY = 'session_token';
-const REFRESH_TOKEN_KEY = 'refresh_token';
-const USER_KEY = 'user';
-
-const hasStorage = () => typeof localStorage !== 'undefined';
-
-const extractErrorMessage = (error, fallback) => {
-    if (error.response) {
-        return error.response.data?.error || error.response.data?.detail?.error || fallback;
-    }
-    if (error.request) {
-        return 'Network connection failed. Please check your server connection.';
-    }
-    return `${fallback}: ${error.message}`;
-};
-
-const storeAuthSession = (data) => {
-    if (!hasStorage()) return;
-
-    const accessToken = data.access_token || data.session_token;
-    if (accessToken) {
-        localStorage.setItem(TOKEN_KEY, accessToken);
-    }
-    if (data.refresh_token) {
-        localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
-    }
-    if (data.user) {
-        localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-    }
-};
-
-const clearAuthSession = () => {
-    if (!hasStorage()) return;
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-};
+import { extractErrorMessage, refreshAccessToken } from './apiClient.js';
+import {
+    clearAuthSession,
+    getCurrentUser,
+    getRefreshToken,
+    getToken,
+    isAuthenticated,
+    storeAuthSession,
+} from './authSession.js';
 
 export const login = async (email, password, role = null) => {
     try {
@@ -66,16 +37,7 @@ export const register = async (email, password, fullName, role = 'student') => {
 };
 
 export const refreshToken = async () => {
-    const refreshTokenValue = getRefreshToken();
-    if (!refreshTokenValue) {
-        throw new Error('Refresh token missing');
-    }
-
-    const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-        refresh_token: refreshTokenValue,
-    });
-    storeAuthSession(response.data);
-    return response.data;
+    return refreshAccessToken();
 };
 
 export const verifyToken = async () => {
@@ -116,35 +78,4 @@ export const logout = () => {
     }
 };
 
-export const getToken = () => {
-    if (!hasStorage()) {
-        return null;
-    }
-    return localStorage.getItem(TOKEN_KEY);
-};
-
-export const getRefreshToken = () => {
-    if (!hasStorage()) {
-        return null;
-    }
-    return localStorage.getItem(REFRESH_TOKEN_KEY);
-};
-
-export const getCurrentUser = () => {
-    if (!hasStorage()) {
-        return null;
-    }
-    const userStr = localStorage.getItem(USER_KEY);
-    if (userStr) {
-        try {
-            return JSON.parse(userStr);
-        } catch (e) {
-            return null;
-        }
-    }
-    return null;
-};
-
-export const isAuthenticated = () => {
-    return !!(getToken() || getRefreshToken());
-};
+export { getCurrentUser, getRefreshToken, getToken, isAuthenticated };

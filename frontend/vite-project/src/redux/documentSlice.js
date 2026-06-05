@@ -1,13 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
-import { API_BASE_URL } from '../config.js';
-import { getToken } from '../api/auth.js';
+import { apiDelete, apiGet, apiPut } from '../api/apiClient.js';
 import { dedupe } from '../utils/requestDeduper.js';
-
-const authConfig = () => {
-    const token = getToken();
-    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-};
 
 // 異步 Thunk 用於從 API 獲取文件
 export const fetchDocuments = createAsyncThunk(
@@ -26,7 +19,7 @@ export const fetchDocuments = createAsyncThunk(
 
 
             // use dedupe utility; return an array of files (not axios response)
-            return dedupe(key, () => axios.get(`${API_BASE_URL}/files`, { params, ...authConfig() }).then(r => r.data.files || []), { ttl: 500 });
+            return dedupe(key, () => apiGet('/files', { params }).then(r => r.data.files || []), { ttl: 500 });
         } catch (error) {
             console.error('Fetch documents error:', error);
             return rejectWithValue('載入文件列表失敗');
@@ -39,12 +32,7 @@ export const deleteDocument = createAsyncThunk(
     'documents/deleteDocument',
     async (docId, { rejectWithValue }) => {
         try {
-            const config = authConfig();
-            if (config.headers) {
-                await axios.delete(`${API_BASE_URL}/files/${docId}`, config);
-            } else {
-                await axios.delete(`${API_BASE_URL}/files/${docId}`);
-            }
+            await apiDelete(`/files/${docId}`);
             return docId;
         } catch (error) {
             console.error('Delete document error:', error);
@@ -57,9 +45,8 @@ export const renameDocument = createAsyncThunk(
     'documents/renameDocument',
     async ({ docId, newName }, { rejectWithValue }) => {
         try {
-            await axios.put(`${API_BASE_URL}/files/${docId}`, null, {
+            await apiPut(`/files/${docId}`, null, {
                 params: { new_name: newName },
-                ...authConfig(),
             });
             return { docId, newName };
         } catch (error) {
@@ -76,10 +63,7 @@ export const fetchDocumentContent = createAsyncThunk(
             return null;
         }
         try {
-            const config = authConfig();
-            const response = config.headers
-                ? await axios.get(`${API_BASE_URL}/files/${docId}`, config)
-                : await axios.get(`${API_BASE_URL}/files/${docId}`);
+            const response = await apiGet(`/files/${docId}`);
             return response.data;
         } catch (error) {
             return rejectWithValue(error.response.data);

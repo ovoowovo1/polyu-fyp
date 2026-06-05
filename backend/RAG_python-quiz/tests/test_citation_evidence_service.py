@@ -4,7 +4,9 @@ from unittest.mock import AsyncMock, patch
 from llama_index.core.base.response.schema import Response
 from llama_index.core.schema import NodeWithScore, TextNode
 
+from app.services.rag import citation_adapters
 from app.services.rag import citation_evidence_service as service
+from tests.support import make_chat_client
 
 
 def _source_node(chunk_id: str, *, file_id="file-1", source="notes.pdf", page=5):
@@ -23,8 +25,6 @@ def _source_node(chunk_id: str, *, file_id="file-1", source="notes.pdf", page=5)
 
 class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
     def test_normalize_and_build_retrieval_evidence_cover_aliases(self):
-        self.assertEqual(service._normalize_concepts([" SQL ", "", "SQL", "NoSQL"]), ["SQL", "NoSQL"])
-
         documents = [
             {
                 "text": " First chunk ",
@@ -47,7 +47,6 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
             },
         ]
 
-        normalized = service.normalize_retrieved_documents(documents)
         evidence = service.build_retrieval_evidence(
             [
                 {**documents[0], "covered_concepts": ["SQL"]},
@@ -56,15 +55,15 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
             ],
             required_concepts=["SQL", "NoSQL"],
         )
+        raw_sources = evidence["raw_sources"]
 
-        self.assertEqual(normalized[0]["content"], "First chunk")
-        self.assertEqual(normalized[0]["fileId"], "file-a")
-        self.assertEqual(normalized[1]["source"], "doc-b.pdf")
-        self.assertEqual(normalized[1]["pageNumber"], 7)
-        self.assertEqual(normalized[2]["source"], "Unknown source")
-        self.assertEqual(normalized[2]["pageNumber"], "Unknown page")
-        self.assertIsNone(normalized[2]["score"])
-        self.assertEqual(evidence["raw_sources"], normalized)
+        self.assertEqual(raw_sources[0]["content"], "First chunk")
+        self.assertEqual(raw_sources[0]["fileId"], "file-a")
+        self.assertEqual(raw_sources[1]["source"], "doc-b.pdf")
+        self.assertEqual(raw_sources[1]["pageNumber"], 7)
+        self.assertEqual(raw_sources[2]["source"], "Unknown source")
+        self.assertEqual(raw_sources[2]["pageNumber"], "Unknown page")
+        self.assertIsNone(raw_sources[2]["score"])
         self.assertEqual(evidence["evidence_nodes"][0]["node_id"], "chunk-a")
         self.assertEqual(evidence["evidence_nodes"][2]["node_id"], "evidence-node-3")
         self.assertEqual(evidence["required_concepts"], ["SQL", "NoSQL"])
@@ -95,6 +94,34 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
                 [],
             ),
         )
+
+    def test_citation_adapter_runs_query_engine_with_static_retriever(self):
+        class FakeCitationQueryEngine:
+            instances = []
+
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+                self.queries = []
+                self.instances.append(self)
+
+            def query(self, question):
+                self.queries.append(question)
+                return "answer"
+
+        result = citation_adapters.run_citation_query(
+            "  What is SQL?  ",
+            [{"text": "SQL is a language", "chunkId": "chunk-1", "source": "notes.pdf"}],
+            llm="llm",
+            query_engine_cls=FakeCitationQueryEngine,
+            citation_chunk_size=123,
+        )
+
+        instance = FakeCitationQueryEngine.instances[0]
+        self.assertEqual(result, "answer")
+        self.assertEqual(instance.queries, ["What is SQL?"])
+        self.assertEqual(instance.kwargs["llm"], "llm")
+        self.assertEqual(instance.kwargs["citation_chunk_size"], 123)
+        self.assertEqual(instance.kwargs["retriever"].retrieve("ignored")[0].node.node_id, "chunk-1")
 
     def test_build_answer_with_citations_extracts_block_segments_and_unique_citations(self):
         answer_text = "Alpha [1]. Beta [2] [1]!"
@@ -308,29 +335,16 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
         retriever = service.StaticNodeRetriever(nodes)
         self.assertEqual(retriever.retrieve("question"), nodes)
 
-        captured = {}
-
-        class _FakeCompletions:
-            def create(self, **kwargs):
-                captured.update(kwargs)
-                return object()
-
-        class _FakeChat:
-            def __init__(self):
-                self.completions = _FakeCompletions()
-
-        class _FakeClient:
-            def __init__(self):
-                self.chat = _FakeChat()
-
         llm = service.OpenAICompatibleCustomLLM(model_name="test-model", api_key="abc")
-        with patch("app.services.rag.citation_evidence_service.get_llm_client", return_value=_FakeClient()), patch(
+        fake_client = make_chat_client(object())
+        with patch("app.services.rag.citation_evidence_service.get_llm_client", return_value=fake_client), patch(
             "app.services.rag.citation_evidence_service.extract_chat_completion_text",
             return_value="Completed answer",
         ):
             completion = llm.complete("Prompt text")
             streamed = list(llm.stream_complete("Prompt text"))
 
+        captured = fake_client.chat.completions.create.call_args.kwargs
         self.assertEqual(llm.metadata.model_name, "test-model")
         self.assertEqual(completion.text, "Completed answer")
         self.assertEqual(streamed[0].delta, "Completed answer")

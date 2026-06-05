@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+from contextlib import nullcontext
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
@@ -15,6 +16,24 @@ class _FakeRequest:
         return next(self._disconnect_sequence)
 
 
+async def progress_chunks(*, queued_event=None, wait_for=None):
+    queue = asyncio.Queue()
+    if queued_event is not None:
+        await queue.put(queued_event)
+    remove_queue = AsyncMock()
+    wait_for_patch = patch("app.routers.sse.asyncio.wait_for", side_effect=wait_for) if wait_for else nullcontext()
+
+    with patch("app.routers.sse.get_queue", AsyncMock(return_value=queue)), patch(
+        "app.routers.sse.remove_queue",
+        remove_queue,
+    ), wait_for_patch:
+        response = await sse.sse_progress(_FakeRequest([False, True]), "client-1")
+        chunks = [chunk async for chunk in response.body_iterator]
+
+    remove_queue.assert_awaited_once_with("client-1")
+    return chunks
+
+
 class SseApiTests(unittest.IsolatedAsyncioTestCase):
     async def test_progress_requires_client_id(self):
         with self.assertRaises(HTTPException) as ctx:
@@ -24,38 +43,16 @@ class SseApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.detail["error"], "clientId is required")
 
     async def test_progress_streams_queue_data_and_cleans_up(self):
-        queue = asyncio.Queue()
-        await queue.put({"type": "progress", "step": 1})
-        remove_queue = AsyncMock()
-
-        with patch("app.routers.sse.get_queue", AsyncMock(return_value=queue)), patch(
-            "app.routers.sse.remove_queue",
-            remove_queue,
-        ):
-            response = await sse.sse_progress(_FakeRequest([False, True]), "client-1")
-            chunks = [chunk async for chunk in response.body_iterator]
+        chunks = await progress_chunks(queued_event={"type": "progress", "step": 1})
 
         self.assertEqual(len(chunks), 1)
         self.assertIn('"type": "progress"', chunks[0])
-        remove_queue.assert_awaited_once_with("client-1")
 
     async def test_progress_sends_keepalive_on_timeout(self):
-        queue = asyncio.Queue()
-        remove_queue = AsyncMock()
-
         async def fake_wait_for(coro, timeout):
             coro.close()
             raise asyncio.TimeoutError
 
-        with patch("app.routers.sse.get_queue", AsyncMock(return_value=queue)), patch(
-            "app.routers.sse.remove_queue",
-            remove_queue,
-        ), patch(
-            "app.routers.sse.asyncio.wait_for",
-            side_effect=fake_wait_for,
-        ):
-            response = await sse.sse_progress(_FakeRequest([False, True]), "client-1")
-            chunks = [chunk async for chunk in response.body_iterator]
+        chunks = await progress_chunks(wait_for=fake_wait_for)
 
         self.assertEqual(chunks, ['data: {"type": "keepalive"}\n\n'])
-        remove_queue.assert_awaited_once_with("client-1")

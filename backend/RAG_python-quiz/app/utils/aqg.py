@@ -1,13 +1,9 @@
 from __future__ import annotations
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from typing import List, Literal, Optional, Dict
+from typing import Dict, List, Literal
 from openai import OpenAI
 import os
-import json
-from pydantic import BaseModel as _BaseModel
-from app.utils.pdf_utils import extract_text_by_page
+
 from app.utils.openai_response import extract_chat_completion_text
 
 
@@ -25,22 +21,9 @@ class MultipleChoice(BaseModel):
     answer_index: int = Field(..., ge=0, le=3, description="0-based index of correct choice")
     rationale: str = Field(..., description="Short explanation for the correct answer")
 
-class AQGRequest(BaseModel):
-    bloom_levels: List[BloomLevel]
-    num_questions: int = Field(ge=1, le=50)
-    source_text: str
-    difficulty: Optional[Difficulty] = None
-
-class _MC(_BaseModel):
-    bloom_level: BloomLevel
-    question: str
-    choices: List[str] = Field(..., min_length=4, max_length=4, description="Exactly 4 choices")
-    answer_index: int = Field(..., ge=0, le=3, description="0-based index of correct choice")
-    rationale: str
-
-class _QuizWithName(_BaseModel):
+class _QuizWithName(BaseModel):
     quiz_name: str
-    questions: List[_MC]
+    questions: List[MultipleChoice]
 
 # ---------- Utilities ----------
 
@@ -61,18 +44,6 @@ DIFFICULTY_TO_BLOOM: Dict[Difficulty, List[BloomLevel]] = {
     "medium": ["apply", "analyze"],
     "difficult": ["evaluate", "create"],
 }
-
-async def read_pdf_to_text(file_bytes: bytes) -> str:
-    """Extracts text from a PDF using pdf_utils."""
-    try:
-        pages = await extract_text_by_page(file_bytes)
-        text = "\n\n".join(pages)
-        # basic cleanup
-        text = "\n".join(line.strip() for line in text.splitlines() if line.strip())
-        return text
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"PDF parse failed: {e}")
-
 
 def maybe_truncate_or_summarize(client: OpenAI, model: str, text: str) -> str:
     """If text too long, ask the model to summarize into key points before question generation."""
@@ -97,25 +68,21 @@ def distribute_counts(total: int, levels: List[BloomLevel]) -> Dict[BloomLevel, 
     if not levels:
         return {}
     n = len(levels)
+    if total < n:
+        return {lvl: (1 if i < total else 0) for i, lvl in enumerate(levels)}
+
     base = total // n
     remainder = total % n
-    counts = {lvl: base for lvl in levels}
-    # spread the remainder deterministically by order
-    for i in range(remainder):
-        counts[levels[i]] += 1
-    # if total < n, give 1 to first `total` levels
-    if total < n:
-        counts = {lvl: (1 if i < total else 0) for i, lvl in enumerate(levels)}
-    return counts
+    return {lvl: base + (1 if i < remainder else 0) for i, lvl in enumerate(levels)}
 
 
 def build_prompt(source_text: str, level_counts: Dict[BloomLevel, int]) -> str:
     # Build per-level instruction lines and quotas
-    level_lines = []
-    for lvl, cnt in level_counts.items():
-        if cnt <= 0:
-            continue
-        level_lines.append(f"- {lvl}: {BLOOM_DESCRIPTIONS[lvl]} (generate {cnt} questions)")
+    level_lines = [
+        f"- {lvl}: {BLOOM_DESCRIPTIONS[lvl]} (generate {cnt} questions)"
+        for lvl, cnt in level_counts.items()
+        if cnt > 0
+    ]
 
     # Guard: if all counts are zero (edge case), fall back to remember with 1
     if not level_lines:

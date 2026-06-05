@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 
 from app.config import get_settings
 
@@ -9,37 +8,18 @@ class MissingCredentialError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class LLMCredentials:
-    api_key: str
-    base_url: Optional[str]
-
-
-@dataclass(frozen=True)
 class OpenAICompatibleCredentials:
     api_key: str
     base_url: str
     model: str
 
 
-def _first_llm_api_key() -> str:
-    settings = get_settings()
-    if settings.llm_api_key.strip():
-        return settings.llm_api_key.strip()
-
-    keys = [key.strip() for key in (settings.llm_api_keys or "").split(",") if key.strip()]
-    return keys[0] if keys else ""
-
-
-def get_llm_credentials() -> LLMCredentials:
-    settings = get_settings()
-    api_key = settings.llm_api_key.strip() or _first_llm_api_key()
-    if not api_key:
-        raise MissingCredentialError(
-            "Missing LLM credentials. Set LLM_API_KEY or LLM_API_KEYS in .env or the shell environment."
-        )
-
-    base_url = settings.llm_base_url.strip() or None
-    return LLMCredentials(api_key=api_key, base_url=base_url)
+def _first_llm_api_key(settings=None) -> str:
+    settings = settings or get_settings()
+    return settings.llm_api_key.strip() or next(
+        (key.strip() for key in (settings.llm_api_keys or "").split(",") if key.strip()),
+        "",
+    )
 
 
 def get_eval_llm_credentials() -> OpenAICompatibleCredentials:
@@ -60,8 +40,7 @@ def get_eval_embedding_credentials() -> OpenAICompatibleCredentials:
     api_key = (
         settings.eval_embedding_api_key.strip()
         or settings.embedding_api_key.strip()
-        or settings.llm_api_key.strip()
-        or _first_llm_api_key()
+        or _first_llm_api_key(settings)
     )
     if not api_key:
         raise MissingCredentialError(

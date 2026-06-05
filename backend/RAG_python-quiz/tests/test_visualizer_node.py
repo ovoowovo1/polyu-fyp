@@ -3,51 +3,38 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import base64
 import unittest
-from unittest.mock import AsyncMock, patch
+from contextlib import contextmanager
+from unittest.mock import AsyncMock, Mock, patch
 
 from app.agents.nodes import visualizer
-from app.agents.schemas import ExamQuestion
+from tests.support import make_chat_client, make_exam_question as make_question, make_message_response
 
 
-def make_question(**overrides):
-    data = {
-        "question_id": "q-1",
-        "question_type": "multiple_choice",
-        "bloom_level": "analyze",
-        "question_text": "What does the chart show?",
-        "choices": ["A", "B", "C", "D"],
-        "correct_answer_index": 0,
-        "model_answer": None,
-        "marks": 1,
-        "marking_scheme": [],
-        "rationale": "Chart interpretation",
-        "image_description": None,
-        "image_path": None,
-        "source_chunk_ids": [],
-    }
-    data.update(overrides)
-    return ExamQuestion(**data)
+@contextmanager
+def patched_llm_text(text, response=None):
+    client = make_chat_client(response or make_message_response())
+    with patch("app.agents.nodes.visualizer.get_llm_client", return_value=client), patch(
+        "app.agents.nodes.visualizer.extract_chat_completion_text",
+        return_value=text,
+    ):
+        yield
 
 
-def make_client(response):
-    return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: response)))
+async def assert_gemini_generation_fails(testcase, client, output_path):
+    with patch("app.agents.nodes.visualizer.get_llm_client", return_value=client), patch(
+        "app.agents.nodes.visualizer._transform_to_image_prompt",
+        AsyncMock(return_value="prompt"),
+    ):
+        testcase.assertFalse(await visualizer._generate_image_with_gemini("key", "desc", output_path))
 
 
 class VisualizerNodeTests(unittest.IsolatedAsyncioTestCase):
     async def test_classification_code_prompt_and_executor_helpers(self):
-        response = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="unused"))])
-
-        with patch("app.agents.nodes.visualizer.get_llm_client", return_value=make_client(response)), patch(
-            "app.agents.nodes.visualizer.extract_chat_completion_text",
-            return_value='{"image_type":"chart"}',
-        ):
+        with patched_llm_text('{"image_type":"chart"}'):
             image_type = await visualizer._classify_image_type("key", "Bar chart of scores")
         self.assertEqual(image_type, "chart")
 
-        with patch("app.agents.nodes.visualizer.get_llm_client", return_value=make_client(response)), patch(
-            "app.agents.nodes.visualizer.extract_chat_completion_text",
-            return_value="not-json",
-        ):
+        with patched_llm_text("not-json"):
             image_type = await visualizer._classify_image_type("key", "Concept diagram")
         self.assertEqual(image_type, "illustration")
 
@@ -59,19 +46,11 @@ class VisualizerNodeTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(visualizer._execute_matplotlib_code("raise RuntimeError('boom')"))
 
     async def test_chart_generation_helpers_cover_fence_stripping_and_file_existence(self):
-        response = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="unused"))])
-
-        with patch("app.agents.nodes.visualizer.get_llm_client", return_value=make_client(response)), patch(
-            "app.agents.nodes.visualizer.extract_chat_completion_text",
-            return_value="```python\nprint('hello')\n```",
-        ):
+        with patched_llm_text("```python\nprint('hello')\n```"):
             code = await visualizer._generate_chart_code("key", "desc", "/tmp/out.png", "model")
         self.assertEqual(code, "print('hello')")
 
-        with patch("app.agents.nodes.visualizer.get_llm_client", return_value=make_client(response)), patch(
-            "app.agents.nodes.visualizer.extract_chat_completion_text",
-            return_value="```\nprint('hello')\n```",
-        ):
+        with patched_llm_text("```\nprint('hello')\n```"):
             code = await visualizer._generate_chart_code("key", "desc", "/tmp/out.png", "model")
         self.assertEqual(code, "print('hello')")
 
@@ -95,53 +74,29 @@ class VisualizerNodeTests(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(await visualizer._generate_chart_with_matplotlib("key", "desc", output_path, "model"))
 
     async def test_transform_prompt_and_generate_image_cover_remaining_paths(self):
-        response = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="unused"))])
-        with patch("app.agents.nodes.visualizer.get_llm_client", return_value=make_client(response)), patch(
-            "app.agents.nodes.visualizer.extract_chat_completion_text",
-            return_value="optimized prompt",
-        ):
+        with patched_llm_text("optimized prompt"):
             self.assertEqual(await visualizer._transform_to_image_prompt("key", "desc"), "optimized prompt")
 
-        with patch("app.agents.nodes.visualizer.get_llm_client", return_value=make_client(response)), patch(
-            "app.agents.nodes.visualizer.extract_chat_completion_text",
-            return_value="",
-        ):
+        with patched_llm_text(""):
             self.assertEqual(await visualizer._transform_to_image_prompt("key", "desc"), "desc")
 
         with TemporaryDirectory() as tmpdir:
             output_path = str(Path(tmpdir) / "image.png")
             bad_choices = SimpleNamespace(choices=None)
-            with patch("app.agents.nodes.visualizer.get_llm_client", return_value=make_client(bad_choices)), patch(
-                "app.agents.nodes.visualizer._transform_to_image_prompt",
-                AsyncMock(return_value="prompt"),
-            ):
-                self.assertFalse(await visualizer._generate_image_with_gemini("key", "desc", output_path))
+            await assert_gemini_generation_fails(self, make_chat_client(bad_choices), output_path)
 
             missing_url = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(images=[{}], content=None))])
-            with patch("app.agents.nodes.visualizer.get_llm_client", return_value=make_client(missing_url)), patch(
-                "app.agents.nodes.visualizer._transform_to_image_prompt",
-                AsyncMock(return_value="prompt"),
-            ):
-                self.assertFalse(await visualizer._generate_image_with_gemini("key", "desc", output_path))
+            await assert_gemini_generation_fails(self, make_chat_client(missing_url), output_path)
 
             empty_bytes = "data:image/png;base64," + base64.b64encode(b"").decode("ascii")
             empty_response = SimpleNamespace(
                 choices=[SimpleNamespace(message=SimpleNamespace(images=[{"image_url": {"url": empty_bytes}}], content=None))]
             )
-            with patch("app.agents.nodes.visualizer.get_llm_client", return_value=make_client(empty_response)), patch(
-                "app.agents.nodes.visualizer._transform_to_image_prompt",
-                AsyncMock(return_value="prompt"),
-            ):
-                self.assertFalse(await visualizer._generate_image_with_gemini("key", "desc", output_path))
+            await assert_gemini_generation_fails(self, make_chat_client(empty_response), output_path)
 
-            error_client = SimpleNamespace(
-                chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom"))))
-            )
-            with patch("app.agents.nodes.visualizer.get_llm_client", return_value=error_client), patch(
-                "app.agents.nodes.visualizer._transform_to_image_prompt",
-                AsyncMock(return_value="prompt"),
-            ):
-                self.assertFalse(await visualizer._generate_image_with_gemini("key", "desc", output_path))
+            error_client = make_chat_client()
+            error_client.chat.completions.create = Mock(side_effect=RuntimeError("boom"))
+            await assert_gemini_generation_fails(self, error_client, output_path)
 
     async def test_generate_single_image_and_visualizer_node_cover_chart_illustration_and_noop_paths(self):
         self.assertIsNone(await visualizer._generate_single_image(make_question(image_description=None), "exam-1", "model"))

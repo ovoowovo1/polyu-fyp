@@ -1,12 +1,10 @@
 from unittest.mock import AsyncMock, patch
 import unittest
 
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app.routers import upload
 from app.routers.upload import router
-from app.utils.ingest_errors import DocumentIngestError, EmbeddingProviderError
+from app.utils.ingest_errors import DocumentIngestError
+from tests.support import build_authed_client, make_embedding_error
 
 
 def make_success(file_id="file-1", *, is_new=True, chunks=3):
@@ -18,31 +16,28 @@ def make_success(file_id="file-1", *, is_new=True, chunks=3):
     }
 
 
-def make_embedding_error():
-    return EmbeddingProviderError(
-        code="EMBEDDING_UPSTREAM_FAILED",
-        message="Embedding upstream failed: No successful provider responses.",
-        retryable=True,
-        provider="openrouter",
-        model="google/gemini-embedding-001",
-        base_url="https://openrouter.ai/api/v1",
-        http_status=200,
-        upstream_code=404,
-        upstream_message="No successful provider responses.",
-        raw_preview='{"error":{"message":"No successful provider responses.","code":404}}',
-    )
-
-
 class UploadApiTests(unittest.TestCase):
     def setUp(self):
-        app = FastAPI()
-        app.include_router(router)
-        app.dependency_overrides[upload.get_current_user] = lambda: {
-            "user_id": "user-1",
-            "email": "u@example.com",
-        }
-        self.app = app
-        self.client = TestClient(app)
+        self.app, self.client = build_authed_client(
+            router,
+            upload.get_current_user,
+            {"user_id": "user-1", "email": "u@example.com"},
+        )
+
+    def upload_multiple(self, side_effect):
+        mock_ingest = AsyncMock(side_effect=side_effect)
+        mock_progress = AsyncMock()
+        files = [
+            ("files", ("a.pdf", b"one", "application/pdf")),
+            ("files", ("b.pdf", b"two", "application/pdf")),
+        ]
+        with patch("app.routers.upload.ingest_document", mock_ingest), patch(
+            "app.routers.upload.publish_progress",
+            mock_progress,
+        ):
+            response = self.client.post("/upload-multiple", files=files)
+
+        return response, response.json(), mock_progress.await_args_list[-1].args[1]
 
     def test_upload_routes_require_authentication(self):
         self.app.dependency_overrides.clear()
@@ -50,88 +45,43 @@ class UploadApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_upload_multiple_returns_200_for_all_success_including_duplicates(self):
-        mock_ingest = AsyncMock(
-            side_effect=[
+        response, payload, finished_event = self.upload_multiple(
+            [
                 make_success("file-1", is_new=True, chunks=4),
                 make_success("file-1", is_new=False, chunks=0),
             ]
         )
-        mock_progress = AsyncMock()
-
-        with patch("app.routers.upload.ingest_document", mock_ingest), patch(
-            "app.routers.upload.publish_progress",
-            mock_progress,
-        ):
-            response = self.client.post(
-                "/upload-multiple",
-                files=[
-                    ("files", ("a.pdf", b"one", "application/pdf")),
-                    ("files", ("b.pdf", b"two", "application/pdf")),
-                ],
-            )
 
         self.assertEqual(response.status_code, 200)
-        payload = response.json()
         self.assertEqual(payload["status"], "success")
         self.assertEqual(payload["summary"], {"total": 2, "succeeded": 2, "failed": 0})
         self.assertFalse(payload["results"][1]["isNew"])
         self.assertEqual(payload["data"]["status"], "success")
-        finished_event = mock_progress.await_args_list[-1].args[1]
         self.assertEqual(finished_event["type"], "finished")
         self.assertEqual(finished_event["status"], "success")
 
     def test_upload_multiple_returns_207_for_partial_success(self):
-        mock_ingest = AsyncMock(side_effect=[make_success("file-1"), make_embedding_error()])
-        mock_progress = AsyncMock()
-
-        with patch("app.routers.upload.ingest_document", mock_ingest), patch(
-            "app.routers.upload.publish_progress",
-            mock_progress,
-        ):
-            response = self.client.post(
-                "/upload-multiple",
-                files=[
-                    ("files", ("a.pdf", b"one", "application/pdf")),
-                    ("files", ("b.pdf", b"two", "application/pdf")),
-                ],
-            )
+        response, payload, finished_event = self.upload_multiple([make_success("file-1"), make_embedding_error()])
 
         self.assertEqual(response.status_code, 207)
-        payload = response.json()
         self.assertEqual(payload["status"], "partial")
         self.assertEqual(payload["summary"], {"total": 2, "succeeded": 1, "failed": 1})
         self.assertEqual(payload["results"][1]["error"]["code"], "EMBEDDING_UPSTREAM_FAILED")
-        finished_event = mock_progress.await_args_list[-1].args[1]
         self.assertEqual(finished_event["status"], "partial")
 
     def test_upload_multiple_returns_502_when_all_files_fail(self):
-        mock_ingest = AsyncMock(
-            side_effect=[
+        response, payload, finished_event = self.upload_multiple(
+            [
                 make_embedding_error(),
                 DocumentIngestError(code="EMPTY_DOCUMENT", message="No extractable text was found in this PDF."),
             ]
         )
-        mock_progress = AsyncMock()
-
-        with patch("app.routers.upload.ingest_document", mock_ingest), patch(
-            "app.routers.upload.publish_progress",
-            mock_progress,
-        ):
-            response = self.client.post(
-                "/upload-multiple",
-                files=[
-                    ("files", ("a.pdf", b"one", "application/pdf")),
-                    ("files", ("b.pdf", b"two", "application/pdf")),
-                ],
-            )
 
         self.assertEqual(response.status_code, 502)
-        payload = response.json()
         self.assertEqual(payload["status"], "failed")
         self.assertEqual(payload["summary"], {"total": 2, "succeeded": 0, "failed": 2})
         self.assertEqual(payload["results"][0]["error"]["code"], "EMBEDDING_UPSTREAM_FAILED")
         self.assertEqual(payload["results"][1]["error"]["code"], "EMPTY_DOCUMENT")
-        finished_event = mock_progress.await_args_list[-1].args[1]
         self.assertEqual(finished_event["status"], "failed")
 
     def test_upload_helper_functions_cover_unexpected_errors(self):

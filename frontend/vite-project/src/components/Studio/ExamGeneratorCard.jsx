@@ -27,6 +27,7 @@ import {
     WarningOutlined
 } from '@ant-design/icons';
 import { generateExam, downloadExamPdf } from '../../api/exam';
+import { buildExamGenerationPayload, getExamProgressStage } from './examGeneratorLogic';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -89,14 +90,7 @@ export default function ExamGeneratorCard({ onExamGenerated }) {
                         clearInterval(progressInterval);
                         return prev;
                     }
-                    const stages = [
-                        { p: 20, s: t('exam.generator.analyzing') },
-                        { p: 40, s: t('exam.generator.generating') },
-                        { p: 60, s: t('exam.generator.generatingCharts') },
-                        { p: 75, s: t('exam.generator.reviewing') },
-                        { p: 85, s: t('exam.generator.generatingPdf') },
-                    ];
-                    const stage = stages.find(s => s.p > prev);
+                    const stage = getExamProgressStage(prev, t);
                     if (stage) {
                         setProgressStatus(stage.s);
                         return stage.p;
@@ -105,21 +99,17 @@ export default function ExamGeneratorCard({ onExamGenerated }) {
                 });
             }, 2000);
 
-            const totalQuestions = mcCount + shortAnswerCount + essayCount;
-            const response = await generateExam({
-                file_ids: selectedFileIds,
-                topic: topic || undefined,
+            const response = await generateExam(buildExamGenerationPayload({
+                selectedFileIds,
+                topic,
                 difficulty,
-                num_questions: totalQuestions,
-                question_types: {
-                    multiple_choice: mcCount,
-                    short_answer: shortAnswerCount,
-                    essay: essayCount
-                },
-                exam_name: examName || undefined,
-                include_images: includeImages,
-                custom_prompt: customPrompt || undefined
-            });
+                mcCount,
+                shortAnswerCount,
+                essayCount,
+                examName,
+                includeImages,
+                customPrompt,
+            }));
 
             clearInterval(progressInterval);
             setProgress(100);
@@ -493,4 +483,3 @@ export default function ExamGeneratorCard({ onExamGenerated }) {
         </>
     );
 }
-

@@ -1,63 +1,43 @@
 import unittest
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, patch
 
 import requests
 from fastapi import HTTPException
 
 from app.utils import api_key_manager
 from app.utils.ingest_errors import EmbeddingProviderError
-
-
-class FakeResponse:
-    def __init__(self, *, status_code=200, payload=None, text="", reason="OK", json_error=None):
-        self.status_code = status_code
-        self._payload = payload
-        self.text = text
-        self.reason = reason
-        self._json_error = json_error
-
-    def json(self):
-        if self._json_error:
-            raise self._json_error
-        return self._payload
-
-
-class FakeChatModel:
-    def __init__(self, **kwargs):
-        self.kwargs = kwargs
-        self.schemas = []
-
-    def with_structured_output(self, schema):
-        self.schemas.append(schema)
-        return {"schema": schema, "kwargs": self.kwargs}
-
-
-class ApiKeyManagerBase(unittest.TestCase):
-    def setUp(self):
-        self.original_llm_keys = list(api_key_manager._llm_keys)
-        self.original_llm_index = api_key_manager._llm_index
-
-    def tearDown(self):
-        api_key_manager._llm_keys = self.original_llm_keys
-        api_key_manager._llm_index = self.original_llm_index
+from tests.support import ApiKeyManagerBase, FakeResponse, make_settings
 
 
 class KeyManagementTests(ApiKeyManagerBase):
     def test_first_configured_llm_key_prefers_single_key(self):
         with patch(
             "app.utils.api_key_manager.get_settings",
-            return_value=SimpleNamespace(llm_api_key="direct-key", llm_api_keys="pool-1,pool-2"),
+            return_value=make_settings(llm_api_key="direct-key", llm_api_keys="pool-1,pool-2"),
         ):
             self.assertEqual(api_key_manager._first_configured_llm_key(), "direct-key")
 
+    def test_compatibility_facade_delegates_small_runtime_helpers(self):
+        settings = make_settings(
+            llm_api_keys="pool-1, pool-2",
+            llm_base_url="https://llm.example.com/v1",
+        )
+
+        self.assertEqual(api_key_manager._split_api_keys(" a, , b "), ["a", "b"])
+        self.assertEqual(api_key_manager._first_csv_key(" first,second "), "first")
+        with patch("app.utils.api_key_manager.get_settings", return_value=settings):
+            self.assertEqual(api_key_manager._get_llm_runtime_keys(), ["pool-1", "pool-2"])
+            self.assertEqual(api_key_manager._resolve_llm_base_url(), "https://llm.example.com/v1")
+        retry_message = api_key_manager._build_retry_error_message("op", 2, 1, RuntimeError("root"))
+        self.assertIn("All API keys failed for op", retry_message)
+        self.assertIn("attempted 1/2 configured keys", retry_message)
+
     def test_key_initialization_and_rotation(self):
-        api_key_manager._llm_keys = []
-        api_key_manager._llm_index = 99
+        self.set_llm_keys([], index=99)
 
         with patch(
             "app.utils.api_key_manager.get_settings",
-            return_value=SimpleNamespace(llm_api_key="", llm_api_keys=" key-1, ,key-2 "),
+            return_value=make_settings(llm_api_keys=" key-1, ,key-2 "),
         ):
             self.assertEqual(api_key_manager.get_llm_keys_count(), 2)
             self.assertEqual(api_key_manager.get_current_llm_api_key(), "key-1")
@@ -69,8 +49,7 @@ class KeyManagementTests(ApiKeyManagerBase):
             self.assertEqual(api_key_manager.get_current_llm_api_key(), "key-1")
 
     def test_get_llm_client_and_default_model_name(self):
-        api_key_manager._llm_keys = ["current-key"]
-        api_key_manager._llm_index = 0
+        self.set_llm_keys(["current-key"])
 
         with patch("app.utils.api_key_manager.OpenAI", return_value="client") as openai_cls:
             client = api_key_manager.get_llm_client()
@@ -82,28 +61,26 @@ class KeyManagementTests(ApiKeyManagerBase):
             api_key_manager.get_llm_client("explicit-key")
         self.assertEqual(openai_cls.call_args.kwargs["api_key"], "explicit-key")
 
-        api_key_manager._llm_keys = []
-        api_key_manager._llm_index = 0
+        self.set_llm_keys([])
         with patch(
             "app.utils.api_key_manager.get_settings",
-            return_value=SimpleNamespace(llm_api_key="", llm_api_keys="", llm_base_url="", llm_model=""),
+            return_value=make_settings(),
         ):
             with self.assertRaises(RuntimeError):
                 api_key_manager.get_llm_client()
 
         with patch(
             "app.utils.api_key_manager.get_settings",
-            return_value=SimpleNamespace(llm_model="", llm_api_key="", llm_api_keys=""),
+            return_value=make_settings(),
         ):
             self.assertEqual(api_key_manager.get_default_llm_model_name(), "gemini-2.5-flash")
 
     def test_single_llm_key_overrides_pool(self):
-        api_key_manager._llm_keys = []
-        api_key_manager._llm_index = 0
+        self.set_llm_keys([])
 
         with patch(
             "app.utils.api_key_manager.get_settings",
-            return_value=SimpleNamespace(llm_api_key="direct-key", llm_api_keys="pool-1,pool-2"),
+            return_value=make_settings(llm_api_key="direct-key", llm_api_keys="pool-1,pool-2"),
         ):
             self.assertEqual(api_key_manager.get_llm_keys_count(), 1)
             self.assertEqual(api_key_manager.get_current_llm_api_key(), "direct-key")
@@ -122,61 +99,31 @@ class KeyManagementTests(ApiKeyManagerBase):
         self.assertIsNone(api_key_manager._safe_int(True))
         self.assertIsNone(api_key_manager._safe_int("4a"))
 
-        self.assertTrue(
-            api_key_manager._is_retryable_provider_error(
-                http_status=None,
-                upstream_code=None,
-                upstream_message="No successful provider responses returned",
-            )
+        cases = (
+            (None, None, "No successful provider responses returned", True),
+            (None, None, "No endpoints found for provider", True),
+            (404, None, "missing", True),
+            (None, 404, "missing", True),
+            (503, None, "server error", True),
+            (None, "429", "rate limited", True),
+            (400, "bad", "validation failed", False),
         )
-        self.assertTrue(
-            api_key_manager._is_retryable_provider_error(
-                http_status=None,
-                upstream_code=None,
-                upstream_message="No endpoints found for provider",
-            )
-        )
-        self.assertTrue(
-            api_key_manager._is_retryable_provider_error(
-                http_status=404,
-                upstream_code=None,
-                upstream_message="missing",
-            )
-        )
-        self.assertTrue(
-            api_key_manager._is_retryable_provider_error(
-                http_status=None,
-                upstream_code=404,
-                upstream_message="missing",
-            )
-        )
-        self.assertTrue(
-            api_key_manager._is_retryable_provider_error(
-                http_status=503,
-                upstream_code=None,
-                upstream_message="server error",
-            )
-        )
-        self.assertTrue(
-            api_key_manager._is_retryable_provider_error(
-                http_status=None,
-                upstream_code="429",
-                upstream_message="rate limited",
-            )
-        )
-        self.assertFalse(
-            api_key_manager._is_retryable_provider_error(
-                http_status=400,
-                upstream_code="bad",
-                upstream_message="validation failed",
-            )
-        )
+        for http_status, upstream_code, upstream_message, expected in cases:
+            with self.subTest(http_status=http_status, upstream_code=upstream_code):
+                self.assertEqual(
+                    api_key_manager._is_retryable_provider_error(
+                        http_status=http_status,
+                        upstream_code=upstream_code,
+                        upstream_message=upstream_message,
+                    ),
+                    expected,
+                )
 
 
 class EmbeddingsTests(ApiKeyManagerBase):
     def setUp(self):
         super().setUp()
-        self.settings = SimpleNamespace(
+        self.settings = make_settings(
             embedding_api_key="embed-key",
             embedding_base_url="https://embed.example.com/v1/",
             embedding_model="embed-model",
@@ -198,14 +145,7 @@ class EmbeddingsTests(ApiKeyManagerBase):
         self.assertEqual(model.model_name, "embed-model")
         self.assertEqual(model._embedding_endpoint(), "https://embed.example.com/v1/embeddings")
 
-        settings_without_key = SimpleNamespace(
-            embedding_api_key="",
-            embedding_base_url="",
-            embedding_model="",
-            embedding_fallback_model="",
-            llm_api_key="",
-            llm_api_keys="",
-        )
+        settings_without_key = make_settings()
         with patch("app.utils.api_key_manager.get_settings", return_value=settings_without_key), self.assertRaises(RuntimeError):
             api_key_manager.OpenAIEmbeddings()
 
@@ -221,7 +161,7 @@ class EmbeddingsTests(ApiKeyManagerBase):
 
         with patch(
             "app.utils.api_key_manager.get_settings",
-            return_value=SimpleNamespace(embedding_api_key="", embedding_fallback_model="", embedding_base_url="", llm_api_key="", llm_api_keys=""),
+            return_value=make_settings(),
         ):
             self.assertIsNone(api_key_manager.get_embedding_model())
 
@@ -237,13 +177,12 @@ class EmbeddingsTests(ApiKeyManagerBase):
 
         with patch(
             "app.utils.api_key_manager.get_settings",
-            return_value=SimpleNamespace(embedding_api_key="embed-key", embedding_fallback_model="", embedding_base_url="", llm_api_key="", llm_api_keys=""),
+            return_value=make_settings(embedding_api_key="embed-key"),
         ):
             self.assertIsNone(api_key_manager.get_fallback_embedding_model())
 
     def test_embedding_model_falls_back_to_shared_llm_key(self):
-        settings = SimpleNamespace(
-            embedding_api_key="",
+        settings = make_settings(
             embedding_base_url="https://embed.example.com/v1/",
             embedding_model="embed-model",
             embedding_fallback_model="fallback-model",
@@ -359,78 +298,62 @@ class EmbeddingsTests(ApiKeyManagerBase):
                 self.assertEqual(ctx.exception.code, expected_code)
 
 
-class StructuredModelFactoryTests(ApiKeyManagerBase):
-    def test_structured_model_factories(self):
-        api_key_manager._llm_keys = ["key-1", "key-2"]
-        api_key_manager._llm_index = 1
+def fail_with_root_cause(api_key):
+    raise RuntimeError(f"root cause from {api_key}")
 
-        with patch(
-            "app.utils.api_key_manager.get_settings",
-            return_value=SimpleNamespace(llm_model="flash-model"),
-        ), patch(
-            "app.utils.api_key_manager.ChatGoogleGenerativeAI",
-            side_effect=lambda **kwargs: FakeChatModel(**kwargs),
-        ):
-            query_model = api_key_manager.get_query_entity_extraction_model()
-            graph_model = api_key_manager.get_graph_extraction_model()
-            answer_model = api_key_manager.get_answer_generation_model({"type": "object"})
-            explicit_answer_model = api_key_manager.get_answer_generation_model(
-                {"type": "object"},
-                options={"temperature": 0.2, "thinking_budget": 64},
-                api_key="explicit-key",
-            )
 
-        self.assertEqual(query_model["kwargs"]["api_key"], "key-1")
-        self.assertEqual(graph_model["kwargs"]["api_key"], "key-2")
-        self.assertEqual(answer_model["kwargs"]["temperature"], 0.7)
-        self.assertEqual(answer_model["kwargs"]["model_kwargs"]["thinking_config"]["thinking_budget"], 0)
-        self.assertEqual(explicit_answer_model["kwargs"]["api_key"], "explicit-key")
-        self.assertEqual(explicit_answer_model["kwargs"]["temperature"], 0.2)
-        self.assertEqual(
-            explicit_answer_model["kwargs"]["model_kwargs"]["thinking_config"]["thinking_budget"],
-            64,
-        )
+async def async_fail_with_root_cause(api_key):
+    fail_with_root_cause(api_key)
 
-        api_key_manager._llm_keys = []
-        api_key_manager._llm_index = 0
-        with patch(
-            "app.utils.api_key_manager.get_settings",
-            return_value=SimpleNamespace(llm_api_key="", llm_api_keys="", llm_model="flash-model"),
-        ):
-            self.assertIsNone(api_key_manager.get_query_entity_extraction_model())
-            self.assertIsNone(api_key_manager.get_graph_extraction_model())
-            self.assertIsNone(api_key_manager.get_answer_generation_model({"type": "object"}))
 
-        api_key_manager._llm_keys = ["key-1"]
-        api_key_manager._llm_index = 1
-        self.assertIsNone(api_key_manager.get_graph_extraction_model())
-        self.assertIsNone(api_key_manager.get_answer_generation_model({"type": "object"}))
+def succeed_after_first_key(api_key, calls, value):
+    calls.append(api_key)
+    if api_key == "key-1":
+        raise RuntimeError("first failed")
+    return value
+
+
+async def async_succeed_after_first_key(api_key, calls, value):
+    return succeed_after_first_key(api_key, calls, value)
+
+
+def should_not_run(api_key):
+    raise AssertionError("should not be called")
+
+
+async def async_should_not_run(api_key):
+    should_not_run(api_key)
 
 
 class RetryWrapperTests(ApiKeyManagerBase, unittest.IsolatedAsyncioTestCase):
+    async def test_async_retry_reports_attempt_count_and_root_cause(self):
+        self.set_llm_keys(["key-1", "key-2"])
+
+        with self.assertRaises(RuntimeError) as ctx:
+            await api_key_manager.with_llm_retry_async("topic_review", async_fail_with_root_cause, retry_delay=0)
+
+        message = str(ctx.exception)
+        self.assertIn("attempted 2/2 configured keys", message)
+        self.assertIn("root cause from key-2", message)
+
     async def test_async_retry_success_and_http_exception_path(self):
-        api_key_manager._llm_keys = ["key-1", "key-2"]
-        api_key_manager._llm_index = 0
+        self.set_llm_keys(["key-1", "key-2"])
         calls = []
 
-        async def succeed_on_second(api_key, value):
-            calls.append(api_key)
-            if api_key == "key-1":
-                raise RuntimeError("first failed")
-            return value
-
         with patch("app.utils.api_key_manager.asyncio.sleep", AsyncMock()) as sleeper:
-            result = await api_key_manager.with_llm_retry_async("op", succeed_on_second, 7, retry_delay=0.1)
+            result = await api_key_manager.with_llm_retry_async(
+                "op", async_succeed_after_first_key, calls, 7, retry_delay=0.1
+            )
         self.assertEqual(result, 7)
         self.assertEqual(calls, ["key-1", "key-2"])
         sleeper.assert_called_once()
 
-        api_key_manager._llm_keys = ["key-1"]
-        api_key_manager._llm_index = 0
+        self.set_llm_keys(["key-1"])
         with self.assertRaises(HTTPException) as ctx:
             await api_key_manager.with_llm_retry_async(
                 "op",
-                succeed_on_second,
+                async_succeed_after_first_key,
+                calls,
                 7,
                 retry_delay=0,
                 error_type=HTTPException,
@@ -439,9 +362,6 @@ class RetryWrapperTests(ApiKeyManagerBase, unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.status_code, 500)
 
     async def test_async_retry_raises_runtime_error_when_no_keys_configured(self):
-        async def should_not_run(api_key):
-            raise AssertionError("should not be called")
-
         with patch("app.utils.api_key_manager.reset_llm_key_index"), patch(
             "app.utils.api_key_manager.get_llm_keys_count", return_value=0
         ), patch(
@@ -449,34 +369,37 @@ class RetryWrapperTests(ApiKeyManagerBase, unittest.IsolatedAsyncioTestCase):
             return_value=None,
         ):
             with self.assertRaises(RuntimeError) as ctx:
-                await api_key_manager.with_llm_retry_async("op", should_not_run, retry_delay=0)
+                await api_key_manager.with_llm_retry_async("op", async_should_not_run, retry_delay=0)
         self.assertIn("No API keys configured for op", str(ctx.exception))
 
 
 class RetryWrapperSyncTests(ApiKeyManagerBase):
+    def test_sync_retry_reports_attempt_count_and_root_cause(self):
+        self.set_llm_keys(["key-1", "key-2"])
+
+        with self.assertRaises(RuntimeError) as ctx:
+            api_key_manager.with_llm_retry_sync("topic_review", fail_with_root_cause, retry_delay=0)
+
+        message = str(ctx.exception)
+        self.assertIn("attempted 2/2 configured keys", message)
+        self.assertIn("root cause from key-2", message)
+
     def test_sync_retry_success_sleep_and_http_exception_path(self):
-        api_key_manager._llm_keys = ["key-1", "key-2"]
-        api_key_manager._llm_index = 0
+        self.set_llm_keys(["key-1", "key-2"])
         calls = []
 
-        def succeed_on_second(api_key, value):
-            calls.append(api_key)
-            if api_key == "key-1":
-                raise RuntimeError("first failed")
-            return value
-
         with patch("app.utils.api_key_manager.time.sleep") as sleeper:
-            result = api_key_manager.with_llm_retry_sync("op", succeed_on_second, 9, retry_delay=0.1)
+            result = api_key_manager.with_llm_retry_sync("op", succeed_after_first_key, calls, 9, retry_delay=0.1)
         self.assertEqual(result, 9)
         self.assertEqual(calls, ["key-1", "key-2"])
         sleeper.assert_called_once()
 
-        api_key_manager._llm_keys = ["key-1"]
-        api_key_manager._llm_index = 0
+        self.set_llm_keys(["key-1"])
         with self.assertRaises(HTTPException) as ctx:
             api_key_manager.with_llm_retry_sync(
                 "op",
-                succeed_on_second,
+                succeed_after_first_key,
+                calls,
                 9,
                 retry_delay=0,
                 error_type=HTTPException,
@@ -485,9 +408,6 @@ class RetryWrapperSyncTests(ApiKeyManagerBase):
         self.assertEqual(ctx.exception.status_code, 500)
 
     def test_sync_retry_breaks_when_no_current_key(self):
-        def should_not_run(api_key):
-            raise AssertionError("should not be called")
-
         with patch("app.utils.api_key_manager.reset_llm_key_index"), patch(
             "app.utils.api_key_manager.get_llm_keys_count", return_value=1
         ), patch(

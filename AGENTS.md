@@ -35,6 +35,18 @@ node --test
 
 Frontend work is only complete if the relevant frontend tests pass. Full frontend coverage is not required yet.
 
+### Expo Changes
+
+If you modify Expo app files under `frontend/expo-app` or the Expo workflow at `.github/workflows/expo-tests.yml`, you must run the Expo test, lint, and TypeScript checks from `frontend/expo-app`:
+
+```powershell
+npm test
+npm run lint
+npx tsc --noEmit
+```
+
+Expo work is only complete if all three commands pass. Do not claim Expo work is verified if only lint or TypeScript was run.
+
 ### Full-Stack Changes
 
 If you modify both backend and frontend files, you must run both verification command sets. Backend changes must still satisfy 100% coverage.

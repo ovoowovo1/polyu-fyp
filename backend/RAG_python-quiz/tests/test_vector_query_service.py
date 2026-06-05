@@ -1,45 +1,21 @@
-from types import SimpleNamespace
+from contextlib import contextmanager
 from unittest.mock import patch
 import unittest
 
 from app.services.rag import vector_query_service
 from app.utils.ingest_errors import EmbeddingProviderError
+from tests.support import make_embedding_error as make_retryable_error
+from tests.support import make_embedding_settings
 
-
-def make_settings():
-    return SimpleNamespace(
-        embedding_active_column="embedding",
-        embedding_fallback_column="embedding_v2",
-    )
-
-
-def make_retryable_error():
-    return EmbeddingProviderError(
-        code="EMBEDDING_UPSTREAM_FAILED",
-        message="Embedding upstream failed: No successful provider responses.",
-        retryable=True,
-        provider="openrouter",
-        model="google/gemini-embedding-001",
-        base_url="https://openrouter.ai/api/v1",
-        http_status=200,
-        upstream_code=404,
-        upstream_message="No successful provider responses.",
-        raw_preview='{"error":{"message":"No successful provider responses.","code":404}}',
-    )
+EMBEDDING_SETTINGS = make_embedding_settings(embedding_active_column="embedding")
+UNSET = object()
 
 
 def make_no_endpoints_error():
-    return EmbeddingProviderError(
-        code="EMBEDDING_UPSTREAM_FAILED",
-        message="Embedding upstream failed: No endpoints found for google/gemini-embedding-001.",
-        retryable=True,
-        provider="openrouter",
-        model="google/gemini-embedding-001",
-        base_url="https://openrouter.ai/api/v1",
-        http_status=200,
-        upstream_code=404,
-        upstream_message="No endpoints found for google/gemini-embedding-001.",
-        raw_preview='{"error":{"message":"No endpoints found for google/gemini-embedding-001.","code":404}}',
+    message = "No endpoints found for google/gemini-embedding-001."
+    return make_retryable_error(
+        upstream_message=message,
+        raw_preview=f'{{"error":{{"message":"{message}","code":404}}}}',
     )
 
 
@@ -68,12 +44,32 @@ class ValueErrorQueryModel:
         raise ValueError("bad input")
 
 
+@contextmanager
+def patched_vector_dependencies(primary_model, *, fallback_model=UNSET, rows=UNSET):
+    fallback_patch = patch("app.services.rag.vector_query_service.get_fallback_embedding_model")
+    if fallback_model is not UNSET:
+        fallback_patch = patch(
+            "app.services.rag.vector_query_service.get_fallback_embedding_model",
+            return_value=fallback_model,
+        )
+
+    rows = rows if rows is not UNSET else [{"chunkId": "chunk"}]
+    with patch(
+        "app.services.rag.vector_query_service.get_settings",
+        return_value=EMBEDDING_SETTINGS,
+    ), patch(
+        "app.services.rag.vector_query_service.get_embedding_model",
+        return_value=primary_model,
+    ), fallback_patch as get_fallback_model, patch(
+        "app.services.rag.vector_query_service.pg_service.retrieve_graph_context",
+        return_value=rows,
+    ) as retrieve_graph_context:
+        yield retrieve_graph_context, get_fallback_model
+
+
 class VectorQueryServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_retrieve_vector_context_requires_primary_embedding_model(self):
-        with patch("app.services.rag.vector_query_service.get_settings", return_value=make_settings()), patch(
-            "app.services.rag.vector_query_service.get_embedding_model",
-            return_value=None,
-        ):
+        with patched_vector_dependencies(primary_model=None):
             with self.assertRaises(RuntimeError) as ctx:
                 await vector_query_service.retrieve_vector_context("hello", ["file-1"])
 
@@ -82,15 +78,10 @@ class VectorQueryServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_retrieve_vector_context_uses_primary_model_by_default(self):
         primary_model = SuccessfulQueryModel("google/gemini-embedding-001", [0.1, 0.2])
 
-        with patch("app.services.rag.vector_query_service.get_settings", return_value=make_settings()), patch(
-            "app.services.rag.vector_query_service.get_embedding_model",
-            return_value=primary_model,
-        ), patch(
-            "app.services.rag.vector_query_service.get_fallback_embedding_model",
-        ) as get_fallback_model, patch(
-            "app.services.rag.vector_query_service.pg_service.retrieve_graph_context",
-            return_value=[{"chunkId": "chunk-1"}],
-        ) as retrieve_graph_context:
+        with patched_vector_dependencies(primary_model, rows=[{"chunkId": "chunk-1"}]) as (
+            retrieve_graph_context,
+            get_fallback_model,
+        ):
             rows, mode = await vector_query_service.retrieve_vector_context("hello", ["file-1"])
 
         self.assertEqual(mode, "primary")
@@ -106,16 +97,11 @@ class VectorQueryServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_retrieve_vector_context_falls_back_on_retryable_provider_error(self):
         fallback_model = SuccessfulQueryModel("google/gemini-embedding-2-preview", [0.3, 0.4])
 
-        with patch("app.services.rag.vector_query_service.get_settings", return_value=make_settings()), patch(
-            "app.services.rag.vector_query_service.get_embedding_model",
-            return_value=RetryableFailingQueryModel(),
-        ), patch(
-            "app.services.rag.vector_query_service.get_fallback_embedding_model",
-            return_value=fallback_model,
-        ) as get_fallback_model, patch(
-            "app.services.rag.vector_query_service.pg_service.retrieve_graph_context",
-            return_value=[{"chunkId": "chunk-2"}],
-        ) as retrieve_graph_context:
+        with patched_vector_dependencies(
+            RetryableFailingQueryModel(),
+            fallback_model=fallback_model,
+            rows=[{"chunkId": "chunk-2"}],
+        ) as (retrieve_graph_context, get_fallback_model):
             rows, mode = await vector_query_service.retrieve_vector_context("hello", ["file-1"])
 
         self.assertEqual(mode, "fallback")
@@ -129,13 +115,7 @@ class VectorQueryServiceTests(unittest.IsolatedAsyncioTestCase):
         get_fallback_model.assert_called_once()
 
     async def test_retrieve_vector_context_re_raises_when_fallback_model_missing(self):
-        with patch("app.services.rag.vector_query_service.get_settings", return_value=make_settings()), patch(
-            "app.services.rag.vector_query_service.get_embedding_model",
-            return_value=RetryableFailingQueryModel(),
-        ), patch(
-            "app.services.rag.vector_query_service.get_fallback_embedding_model",
-            return_value=None,
-        ):
+        with patched_vector_dependencies(RetryableFailingQueryModel(), fallback_model=None):
             with self.assertRaises(EmbeddingProviderError):
                 await vector_query_service.retrieve_vector_context("hello", ["file-1"])
 
@@ -148,16 +128,11 @@ class VectorQueryServiceTests(unittest.IsolatedAsyncioTestCase):
             async def aembed_query(self, text):
                 raise make_no_endpoints_error()
 
-        with patch("app.services.rag.vector_query_service.get_settings", return_value=make_settings()), patch(
-            "app.services.rag.vector_query_service.get_embedding_model",
-            return_value=NoEndpointsFailingQueryModel(),
-        ), patch(
-            "app.services.rag.vector_query_service.get_fallback_embedding_model",
-            return_value=fallback_model,
-        ) as get_fallback_model, patch(
-            "app.services.rag.vector_query_service.pg_service.retrieve_graph_context",
-            return_value=[{"chunkId": "chunk-3"}],
-        ) as retrieve_graph_context:
+        with patched_vector_dependencies(
+            NoEndpointsFailingQueryModel(),
+            fallback_model=fallback_model,
+            rows=[{"chunkId": "chunk-3"}],
+        ) as (retrieve_graph_context, get_fallback_model):
             rows, mode = await vector_query_service.retrieve_vector_context("hello", ["file-1"])
 
         self.assertEqual(mode, "fallback")
@@ -173,15 +148,10 @@ class VectorQueryServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_retrieve_vector_context_does_not_fallback_on_empty_primary_results(self):
         primary_model = SuccessfulQueryModel("google/gemini-embedding-001", [0.1, 0.2])
 
-        with patch("app.services.rag.vector_query_service.get_settings", return_value=make_settings()), patch(
-            "app.services.rag.vector_query_service.get_embedding_model",
-            return_value=primary_model,
-        ), patch(
-            "app.services.rag.vector_query_service.get_fallback_embedding_model",
-        ) as get_fallback_model, patch(
-            "app.services.rag.vector_query_service.pg_service.retrieve_graph_context",
-            return_value=[],
-        ) as retrieve_graph_context:
+        with patched_vector_dependencies(primary_model, rows=[]) as (
+            retrieve_graph_context,
+            get_fallback_model,
+        ):
             rows, mode = await vector_query_service.retrieve_vector_context("hello", ["file-1"])
 
         self.assertEqual(mode, "primary")
@@ -190,12 +160,7 @@ class VectorQueryServiceTests(unittest.IsolatedAsyncioTestCase):
         get_fallback_model.assert_not_called()
 
     async def test_retrieve_vector_context_does_not_fallback_on_local_error(self):
-        with patch("app.services.rag.vector_query_service.get_settings", return_value=make_settings()), patch(
-            "app.services.rag.vector_query_service.get_embedding_model",
-            return_value=ValueErrorQueryModel(),
-        ), patch(
-            "app.services.rag.vector_query_service.get_fallback_embedding_model",
-        ) as get_fallback_model:
+        with patched_vector_dependencies(ValueErrorQueryModel()) as (_, get_fallback_model):
             with self.assertRaises(ValueError):
                 await vector_query_service.retrieve_vector_context("hello", ["file-1"])
 
@@ -210,12 +175,9 @@ class VectorQueryServiceTests(unittest.IsolatedAsyncioTestCase):
             async def aembed_query(self, text):
                 raise fallback_error
 
-        with patch("app.services.rag.vector_query_service.get_settings", return_value=make_settings()), patch(
-            "app.services.rag.vector_query_service.get_embedding_model",
-            return_value=RetryableFailingQueryModel(),
-        ), patch(
-            "app.services.rag.vector_query_service.get_fallback_embedding_model",
-            return_value=RetryableFallbackModel(),
+        with patched_vector_dependencies(
+            RetryableFailingQueryModel(),
+            fallback_model=RetryableFallbackModel(),
         ):
             with self.assertRaises(EmbeddingProviderError) as ctx:
                 await vector_query_service.retrieve_vector_context("hello", ["file-1"])

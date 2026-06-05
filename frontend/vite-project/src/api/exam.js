@@ -1,14 +1,5 @@
-import axios from 'axios';
 import { API_BASE_URL } from '../config.js';
-import { getToken } from './auth.js';
-
-/**
- * 獲取帶認證的 axios 配置
- */
-const getAuthConfig = () => {
-    const token = getToken();
-    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-};
+import { apiDelete, apiGet, apiPost, apiPut } from './apiClient.js';
 
 /**
  * 使用 Multi-Agent 系統生成考試（含 PDF）
@@ -22,10 +13,7 @@ const getAuthConfig = () => {
  * @returns {Promise} - API 響應
  */
 export const generateExam = async (params) => {
-    const config = getAuthConfig();
-    console.log('[Exam API] 發送考試生成請求:', params);
-    
-    return axios.post(`${API_BASE_URL}/exam/generate`, params, config);
+    return apiPost('/exam/generate', params);
 };
 
 /**
@@ -34,8 +22,7 @@ export const generateExam = async (params) => {
  * @returns {Promise} - API 響應
  */
 export const generateQuestionsOnly = async (params) => {
-    const config = getAuthConfig();
-    return axios.post(`${API_BASE_URL}/exam/generate-questions-only`, params, config);
+    return apiPost('/exam/generate-questions-only', params);
 };
 
 /**
@@ -46,11 +33,10 @@ export const generateQuestionsOnly = async (params) => {
  * @returns {Promise} - API 響應
  */
 export const regenerateExamPdf = async (examId, questions, examName) => {
-    const config = getAuthConfig();
-    return axios.post(`${API_BASE_URL}/exam/${examId}/regenerate-pdf`, {
+    return apiPost(`/exam/${examId}/regenerate-pdf`, {
         questions,
         exam_name: examName
-    }, config);
+    });
 };
 
 /**
@@ -68,9 +54,7 @@ export const getExamPdfUrl = (examId) => {
  * @param {string} filename - 下載的檔案名稱
  */
 export const downloadExamPdf = async (examId, filename = 'exam.pdf') => {
-    const config = getAuthConfig();
-    const response = await axios.get(`${API_BASE_URL}/exam/${examId}/pdf`, {
-        ...config,
+    const response = await apiGet(`/exam/${examId}/pdf`, {
         responseType: 'blob'
     });
     
@@ -90,7 +74,7 @@ export const downloadExamPdf = async (examId, filename = 'exam.pdf') => {
  * @returns {Promise} - 難度選項列表
  */
 export const getExamDifficulties = async () => {
-    return axios.get(`${API_BASE_URL}/exam/difficulties`);
+    return apiGet('/exam/difficulties');
 };
 
 /**
@@ -98,7 +82,7 @@ export const getExamDifficulties = async () => {
  * @returns {Promise} - 題目類型列表
  */
 export const getQuestionTypes = async () => {
-    return axios.get(`${API_BASE_URL}/exam/question-types`);
+    return apiGet('/exam/question-types');
 };
 
 /**
@@ -106,8 +90,7 @@ export const getQuestionTypes = async () => {
  * @param {string} classId
  */
 export const getExamList = async (classId) => {
-    const config = getAuthConfig();
-    return axios.get(`${API_BASE_URL}/exam/list`, { params: { class_id: classId }, ...config });
+    return apiGet('/exam/list', { params: { class_id: classId } });
 };
 
 /**
@@ -116,8 +99,7 @@ export const getExamList = async (classId) => {
  * @param {boolean} includeAnswers
  */
 export const getExamById = async (examId, includeAnswers = false) => {
-    const config = getAuthConfig();
-    return axios.get(`${API_BASE_URL}/exam/${examId}`, { params: { include_answers: includeAnswers }, ...config });
+    return apiGet(`/exam/${examId}`, { params: { include_answers: includeAnswers } });
 };
 
 /**
@@ -126,8 +108,7 @@ export const getExamById = async (examId, includeAnswers = false) => {
  * @param {object} data
  */
 export const updateExam = async (examId, data) => {
-    const config = getAuthConfig();
-    return axios.put(`${API_BASE_URL}/exam/${examId}`, data, config);
+    return apiPut(`/exam/${examId}`, data);
 };
 
 /**
@@ -135,8 +116,7 @@ export const updateExam = async (examId, data) => {
  * @param {string} examId
  */
 export const deleteExam = async (examId) => {
-    const config = getAuthConfig();
-    return axios.delete(`${API_BASE_URL}/exam/${examId}`, config);
+    return apiDelete(`/exam/${examId}`);
 };
 
 /**
@@ -145,8 +125,7 @@ export const deleteExam = async (examId) => {
  * @param {boolean} isPublished
  */
 export const publishExam = async (examId, isPublished = true) => {
-    const config = getAuthConfig();
-    return axios.post(`${API_BASE_URL}/exam/${examId}/publish`, { is_published: isPublished }, config);
+    return apiPost(`/exam/${examId}/publish`, { is_published: isPublished });
 };
 
 /**
@@ -154,8 +133,7 @@ export const publishExam = async (examId, isPublished = true) => {
  * @param {string} examId
  */
 export const startExam = async (examId) => {
-    const config = getAuthConfig();
-    return axios.post(`${API_BASE_URL}/exam/${examId}/start`, {}, config);
+    return apiPost(`/exam/${examId}/start`, {});
 };
 
 /**
@@ -164,8 +142,7 @@ export const startExam = async (examId) => {
  * @param {object} data - { answers: [...], time_spent_seconds?: number }
  */
 export const submitExam = async (submissionId, data) => {
-    const config = getAuthConfig();
-    return axios.post(`${API_BASE_URL}/exam/submission/${submissionId}/submit`, data, config);
+    return apiPost(`/exam/submission/${submissionId}/submit`, data);
 };
 
 /**
@@ -173,8 +150,7 @@ export const submitExam = async (submissionId, data) => {
  * @param {string} examId
  */
 export const getExamSubmissions = async (examId) => {
-    const config = getAuthConfig();
-    return axios.get(`${API_BASE_URL}/exam/${examId}/submissions`, config);
+    return apiGet(`/exam/${examId}/submissions`);
 };
 
 /**
@@ -182,8 +158,7 @@ export const getExamSubmissions = async (examId) => {
  * @param {string} examId
  */
 export const getMyExamSubmissions = async (examId) => {
-    const config = getAuthConfig();
-    return axios.get(`${API_BASE_URL}/exam/${examId}/my-submissions`, config);
+    return apiGet(`/exam/${examId}/my-submissions`);
 };
 
 /**
@@ -192,8 +167,7 @@ export const getMyExamSubmissions = async (examId) => {
  * @param {object} data - { answers_grades: [...], teacher_comment?: string }
  */
 export const gradeSubmission = async (submissionId, data) => {
-    const config = getAuthConfig();
-    return axios.put(`${API_BASE_URL}/exam/submission/${submissionId}/grade`, data, config);
+    return apiPut(`/exam/submission/${submissionId}/grade`, data);
 };
 
 /**
@@ -202,6 +176,5 @@ export const gradeSubmission = async (submissionId, data) => {
  * @returns {Promise} - { message, submission, graded_answers }
  */
 export const aiGradeSubmission = async (submissionId) => {
-    const config = getAuthConfig();
-    return axios.post(`${API_BASE_URL}/exam/submission/${submissionId}/ai-grade`, {}, config);
+    return apiPost(`/exam/submission/${submissionId}/ai-grade`, {});
 };

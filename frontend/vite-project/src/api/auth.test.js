@@ -219,7 +219,7 @@ test('verifyToken refreshes and stores new tokens when access token verification
     }
 });
 
-test('verifyToken logs out when access verification and refresh both fail', async () => {
+test('verifyToken clears storage when access verification and refresh both fail', async () => {
     const originalGet = axios.get;
     const originalPost = axios.post;
     const storage = installLocalStorage({
@@ -249,10 +249,7 @@ test('verifyToken logs out when access verification and refresh both fail', asyn
             url: `${API_BASE_URL}/auth/refresh`,
             body: { refresh_token: 'bad-refresh' },
         });
-        assert.deepEqual(postCalls[1], {
-            url: `${API_BASE_URL}/auth/logout`,
-            body: { refresh_token: 'bad-refresh' },
-        });
+        assert.equal(postCalls.length, 1);
     } finally {
         axios.get = originalGet;
         axios.post = originalPost;

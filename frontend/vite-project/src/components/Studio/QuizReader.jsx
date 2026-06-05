@@ -2,6 +2,11 @@ import React, { useState, useEffect } from 'react'
 import { Button, Radio, Typography, Space, Progress, Card, message, Spin } from 'antd'
 import { ArrowLeftOutlined, ArrowRightOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
 import { getQuizById, submitQuiz, generateQuizFeedback } from '../../api/quiz'
+import {
+    buildQuizFeedbackPayload,
+    calculateQuizScore,
+    createEmptyAnswers,
+} from './quizReaderLogic.js'
 
 const { Title, Text, Paragraph } = Typography
 
@@ -29,7 +34,7 @@ export default function QuizReader({ quizId, quizName, onClose }) {
             try {
                 const response = await getQuizById(quizId)
                 setQuestions(response.data.quiz.questions || [])
-                setUserAnswers(new Array(response.data.quiz.questions.length).fill(null))
+                setUserAnswers(createEmptyAnswers(response.data.quiz.questions.length))
             } catch (error) {
                 console.error('加載測驗失敗:', error)
                 message.error('Failed to load quiz. Please try again later.')
@@ -82,56 +87,10 @@ export default function QuizReader({ quizId, quizName, onClose }) {
         }
     }
 
-    const calculateScore = () => {
-        let correct = 0
-        questions.forEach((question, index) => {
-            if (userAnswers[index] === question.answer_index) {
-                correct++
-            }
-        })
-        return { correct, total: questions.length, percentage: Math.round((correct / questions.length) * 100) }
-    }
+    const calculateScore = () => calculateQuizScore(questions, userAnswers)
 
     // 整理成 AI 回饋所需的摘要 payload
-    const buildFeedbackPayload = (score) => {
-        const bloomStats = {}
-
-        questions.forEach((q, idx) => {
-            const key = q.bloom_level || 'general'
-            if (!bloomStats[key]) {
-                bloomStats[key] = { correct: 0, total: 0 }
-            }
-            bloomStats[key].total += 1
-            if (userAnswers[idx] === q.answer_index) {
-                bloomStats[key].correct += 1
-            }
-        })
-
-        const bloom_summary = Object.entries(bloomStats).map(([level, stats]) => ({
-            level,
-            correct: stats.correct,
-            total: stats.total,
-            accuracy: stats.total ? Math.round((stats.correct / stats.total) * 100) : 0
-        }))
-
-        const questionsSummary = questions.map((q, idx) => ({
-            question: q.question,
-            choices: q.choices,
-            correct_answer_index: q.answer_index,
-            user_answer_index: userAnswers[idx],
-            bloom_level: q.bloom_level || 'general',
-            rationale: q.rationale
-        }))
-
-        return {
-            quiz_name: quizName,
-            score: score.correct,
-            total_questions: score.total,
-            percentage: score.percentage,
-            bloom_summary,
-            questions: questionsSummary
-        }
-    }
+    const buildFeedbackPayload = (score) => buildQuizFeedbackPayload({ quizName, questions, userAnswers, score })
 
     const requestFeedback = async (score) => {
         if (!questions || !questions.length) {
@@ -279,7 +238,7 @@ export default function QuizReader({ quizId, quizName, onClose }) {
                             type="primary"
                             onClick={() => {
                                 setCurrentIndex(0)
-                                setUserAnswers(new Array(questions.length).fill(null))
+                                setUserAnswers(createEmptyAnswers(questions.length))
                                 setSelectedAnswer(null)
                                 setShowResult(false)
                                 setIsFinished(false)

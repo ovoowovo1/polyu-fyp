@@ -7,7 +7,7 @@ import { Bubble, Sender } from '@ant-design/x';
 import MarkdownIt from 'markdown-it';
 import { useTranslation } from 'react-i18next';
 
-import { handleProChatRequest, generateWelcomeMessage } from '../utils/proChatHelpers.jsx';
+import { handleProChatRequest, generateWelcomeMessage } from '../utils/proChatHelpers.js';
 import { handleProChatRequestWithSse } from '../utils/proChatRequestWithSse.js';
 import Citation from '../components/Citation.jsx';
 import TTSButton from '../components/TTSButton.jsx';
@@ -76,9 +76,7 @@ function Chat({ widthSize = null }) {
     }, []);
 
     const handleCopy = useCallback((messageContent) => {
-        console.log('handleCopy called with:', typeof messageContent, messageContent);
         const textToCopy = extractMessageText(messageContent);
-        console.log('Copying text:', textToCopy);
         if (!textToCopy.trim()) {
             message.warning('沒有可複製的內容');
             return;

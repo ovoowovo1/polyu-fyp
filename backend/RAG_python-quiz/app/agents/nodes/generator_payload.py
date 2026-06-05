@@ -4,6 +4,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 from app.agents.nodes.generator_config import DEFAULT_MARKS, SECTION_TO_ARRAY
+from app.agents.nodes.text_utils import strip_code_fences as _strip_code_fences
 
 
 class GeneratorPayloadError(RuntimeError):
@@ -19,17 +20,6 @@ class GeneratorPayloadError(RuntimeError):
         super().__init__(message)
         self.raw_text = raw_text
         self.error_context = error_context
-
-
-def _strip_code_fences(raw_text: str) -> str:
-    cleaned_text = raw_text.strip()
-    if cleaned_text.startswith("```json"):
-        cleaned_text = cleaned_text[7:]
-    elif cleaned_text.startswith("```"):
-        cleaned_text = cleaned_text[3:]
-    if cleaned_text.endswith("```"):
-        cleaned_text = cleaned_text[:-3]
-    return cleaned_text.strip()
 
 
 def _extract_outermost_json_object(text: str) -> Optional[str]:

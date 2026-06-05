@@ -66,20 +66,6 @@ export default function ExamReader({ examId, submissionId, onSubmitted, onBack }
 
   const currentQuestion = useMemo(() => questions[currentIndex], [questions, currentIndex]);
 
-  // Debugging: show information about the current question and render mode
-  useEffect(() => {
-    if (currentQuestion) {
-      // eslint-disable-next-line no-console
-      console.debug('ExamReader currentQuestion', {
-        question_id: currentQuestion.question_id,
-        type: currentQuestion.question_type,
-        choices: currentQuestion.choices,
-        marks: currentQuestion.marks,
-        selected: selectedAnswer,
-      });
-    }
-  }, [currentQuestion, selectedAnswer]);
-
   const handleAnswerSelect = (answerIndex) => {
     setSelectedAnswer(answerIndex);
     setUserAnswers((prev) => {
@@ -233,9 +219,6 @@ export default function ExamReader({ examId, submissionId, onSubmitted, onBack }
             const isShort = currentQuestion?.question_type === 'short_answer' || (isMCNoChoices && marks <= 2);
             const isLong = currentQuestion?.question_type === 'essay' || currentQuestion?.question_type === 'long_answer' || (isMCNoChoices && marks > 2);
 
-            // Debugging helper: uncomment to log current question
-            // console.debug('Rendering question:', { type: currentQuestion?.question_type, marks, choices: currentQuestion?.choices });
-
             if (isMCWithChoices) {
               return (currentQuestion.choices || []).map((choice, index) => {
               let className = 'w-full text-left p-4 rounded-lg border-2 transition-all';
@@ -309,4 +292,3 @@ export default function ExamReader({ examId, submissionId, onSubmitted, onBack }
     </div>
   );
 }
-

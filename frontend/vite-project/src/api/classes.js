@@ -1,41 +1,31 @@
-import axios from 'axios';
-import { API_BASE_URL } from '../config.js';
-import { getToken } from './auth.js';
+import { apiGet, apiPost } from './apiClient.js';
+import { isAuthenticated } from './auth.js';
 import i18n from '../i18n/config.js';
 
+const requireAuth = () => {
+    if (!isAuthenticated()) throw new Error(i18n.t('auth.notLoggedIn'));
+};
+
 export const listMyClasses = async () => {
-    const token = getToken();
-    if (!token) throw new Error(i18n.t('auth.notLoggedIn'));
-    const res = await axios.get(`${API_BASE_URL}/classes/mine`, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
+    requireAuth();
+    const res = await apiGet('/classes/mine');
     return res.data;
 };
 
 export const listMyEnrolledClasses = async () => {
-    const token = getToken();
-    if (!token) throw new Error(i18n.t('auth.notLoggedIn'));
-    const res = await axios.get(`${API_BASE_URL}/classes/enrolled`, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
+    requireAuth();
+    const res = await apiGet('/classes/enrolled');
     return res.data;
 };
 
 export const createClass = async (name) => {
-    const token = getToken();
-    if (!token) throw new Error(i18n.t('auth.notLoggedIn'));
-    const res = await axios.post(`${API_BASE_URL}/classes/`, { name }, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
+    requireAuth();
+    const res = await apiPost('/classes/', { name });
     return res.data;
 };
 
 export const inviteStudent = async (classId, email) => {
-    const token = getToken();
-    if (!token) throw new Error(i18n.t('auth.notLoggedIn'));
-    const res = await axios.post(`${API_BASE_URL}/classes/${classId}/invite`, { email }, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
+    requireAuth();
+    const res = await apiPost(`/classes/${classId}/invite`, { email });
     return res.data;
 };
-

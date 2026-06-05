@@ -4,34 +4,17 @@ from unittest.mock import AsyncMock, patch
 
 from app.services.documents import document_service
 from app.utils.ingest_errors import EmbeddingProviderError
+from tests.support import make_embedding_error as make_retryable_error
+from tests.support import make_embedding_settings
+
+STANDBY_SETTINGS = make_embedding_settings(embedding_fallback_model="google/gemini-embedding-2-preview")
+PRIMARY_ONLY_SETTINGS = make_embedding_settings(embedding_fallback_model="", embedding_fallback_column="embedding")
+FALLBACK_V2_SETTINGS = make_embedding_settings(embedding_fallback_column="embedding_v2")
+FALLBACK_LEGACY_SETTINGS = make_embedding_settings(embedding_fallback_column="embedding")
 
 
-def make_retryable_error(raw_preview="upstream"):
-    return EmbeddingProviderError(
-        code="EMBEDDING_UPSTREAM_FAILED",
-        message="Embedding upstream failed: No successful provider responses.",
-        retryable=True,
-        provider="openrouter",
-        model="google/gemini-embedding-001",
-        base_url="https://openrouter.ai/api/v1",
-        http_status=200,
-        upstream_code=404,
-        upstream_message="No successful provider responses.",
-        raw_preview=raw_preview,
-    )
-
-
-def make_settings(
-    *,
-    fallback_model="google/gemini-embedding-2-preview",
-    fallback_column="embedding_v2",
-    base_url="https://openrouter.ai/api/v1",
-):
-    return SimpleNamespace(
-        embedding_fallback_model=fallback_model,
-        embedding_fallback_column=fallback_column,
-        embedding_base_url=base_url,
-    )
+def markdown_doc(page_content):
+    return SimpleNamespace(page_content=page_content)
 
 
 class SplittingModel:
@@ -135,7 +118,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
 
         with patch(
             "app.services.documents.document_service.get_settings",
-            return_value=make_settings(),
+            return_value=STANDBY_SETTINGS,
         ), patch(
             "app.services.documents.document_service.create_embedding_model",
             side_effect=[primary_model, fallback_model],
@@ -157,7 +140,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
 
         with patch(
             "app.services.documents.document_service.get_settings",
-            return_value=make_settings(),
+            return_value=STANDBY_SETTINGS,
         ), patch(
             "app.services.documents.document_service.create_embedding_model",
             return_value=object(),
@@ -200,7 +183,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
         chunks = [{"pageContent": "chunk-1", "metadata": {"pageNumber": 1}}]
         with patch(
             "app.services.documents.document_service.get_settings",
-            return_value=make_settings(fallback_model="", fallback_column="embedding"),
+            return_value=PRIMARY_ONLY_SETTINGS,
         ), patch(
             "app.services.documents.document_service.create_embedding_model",
             return_value=object(),
@@ -215,7 +198,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
         fallback_model = object()
         with patch(
             "app.services.documents.document_service.get_settings",
-            return_value=make_settings(),
+            return_value=STANDBY_SETTINGS,
         ), patch(
             "app.services.documents.document_service.create_embedding_model",
             side_effect=[primary_model, fallback_model],
@@ -306,7 +289,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
             AsyncMock(return_value=([[1.0]], None)),
         ), patch(
             "app.services.documents.document_service.get_settings",
-            return_value=make_settings(fallback_column="embedding_v2"),
+            return_value=FALLBACK_V2_SETTINGS,
         ), patch(
             "app.services.documents.document_service.pg_service.create_graph_from_document",
             side_effect=RuntimeError("db failed"),
@@ -328,7 +311,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
             AsyncMock(return_value=([[1.0]], [[2.0]])),
         ), patch(
             "app.services.documents.document_service.get_settings",
-            return_value=make_settings(fallback_column="embedding_v2"),
+            return_value=FALLBACK_V2_SETTINGS,
         ), patch(
             "app.services.documents.document_service.pg_service.create_graph_from_document",
             return_value={"fileId": "doc-1"},
@@ -349,12 +332,12 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
 
         with patch(
             "app.services.documents.document_service.load_markdown",
-            AsyncMock(return_value=[SimpleNamespace(page_content="   "), SimpleNamespace(page_content="")]),
+            AsyncMock(return_value=[markdown_doc("   "), markdown_doc("")]),
         ):
             with self.assertRaises(RuntimeError):
                 await document_service.ingest_website(url="https://example.com")
 
-        docs = [SimpleNamespace(page_content=""), SimpleNamespace(page_content="Actual website content")]
+        docs = [markdown_doc(""), markdown_doc("Actual website content")]
         with patch("app.services.documents.document_service.load_markdown", AsyncMock(return_value=docs)), patch(
             "app.services.documents.document_service.pg_service.find_document_by_hash",
             return_value={"id": "doc-1"},
@@ -363,7 +346,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(duplicate["isNew"])
 
         progress = AsyncMock()
-        with patch("app.services.documents.document_service.load_markdown", AsyncMock(return_value=[SimpleNamespace(page_content="Actual website content")])), patch(
+        with patch("app.services.documents.document_service.load_markdown", AsyncMock(return_value=[markdown_doc("Actual website content")])), patch(
             "app.services.documents.document_service.pg_service.find_document_by_hash",
             return_value=None,
         ), patch(
@@ -371,7 +354,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
             AsyncMock(return_value=([[1.0]], None)),
         ), patch(
             "app.services.documents.document_service.get_settings",
-            return_value=make_settings(fallback_column="embedding"),
+            return_value=FALLBACK_LEGACY_SETTINGS,
         ), patch(
             "app.services.documents.document_service.pg_service.create_graph_from_document",
             return_value={"fileId": "doc-2"},

@@ -7,6 +7,25 @@ from tests.support import FakeCursor
 
 
 class PgSharedTests(unittest.TestCase):
+    def test_sql_update_builder_collects_assignments_and_params(self):
+        update = pg_shared.SqlUpdateBuilder(["updated_at = now()"])
+        update.add_if_provided("name", "Quiz 1")
+        update.add_if_provided("ignored", None)
+        update.add("questions_json = %s", "[]")
+
+        self.assertEqual(
+            update.set_clause(),
+            "updated_at = now(), name = %s, questions_json = %s",
+        )
+        self.assertEqual(update.params, ["Quiz 1", "[]"])
+
+    def test_sql_update_builder_supports_custom_assignment(self):
+        update = pg_shared.SqlUpdateBuilder()
+        update.add_if_provided("starts_at", "2026-01-01", assignment="start_at = %s")
+
+        self.assertEqual(update.set_clause(), "start_at = %s")
+        self.assertEqual(update.params, ["2026-01-01"])
+
     def test_value_helpers_cover_json_time_and_stringify_paths(self):
         parsed = {"a": 1}
         self.assertIs(pg_shared.maybe_json_load(parsed), parsed)

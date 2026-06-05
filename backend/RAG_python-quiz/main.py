@@ -19,7 +19,7 @@ from app.routers.tts import router as tts_router
 from app.routers.upload import router as upload_router
 from fastapi.responses import JSONResponse
 from app.services.core.exceptions import ServiceError
-from app.services.pg import pg_service
+from app.services.auth.tokens import validate_jwt_secret_config
 from app.services.pg.rls_context import clear_current_rls_user
 from app.utils.jwt_utils import verify_token
 
@@ -31,11 +31,8 @@ def _default_static_dir() -> str:
     return os.path.join(os.path.dirname(__file__), "static")
 
 
-def _create_startup_handler():
-    def on_startup():
-        pg_service.setup_vector_index()
-
-    return on_startup
+def _validate_startup_settings(settings) -> None:
+    validate_jwt_secret_config(settings)
 
 
 def _request_user_from_authorization(authorization: str | None) -> dict[str, str]:
@@ -148,7 +145,7 @@ def create_app(*, settings=None, static_dir: str | None = None) -> FastAPI:
     os.makedirs(os.path.join(resolved_static_dir, "pdfs"), exist_ok=True)
     os.makedirs(os.path.join(resolved_static_dir, "images"), exist_ok=True)
     app.mount("/static", StaticFiles(directory=resolved_static_dir), name="static")
-    app.add_event_handler('startup', _create_startup_handler())
+    app.add_event_handler("startup", lambda: _validate_startup_settings(settings))
     return app
 
 

@@ -1,36 +1,36 @@
-# -*- coding: utf-8 -*-
 from datetime import datetime
 import json as json_lib
 from typing import Any, Dict, List, Optional
 
 from app.services.core.exceptions import NotFoundError, PermissionDeniedError, ValidationServiceError
 from app.services.pg.pg_db import _get_conn, fetch_one, map_rows, require_row
+from app.services.pg.pg_quiz_formatters import (
+    UNTITLED_QUIZ_NAME,
+    build_default_quiz_name,
+    format_quiz_detail,
+    format_quiz_submission_with_student,
+    format_quiz_summary,
+)
+from app.services.pg.pg_quiz_submissions import (
+    build_submission_insert_params,
+    format_submission_insert_result,
+)
+from app.services.pg.pg_quiz_visibility import enforce_quiz_document_access, fetch_user_role
 from app.services.pg.pg_shared import (
     fetch_default_document_names,
     fetch_linked_documents,
-    filter_linked_documents,
     insert_submission_with_attempt,
-    linked_document_ids,
-    maybe_iso,
     maybe_json_load,
     map_quiz_submission_row,
     replace_linked_documents,
     stringify_id,
-    stringify_id_list,
+    SqlUpdateBuilder,
 )
 
 
 def _default_quiz_name(cur, file_ids: List[str]) -> str:
     names = fetch_default_document_names(cur, file_ids)
-    if len(names) == 1:
-        base = names[0].rsplit(".", 1)[0]
-        prefix = f"{base} - 測驗"
-    elif len(names) > 1:
-        prefix = f"{len(names)} 個文件的測驗"
-    else:
-        prefix = "測驗"
-    now = datetime.now()
-    return f"{prefix} ({now.strftime('%m/%d %H:%M')})"
+    return build_default_quiz_name(names, now=datetime.now())
 
 
 def save_quiz(
@@ -39,7 +39,7 @@ def save_quiz(
     quiz_name: str = None,
     class_id: str = None,
 ) -> Dict[str, Any]:
-    """保存 Quiz 以及對應文件關聯，結構對齊原實作。"""
+    """Persist generated quiz questions and linked source documents."""
     with _get_conn() as conn, conn.cursor() as cur:
         name = quiz_name or _default_quiz_name(cur, file_ids)
         cur.execute(
@@ -77,26 +77,23 @@ def update_quiz(
     name: Optional[str] = None,
     file_ids: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
-    """Update existing quiz's questions and optionally name and linked documents."""
+    """Update existing quiz questions, name, and linked documents."""
     if not quiz_data or "questions" not in quiz_data:
         raise ValidationServiceError("quiz_data must contain 'questions'")
 
     with _get_conn() as conn, conn.cursor() as cur:
+        update = SqlUpdateBuilder()
+        update.add_if_provided("name", name)
+        update.add("questions_json = %s", json_lib.dumps(quiz_data["questions"]))
+        update.add("num_questions = %s", len(quiz_data["questions"]))
         cur.execute(
-            """
+            f"""
             UPDATE quizzes
-            SET name = COALESCE(%s, name),
-                questions_json = %s,
-                num_questions = %s
+            SET {update.set_clause()}
             WHERE id = %s
             RETURNING id, name
             """,
-            (
-                name,
-                json_lib.dumps(quiz_data["questions"]),
-                len(quiz_data["questions"]),
-                quiz_id,
-            ),
+            (*update.params, quiz_id),
         )
         row = cur.fetchone()
         if not row:
@@ -126,9 +123,7 @@ def get_all_quizzes(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
             """
             cur.execute(base_sql)
         else:
-            cur.execute("SELECT role FROM users WHERE id=%s", (user_id,))
-            row = cur.fetchone()
-            role = row["role"] if row and row.get("role") else None
+            role = fetch_user_role(cur, user_id)
             if role == "teacher":
                 base_sql = """
                 SELECT q.id, q.name, q.num_questions, q.created_at, q.was_summarized, q.source_text_length,
@@ -221,31 +216,7 @@ def get_quiz_by_id(quiz_id: str, user_id: Optional[str] = None) -> Dict[str, Any
         ).get(quiz_id, [])
 
         if user_id:
-            cur.execute("SELECT role FROM users WHERE id=%s", (user_id,))
-            row = cur.fetchone()
-            role = row["role"] if row and row.get("role") else None
-            allowed = False
-            if role == "teacher":
-                class_ids = [d["class_id"] for d in documents if d.get("class_id")]
-                if class_ids:
-                    cur.execute(
-                        "SELECT 1 FROM classes WHERE id = ANY(%s::uuid[]) AND teacher_id = %s LIMIT 1",
-                        (class_ids, user_id),
-                    )
-                    if cur.fetchone():
-                        allowed = True
-            else:
-                class_ids = [d["class_id"] for d in documents if d.get("class_id")]
-                if class_ids:
-                    cur.execute(
-                        "SELECT 1 FROM class_students WHERE class_id = ANY(%s::uuid[]) AND student_id = %s LIMIT 1",
-                        (class_ids, user_id),
-                    )
-                    if cur.fetchone():
-                        allowed = True
-
-            if not allowed:
-                raise PermissionDeniedError("Permission denied")
+            enforce_quiz_document_access(cur, documents, user_id)
 
         questions = maybe_json_load(r["questions_json"], [])
         return _format_quiz_detail(r, questions, documents)
@@ -260,7 +231,7 @@ def delete_quiz(quiz_id: str, teacher_id: Optional[str] = None) -> Dict[str, Any
         error=NotFoundError("Quiz not found"),
         write=True,
     )
-    return {"message": "測驗已成功刪除", "quiz_id": str(quiz_id)}
+    return {"message": "Quiz deleted successfully", "quiz_id": str(quiz_id)}
 
 
 def submit_quiz_result(
@@ -281,21 +252,10 @@ def submit_quiz_result(
             "quiz_submissions",
             {"quiz_id": quiz_id, "student_id": student_id},
             sql,
-            lambda attempt_no: (
-                quiz_id,
-                student_id,
-                score,
-                total_questions,
-                json_lib.dumps(answers),
-                attempt_no,
-            ),
+            build_submission_insert_params(quiz_id, student_id, answers, score, total_questions),
         )
         conn.commit()
-        return {
-            "submission_id": stringify_id(row["id"]),
-            "submitted_at": maybe_iso(row["submitted_at"]),
-            "attempt_no": row.get("attempt_no"),
-        }
+        return format_submission_insert_result(row)
 
 
 def get_quiz_submissions(quiz_id: str, teacher_id: Optional[str] = None) -> List[dict]:
@@ -336,97 +296,14 @@ def get_student_quiz_submission(quiz_id: str, student_id: str) -> Optional[dict]
 
 
 def _format_quiz_summary(row: Dict[str, Any], docs: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
-    quiz_id = stringify_id(row["id"])
-    return {
-        "id": quiz_id,
-        "name": row["name"] or "未命名測驗",
-        "num_questions": row["num_questions"],
-        "created_at": maybe_iso(row["created_at"]),
-        "file_ids": stringify_id_list(row["file_ids"]),
-        "was_summarized": row["was_summarized"],
-        "source_text_length": row["source_text_length"],
-        "documents": [doc for doc in (docs.get(quiz_id) or []) if doc.get("id")],
-    }
+    return format_quiz_summary(row, docs)
 
 
 def _format_quiz_detail(
     row: Dict[str, Any], questions: List[Dict[str, Any]], documents: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
-    return {
-        "id": stringify_id(row["id"]),
-        "name": row["name"] or "未命名測驗",
-        "questions": questions,
-        "num_questions": row["num_questions"],
-        "created_at": maybe_iso(row["created_at"]),
-        "file_ids": linked_document_ids(documents),
-        "was_summarized": row["was_summarized"],
-        "source_text_length": row["source_text_length"],
-        "documents": [
-            {"id": document["id"], "name": document["name"]}
-            for document in filter_linked_documents(documents)
-        ],
-    }
+    return format_quiz_detail(row, questions, documents)
 
 
 def _format_quiz_submission_with_student(row: Dict[str, Any]) -> Dict[str, Any]:
-    return map_quiz_submission_row(
-        {
-            **row,
-            "student_name": row.get("full_name"),
-            "student_email": row.get("email"),
-        },
-        include_student=True,
-    )
-
-
-__all__ = [
-    "_default_quiz_name",
-    "delete_quiz",
-    "get_all_quizzes",
-    "get_quiz_by_id",
-    "get_quiz_submissions",
-    "get_quizzes_by_class",
-    "get_student_quiz_submission",
-    "save_quiz",
-    "submit_quiz_result",
-    "update_quiz",
-]
-
-class QuizService:
-    def get_all_quizzes(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        return get_all_quizzes(user_id)
-        
-    def get_quizzes_by_class(self, class_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        if user_id is None:
-            return get_quizzes_by_class(class_id)
-        return get_quizzes_by_class(class_id, user_id)
-        
-    def get_quiz_by_id(self, quiz_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
-        if user_id is None:
-            return get_quiz_by_id(quiz_id)
-        return get_quiz_by_id(quiz_id, user_id)
-        
-    def save_quiz(self, quiz_data: Dict[str, Any], file_ids: List[str], quiz_name: str = None, class_id: str = None) -> Dict[str, Any]:
-        return save_quiz(quiz_data, file_ids, quiz_name, class_id)
-        
-    def update_quiz(self, quiz_id: str, quiz_data: Dict[str, Any], name: Optional[str] = None, file_ids: Optional[List[str]] = None) -> Dict[str, Any]:
-        return update_quiz(quiz_id, quiz_data, name, file_ids)
-        
-    def delete_quiz(self, quiz_id: str, teacher_id: Optional[str] = None) -> Dict[str, Any]:
-        if teacher_id is None:
-            return delete_quiz(quiz_id)
-        return delete_quiz(quiz_id, teacher_id)
-        
-    def submit_quiz_result(self, quiz_id: str, student_id: str, answers: List[dict], score: float, total_questions: int) -> dict:
-        return submit_quiz_result(quiz_id, student_id, answers, score, total_questions)
-        
-    def get_quiz_submissions(self, quiz_id: str, teacher_id: Optional[str] = None) -> List[dict]:
-        if teacher_id is None:
-            return get_quiz_submissions(quiz_id)
-        return get_quiz_submissions(quiz_id, teacher_id)
-        
-    def get_student_quiz_submission(self, quiz_id: str, student_id: str) -> Optional[dict]:
-        return get_student_quiz_submission(quiz_id, student_id)
-
-def get_quiz_service() -> QuizService:
-    return QuizService()
+    return format_quiz_submission_with_student(row)

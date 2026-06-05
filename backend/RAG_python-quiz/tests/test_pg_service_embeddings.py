@@ -1,66 +1,19 @@
-from types import SimpleNamespace
 from unittest.mock import patch
 import unittest
 
-from app.services.pg import pg_service
+from app.services.pg import pg_retrieval_service as pg_service
+from tests.support import FakeConnection, FakeCursor, capture_execute_values, make_embedding_settings
 
-
-class FakeCursor:
-    def __init__(self, *, fetchone_result=None, fetchall_result=None):
-        self.fetchone_result = fetchone_result
-        self.fetchall_result = fetchall_result or []
-        self.executed = []
-
-    def execute(self, sql, params=None):
-        self.executed.append((sql, params))
-
-    def fetchone(self):
-        return self.fetchone_result
-
-    def fetchall(self):
-        return self.fetchall_result
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return False
-
-
-class FakeConnection:
-    def __init__(self, cursor):
-        self._cursor = cursor
-        self.committed = False
-
-    def cursor(self, *args, **kwargs):
-        return self._cursor
-
-    def commit(self):
-        self.committed = True
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return False
-
-
-def make_settings(active_column="embedding_v2"):
-    return SimpleNamespace(embedding_active_column=active_column)
+EMBEDDING_SETTINGS = make_embedding_settings()
 
 
 class PgServiceEmbeddingColumnTests(unittest.TestCase):
     def test_create_graph_from_document_uses_active_embedding_column(self):
-        cursor = FakeCursor(fetchone_result={"id": "doc-1"})
+        cursor = FakeCursor(fetchone_results=[{"id": "doc-1"}])
         conn = FakeConnection(cursor)
-        captured = {}
+        captured, fake_execute_values = capture_execute_values()
 
-        def fake_execute_values(cur, sql, rows, template=None):
-            captured["sql"] = sql
-            captured["rows"] = rows
-            captured["template"] = template
-
-        with patch("app.services.pg.pg_shared.get_settings", return_value=make_settings("embedding_v2")), patch(
+        with patch("app.services.pg.pg_shared.get_settings", return_value=EMBEDDING_SETTINGS), patch(
             "app.services.pg.pg_retrieval_service._get_conn",
             return_value=conn,
         ), patch("app.services.pg.pg_retrieval_service.psycopg2.extras.execute_values", side_effect=fake_execute_values):
@@ -76,20 +29,22 @@ class PgServiceEmbeddingColumnTests(unittest.TestCase):
 
     def test_retrieve_graph_context_uses_embedding_v2_and_filters_nulls(self):
         cursor = FakeCursor(
-            fetchall_result=[
-                {
-                    "text": "chunk text",
-                    "score": 0.12,
-                    "source": "doc.pdf",
-                    "page_start": 1,
-                    "fileid": "file-1",
-                    "chunkid": "chunk-1",
-                }
+            fetchall_results=[
+                [
+                    {
+                        "text": "chunk text",
+                        "score": 0.12,
+                        "source": "doc.pdf",
+                        "page_start": 1,
+                        "fileid": "file-1",
+                        "chunkid": "chunk-1",
+                    }
+                ]
             ]
         )
         conn = FakeConnection(cursor)
 
-        with patch("app.services.pg.pg_shared.get_settings", return_value=make_settings("embedding_v2")), patch(
+        with patch("app.services.pg.pg_shared.get_settings", return_value=EMBEDDING_SETTINGS), patch(
             "app.services.pg.pg_retrieval_service._get_conn",
             return_value=conn,
         ):
@@ -101,7 +56,7 @@ class PgServiceEmbeddingColumnTests(unittest.TestCase):
         self.assertEqual(rows[0]["chunkId"], "chunk-1")
 
     def test_retrieve_graph_context_can_use_legacy_embedding_column(self):
-        cursor = FakeCursor(fetchall_result=[])
+        cursor = FakeCursor(fetchall_results=[[]])
         conn = FakeConnection(cursor)
 
         with patch("app.services.pg.pg_retrieval_service._get_conn", return_value=conn):
@@ -112,14 +67,9 @@ class PgServiceEmbeddingColumnTests(unittest.TestCase):
         self.assertIn("ORDER BY c.embedding <=> %s::vector", sql)
 
     def test_create_graph_from_document_can_insert_primary_and_standby_embeddings(self):
-        cursor = FakeCursor(fetchone_result={"id": "doc-1"})
+        cursor = FakeCursor(fetchone_results=[{"id": "doc-1"}])
         conn = FakeConnection(cursor)
-        captured = {}
-
-        def fake_execute_values(cur, sql, rows, template=None):
-            captured["sql"] = sql
-            captured["rows"] = rows
-            captured["template"] = template
+        captured, fake_execute_values = capture_execute_values()
 
         with patch("app.services.pg.pg_retrieval_service._get_conn", return_value=conn), patch(
             "app.services.pg.pg_retrieval_service.psycopg2.extras.execute_values",
@@ -144,11 +94,7 @@ class PgServiceEmbeddingColumnTests(unittest.TestCase):
     def test_update_chunk_embeddings_targets_requested_column(self):
         cursor = FakeCursor()
         conn = FakeConnection(cursor)
-        captured = {}
-
-        def fake_execute_values(cur, sql, rows, template=None):
-            captured["sql"] = sql
-            captured["rows"] = rows
+        captured, fake_execute_values = capture_execute_values()
 
         with patch("app.services.pg.pg_retrieval_service._get_conn", return_value=conn), patch(
             "app.services.pg.pg_retrieval_service.psycopg2.extras.execute_values",

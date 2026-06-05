@@ -8,6 +8,14 @@ from app.routers import service_helpers
 from app.services.core.exceptions import NotFoundError, ValidationServiceError
 
 
+def capture_http_exception(awaitable):
+    try:
+        asyncio.run(awaitable)
+    except HTTPException as error:
+        return error
+    raise AssertionError("Expected HTTPException")
+
+
 class ServiceHelpersTests(unittest.TestCase):
     def test_error_and_success_payload_helpers(self):
         self.assertEqual(
@@ -51,9 +59,7 @@ class ServiceHelpersTests(unittest.TestCase):
                 lambda: (_ for _ in ()).throw(HTTPException(status_code=409, detail="conflict")),
             )
 
-        with self.assertRaises(HTTPException) as ctx:
-            asyncio.run(run_http_exception())
-        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(capture_http_exception(run_http_exception()).status_code, 409)
 
         async def run_value_error():
             return await service_helpers.run_service(
@@ -61,10 +67,9 @@ class ServiceHelpersTests(unittest.TestCase):
                 error_rules=[(service_helpers.exception_is(ValueError), 400, "Bad request")],
             )
 
-        with self.assertRaises(HTTPException) as ctx:
-            asyncio.run(run_value_error())
-        self.assertEqual(ctx.exception.status_code, 400)
-        self.assertEqual(ctx.exception.detail, "Bad request")
+        error = capture_http_exception(run_value_error())
+        self.assertEqual(error.status_code, 400)
+        self.assertEqual(error.detail, "Bad request")
 
         logger = Mock()
 
@@ -76,10 +81,9 @@ class ServiceHelpersTests(unittest.TestCase):
                 log_message="service failed: %s",
             )
 
-        with self.assertRaises(HTTPException) as ctx:
-            asyncio.run(run_runtime_error())
-        self.assertEqual(ctx.exception.status_code, 500)
-        self.assertEqual(ctx.exception.detail, "Failed: boom")
+        error = capture_http_exception(run_runtime_error())
+        self.assertEqual(error.status_code, 500)
+        self.assertEqual(error.detail, "Failed: boom")
         logger.error.assert_called_once()
 
     def test_run_service_maps_service_error(self):
@@ -88,40 +92,31 @@ class ServiceHelpersTests(unittest.TestCase):
                 lambda: (_ for _ in ()).throw(NotFoundError("Missing")),
             )
 
-        with self.assertRaises(HTTPException) as ctx:
-            asyncio.run(run_not_found())
-        self.assertEqual(ctx.exception.status_code, 404)
-        self.assertEqual(ctx.exception.detail, "Missing")
+        error = capture_http_exception(run_not_found())
+        self.assertEqual(error.status_code, 404)
+        self.assertEqual(error.detail, "Missing")
 
     def test_run_async_service_supports_http_and_fallback(self):
         async def raises_http():
             raise HTTPException(status_code=418, detail="teapot")
 
-        with self.assertRaises(HTTPException) as ctx:
-            asyncio.run(service_helpers.run_async_service(raises_http))
-        self.assertEqual(ctx.exception.status_code, 418)
+        self.assertEqual(capture_http_exception(service_helpers.run_async_service(raises_http)).status_code, 418)
 
         async def raises_runtime():
             raise ValidationServiceError("Broken")
 
-        with self.assertRaises(HTTPException) as ctx:
-            asyncio.run(
-                service_helpers.run_async_service(
-                    raises_runtime,
-                )
-            )
-        self.assertEqual(ctx.exception.status_code, 400)
-        self.assertEqual(ctx.exception.detail, "Broken")
+        error = capture_http_exception(service_helpers.run_async_service(raises_runtime))
+        self.assertEqual(error.status_code, 400)
+        self.assertEqual(error.detail, "Broken")
 
         async def raises_value_error():
             raise ValueError("bad async input")
 
-        with self.assertRaises(HTTPException) as ctx:
-            asyncio.run(
-                service_helpers.run_async_service(
-                    raises_value_error,
-                    error_rules=[(service_helpers.exception_is(ValueError), 422, lambda error: str(error))],
-                )
+        error = capture_http_exception(
+            service_helpers.run_async_service(
+                raises_value_error,
+                error_rules=[(service_helpers.exception_is(ValueError), 422, lambda error: str(error))],
             )
-        self.assertEqual(ctx.exception.status_code, 422)
-        self.assertEqual(ctx.exception.detail, "bad async input")
+        )
+        self.assertEqual(error.status_code, 422)
+        self.assertEqual(error.detail, "bad async input")

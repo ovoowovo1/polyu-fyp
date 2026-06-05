@@ -7,7 +7,6 @@ from app.services.core.exceptions import ServiceError
 
 
 ErrorPredicate = Callable[[Exception], bool]
-DetailFactory = Callable[[Exception], Any]
 
 
 def error_detail(
@@ -61,6 +60,26 @@ def service_error_to_http(error: ServiceError) -> HTTPException:
     return HTTPException(status_code=error.status_code, detail=error.detail)
 
 
+def _raise_mapped_error(
+    error: Exception,
+    *,
+    error_rules: list[tuple[ErrorPredicate, int, Any]] | None,
+    fallback_status: int,
+    fallback_detail: Any,
+    logger,
+    log_message: str | None,
+) -> None:
+    for predicate, status_code, detail in error_rules or []:
+        if predicate(error):
+            resolved_detail = detail(error) if callable(detail) else detail
+            raise HTTPException(status_code=status_code, detail=resolved_detail) from error
+
+    if logger and log_message:
+        logger.error(log_message, error, exc_info=(fallback_status >= 500))
+    resolved_detail = fallback_detail(error) if callable(fallback_detail) else fallback_detail
+    raise HTTPException(status_code=fallback_status, detail=resolved_detail) from error
+
+
 async def run_service(
     func: Callable[..., Any],
     *args: Any,
@@ -70,22 +89,9 @@ async def run_service(
     logger=None,
     log_message: str | None = None,
 ) -> Any:
-    try:
-        return await asyncio.to_thread(func, *args)
-    except HTTPException:
-        raise
-    except ServiceError as error:
-        raise service_error_to_http(error) from error
-    except Exception as error:
-        for predicate, status_code, detail in error_rules or []:
-            if predicate(error):
-                resolved_detail = detail(error) if callable(detail) else detail
-                raise HTTPException(status_code=status_code, detail=resolved_detail) from error
-
-        if logger and log_message:
-            logger.error(log_message, error, exc_info=(fallback_status >= 500))
-        resolved_detail = fallback_detail(error) if callable(fallback_detail) else fallback_detail
-        raise HTTPException(status_code=fallback_status, detail=resolved_detail) from error
+    return await _run_with_error_mapping(
+        lambda: asyncio.to_thread(func, *args), error_rules, fallback_status, fallback_detail, logger, log_message
+    )
 
 
 async def run_async_service(
@@ -98,19 +104,24 @@ async def run_async_service(
     log_message: str | None = None,
     **kwargs: Any,
 ) -> Any:
+    return await _run_with_error_mapping(
+        lambda: func(*args, **kwargs), error_rules, fallback_status, fallback_detail, logger, log_message
+    )
+
+
+async def _run_with_error_mapping(call, error_rules, fallback_status, fallback_detail, logger, log_message):
     try:
-        return await func(*args, **kwargs)
+        return await call()
     except HTTPException:
         raise
     except ServiceError as error:
         raise service_error_to_http(error) from error
     except Exception as error:
-        for predicate, status_code, detail in error_rules or []:
-            if predicate(error):
-                resolved_detail = detail(error) if callable(detail) else detail
-                raise HTTPException(status_code=status_code, detail=resolved_detail) from error
-
-        if logger and log_message:
-            logger.error(log_message, error, exc_info=(fallback_status >= 500))
-        resolved_detail = fallback_detail(error) if callable(fallback_detail) else fallback_detail
-        raise HTTPException(status_code=fallback_status, detail=resolved_detail) from error
+        _raise_mapped_error(
+            error,
+            error_rules=error_rules,
+            fallback_status=fallback_status,
+            fallback_detail=fallback_detail,
+            logger=logger,
+            log_message=log_message,
+        )

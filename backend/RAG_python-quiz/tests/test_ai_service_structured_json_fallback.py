@@ -1,24 +1,13 @@
 import unittest
-from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from app.services.ai.llm import structured_json
-
-
-def make_chat_client(*responses):
-    return SimpleNamespace(
-        chat=SimpleNamespace(
-            completions=SimpleNamespace(create=Mock(side_effect=list(responses)))
-        )
-    )
+from tests.support import fake_llm_retry, make_chat_client, make_completion_response
 
 
 class StructuredJsonFallbackTests(unittest.IsolatedAsyncioTestCase):
     async def test_generate_structured_json_gemini_json_schema_success_unchanged(self):
-        client = make_chat_client(SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop")]))
-
-        async def fake_retry(_name, func, *args, error_type=RuntimeError):
-            return await func("api-key", *args)
+        client = make_chat_client(make_completion_response())
 
         with patch("app.services.ai.llm.structured_json.get_llm_client", return_value=client), patch(
             "app.services.ai.llm.structured_json.get_default_llm_model_name",
@@ -28,7 +17,7 @@ class StructuredJsonFallbackTests(unittest.IsolatedAsyncioTestCase):
             return_value='{"ok": true}',
         ), patch(
             "app.services.ai.llm.structured_json.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             result = await structured_json.generate_structured_json(
                 "prompt",
@@ -47,12 +36,9 @@ class StructuredJsonFallbackTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_generate_structured_json_empty_choices_falls_back_to_plain_json(self):
         client = make_chat_client(
-            SimpleNamespace(choices=None),
-            SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop")]),
+            make_completion_response(choices=False),
+            make_completion_response(),
         )
-
-        async def fake_retry(_name, func, *args, error_type=RuntimeError):
-            return await func("api-key", *args)
 
         with patch("app.services.ai.llm.structured_json.get_llm_client", return_value=client), patch(
             "app.services.ai.llm.structured_json.get_default_llm_model_name",
@@ -62,7 +48,7 @@ class StructuredJsonFallbackTests(unittest.IsolatedAsyncioTestCase):
             side_effect=["", '{"ok": true}'],
         ), patch(
             "app.services.ai.llm.structured_json.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             result = await structured_json.generate_structured_json(
                 "prompt",
@@ -82,12 +68,9 @@ class StructuredJsonFallbackTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_generate_structured_json_falls_back_on_invalid_structured_output(self):
         client = make_chat_client(
-            SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop")]),
-            SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop")]),
+            make_completion_response(),
+            make_completion_response(),
         )
-
-        async def fake_retry(_name, func, *args, error_type=RuntimeError):
-            return await func("api-key", *args)
 
         with patch("app.services.ai.llm.structured_json.get_llm_client", return_value=client), patch(
             "app.services.ai.llm.structured_json.get_default_llm_model_name",
@@ -97,7 +80,7 @@ class StructuredJsonFallbackTests(unittest.IsolatedAsyncioTestCase):
             side_effect=['{"wrong": true}', '{"ok": true}'],
         ), patch(
             "app.services.ai.llm.structured_json.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             result = await structured_json.generate_structured_json(
                 "prompt",
@@ -108,10 +91,7 @@ class StructuredJsonFallbackTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, {"ok": True})
 
     async def test_generate_structured_json_deepseek_plain_json_fenced_block_parses(self):
-        client = make_chat_client(SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop")]))
-
-        async def fake_retry(_name, func, *args, error_type=RuntimeError):
-            return await func("api-key", *args)
+        client = make_chat_client(make_completion_response())
 
         with patch("app.services.ai.llm.structured_json.get_llm_client", return_value=client), patch(
             "app.services.ai.llm.structured_json.get_default_llm_model_name",
@@ -121,7 +101,7 @@ class StructuredJsonFallbackTests(unittest.IsolatedAsyncioTestCase):
             return_value='```json\n{"ok": true}\n```',
         ), patch(
             "app.services.ai.llm.structured_json.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             result = await structured_json.generate_structured_json(
                 "prompt",
@@ -135,10 +115,7 @@ class StructuredJsonFallbackTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Return only valid JSON matching this schema", create_kwargs["messages"][0]["content"])
 
     async def test_generate_structured_json_invalid_plain_json_raises_clear_runtime_error(self):
-        client = make_chat_client(SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop")]))
-
-        async def fake_retry(_name, func, *args, error_type=RuntimeError):
-            return await func("api-key", *args)
+        client = make_chat_client(make_completion_response())
 
         with patch("app.services.ai.llm.structured_json.get_llm_client", return_value=client), patch(
             "app.services.ai.llm.structured_json.get_default_llm_model_name",
@@ -148,7 +125,7 @@ class StructuredJsonFallbackTests(unittest.IsolatedAsyncioTestCase):
             return_value="not-json",
         ), patch(
             "app.services.ai.llm.structured_json.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             with self.assertRaisesRegex(RuntimeError, "invalid JSON"):
                 await structured_json.generate_structured_json(
@@ -158,10 +135,7 @@ class StructuredJsonFallbackTests(unittest.IsolatedAsyncioTestCase):
                 )
 
     async def test_generate_structured_json_non_object_plain_json_raises_clear_runtime_error(self):
-        client = make_chat_client(SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop")]))
-
-        async def fake_retry(_name, func, *args, error_type=RuntimeError):
-            return await func("api-key", *args)
+        client = make_chat_client(make_completion_response())
 
         with patch("app.services.ai.llm.structured_json.get_llm_client", return_value=client), patch(
             "app.services.ai.llm.structured_json.get_default_llm_model_name",
@@ -171,7 +145,7 @@ class StructuredJsonFallbackTests(unittest.IsolatedAsyncioTestCase):
             return_value="[]",
         ), patch(
             "app.services.ai.llm.structured_json.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             with self.assertRaisesRegex(RuntimeError, "not an object"):
                 await structured_json.generate_structured_json(

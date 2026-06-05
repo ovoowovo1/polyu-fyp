@@ -4,18 +4,17 @@ from pydantic import BaseModel
 
 from app.logger import get_logger
 from app.routers.service_helpers import error_detail, run_service, success_payload
-from app.services.pg.pg_auth_service import (
-    login as auth_login,
-    logout as auth_logout,
-    refresh_session as auth_refresh_session,
-    register as auth_register,
-)
+from app.services.auth.service import auth_service
 from app.utils.jwt_utils import verify_token
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 security = HTTPBearer(auto_error=False)
+auth_login = auth_service.login
+auth_register = auth_service.register
+auth_refresh_session = auth_service.refresh_session
+auth_logout = auth_service.logout
 
 
 class LoginRequest(BaseModel):

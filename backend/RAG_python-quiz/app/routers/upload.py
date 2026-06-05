@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
@@ -18,22 +18,20 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="", tags=["upload"])
 
 
-def _build_success_result(filename: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-    result = {
+def _build_success_result(filename: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return {
         "filename": filename,
         "status": "success",
         "message": payload.get("message") or f"Uploaded {filename}",
+        **{
+            key: payload[key]
+            for key in ("fileId", "isNew", "chunksCount")
+            if payload.get(key) is not None
+        },
     }
-    if payload.get("fileId") is not None:
-        result["fileId"] = payload["fileId"]
-    if payload.get("isNew") is not None:
-        result["isNew"] = payload["isNew"]
-    if payload.get("chunksCount") is not None:
-        result["chunksCount"] = payload["chunksCount"]
-    return result
 
 
-def _build_failure_result(filename: str, error: Exception) -> Dict[str, Any]:
+def _build_failure_result(filename: str, error: Exception) -> dict[str, Any]:
     if isinstance(error, EmbeddingProviderError):
         error_payload = error.to_dict()
     elif isinstance(error, DocumentIngestError):
@@ -53,26 +51,18 @@ def _build_failure_result(filename: str, error: Exception) -> Dict[str, Any]:
     }
 
 
-def _summarize_results(results: List[Dict[str, Any]]) -> Dict[str, int]:
+def _summarize_results(results: list[dict[str, Any]]) -> dict[str, int]:
     succeeded = sum(1 for result in results if result["status"] == "success")
     failed = len(results) - succeeded
     return {"total": len(results), "succeeded": succeeded, "failed": failed}
 
 
-def _batch_status(summary: Dict[str, int]) -> str:
-    if summary["failed"] == 0:
-        return "success"
-    if summary["succeeded"] == 0:
-        return "failed"
-    return "partial"
+def _batch_status(summary: dict[str, int]) -> str:
+    return "success" if summary["failed"] == 0 else "failed" if summary["succeeded"] == 0 else "partial"
 
 
 def _http_status_for_batch(batch_status: str) -> int:
-    if batch_status == "success":
-        return 200
-    if batch_status == "partial":
-        return 207
-    return 502
+    return {"success": 200, "partial": 207}.get(batch_status, 502)
 
 
 def _progress_payload(
@@ -82,7 +72,7 @@ def _progress_payload(
     total: int | None = None,
     current_file: str | None = None,
     last_file_status: str | None = None,
-    extra: Optional[dict[str, Any]] = None,
+    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = {
         "type": event_type,
@@ -96,7 +86,7 @@ def _progress_payload(
     return payload
 
 
-def _upload_batch_payload(results: List[Dict[str, Any]]) -> dict[str, Any]:
+def _upload_batch_payload(results: list[dict[str, Any]]) -> dict[str, Any]:
     summary = _summarize_results(results)
     status = _batch_status(summary)
     return success_payload(
@@ -112,9 +102,9 @@ def _upload_batch_payload(results: List[Dict[str, Any]]) -> dict[str, Any]:
 
 @router.post("/upload-multiple")
 async def upload_multiple(
-    files: Optional[List[UploadFile]] = File(default=None),
-    clientId: Optional[str] = Query(default=None),
-    class_id: Optional[str] = Query(default=None),
+    files: list[UploadFile] | None = File(default=None),
+    clientId: str | None = Query(default=None),
+    class_id: str | None = Query(default=None),
     user: dict = Depends(get_current_user),
 ):
     if not files:
@@ -123,7 +113,7 @@ async def upload_multiple(
             content=error_detail("Please provide at least one file."),
         )
 
-    results: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
     total_files = len(files)
     await publish_progress(
         clientId,
@@ -185,8 +175,8 @@ class UploadLinkBody(BaseModel):
 @router.post("/upload-link")
 async def upload_link(
     body: UploadLinkBody,
-    clientId: Optional[str] = Query(default=None),
-    class_id: Optional[str] = Query(default=None),
+    clientId: str | None = Query(default=None),
+    class_id: str | None = Query(default=None),
     user: dict = Depends(get_current_user),
 ):
     if not body.url or not body.url.strip():

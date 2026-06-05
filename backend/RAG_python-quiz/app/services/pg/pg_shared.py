@@ -11,6 +11,23 @@ from app.utils.datetime_utils import iso
 VALID_EMBEDDING_COLUMNS = {"embedding", "embedding_v2"}
 
 
+class SqlUpdateBuilder:
+    def __init__(self, initial_assignments: Sequence[str] = ()):
+        self.assignments = list(initial_assignments)
+        self.params: list[Any] = []
+
+    def add(self, assignment: str, value: Any) -> None:
+        self.assignments.append(assignment)
+        self.params.append(value)
+
+    def add_if_provided(self, column: str, value: Any, *, assignment: str | None = None) -> None:
+        if value is not None:
+            self.add(assignment or f"{column} = %s", value)
+
+    def set_clause(self) -> str:
+        return ", ".join(self.assignments)
+
+
 def _to_pgvector(vec: Sequence[float]) -> str:
     # Convert to a pgvector text literal, e.g. "[0.1,0.2,...]"
     return "[" + ",".join(f"{float(x):.8f}" for x in vec) + "]"
@@ -221,24 +238,3 @@ def map_exam_submission_row(
         submission["grading_source"] = row.get("grading_source")
     return submission
 
-
-__all__ = [
-    "VALID_EMBEDDING_COLUMNS",
-    "_get_embedding_column",
-    "_to_pgvector",
-    "fetch_default_document_names",
-    "fetch_linked_documents",
-    "filter_linked_documents",
-    "insert_submission_with_attempt",
-    "linked_document_ids",
-    "map_document_row",
-    "map_exam_answer_row",
-    "map_exam_submission_row",
-    "map_quiz_submission_row",
-    "maybe_iso",
-    "maybe_json_load",
-    "next_attempt_no",
-    "replace_linked_documents",
-    "stringify_id",
-    "stringify_id_list",
-]

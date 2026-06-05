@@ -1,10 +1,11 @@
-import asyncio
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from app.agents import graph
-from app.agents.schemas import ExamGenerationRequest, ExamQuestion, ReviewResult
+from app.agents.schemas import ExamGenerationRequest, ReviewResult
+from tests.support import FakeConnection, FakeCursor
+from tests.support import make_exam_question as make_question
 
 
 def make_request(**overrides):
@@ -22,19 +23,19 @@ def make_request(**overrides):
     return ExamGenerationRequest(**payload)
 
 
-def make_question():
-    return ExamQuestion(
-        question_id="q-1",
-        question_type="multiple_choice",
-        bloom_level="remember",
-        question_text="What is SQL?",
-        choices=["A", "B", "C", "D"],
-        correct_answer_index=1,
-        marks=1,
-        marking_scheme=[],
-        rationale="Basic recall",
-        source_chunk_ids=[],
+def make_exam_response():
+    return SimpleNamespace(
+        exam_id="exam-1",
+        exam_name="Database Exam",
+        questions=[make_question()],
+        pdf_path=None,
+        warnings=[],
+        review_score=90,
     )
+
+
+def fake_exam_graph(final_state):
+    return SimpleNamespace(ainvoke=AsyncMock(return_value=final_state))
 
 
 class GraphTests(unittest.IsolatedAsyncioTestCase):
@@ -56,7 +57,7 @@ class GraphTests(unittest.IsolatedAsyncioTestCase):
             "warnings": [],
             "review_result": ReviewResult(is_valid=True, overall_score=92, issues=[], summary="ok"),
         }
-        fake_graph = SimpleNamespace(ainvoke=AsyncMock(return_value=final_state))
+        fake_graph = fake_exam_graph(final_state)
         with patch("app.agents.graph.create_exam_graph", return_value=fake_graph):
             response = await graph.run_exam_generation(make_request())
 
@@ -72,7 +73,7 @@ class GraphTests(unittest.IsolatedAsyncioTestCase):
             "warnings": [],
             "review_result": None,
         }
-        fake_graph = SimpleNamespace(ainvoke=AsyncMock(return_value=final_state))
+        fake_graph = fake_exam_graph(final_state)
         request = make_request(question_types={"multiple_choice": 1, "short_answer": 1, "essay": 0})
         with patch("app.agents.graph.create_exam_graph", return_value=fake_graph):
             await graph.run_exam_generation(request)
@@ -81,14 +82,7 @@ class GraphTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(initial_state["question_types"]["multiple_choice"], 1)
 
     async def test_run_exam_generation_with_pdf_saves_pdf_and_exam(self):
-        response = SimpleNamespace(
-            exam_id="exam-1",
-            exam_name="Database Exam",
-            questions=[make_question()],
-            pdf_path=None,
-            warnings=[],
-            review_score=90,
-        )
+        response = make_exam_response()
         with patch("app.agents.graph.run_exam_generation", AsyncMock(return_value=response)), patch(
             "app.utils.pdf_generator.generate_exam_pdf",
             AsyncMock(return_value="/tmp/exam-1.pdf"),
@@ -105,14 +99,7 @@ class GraphTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.warnings, [])
 
     async def test_run_exam_generation_with_pdf_collects_warnings(self):
-        response = SimpleNamespace(
-            exam_id="exam-1",
-            exam_name="Database Exam",
-            questions=[make_question()],
-            pdf_path=None,
-            warnings=[],
-            review_score=90,
-        )
+        response = make_exam_response()
         with patch("app.agents.graph.run_exam_generation", AsyncMock(return_value=response)), patch(
             "app.utils.pdf_generator.generate_exam_pdf",
             AsyncMock(side_effect=RuntimeError("pdf failed")),
@@ -130,46 +117,22 @@ class GraphTests(unittest.IsolatedAsyncioTestCase):
     async def test_get_class_and_owner_from_files_handles_no_rows_and_failures(self):
         self.assertEqual(await graph._get_class_and_owner_from_files([]), (None, None))
 
-        class Cursor:
-            def execute(self, *args, **kwargs):
-                return None
-
-            def fetchall(self):
-                return [{"class_id": "class-1", "teacher_id": "teacher-1"}]
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, exc, tb):
-                return False
-
-        class Conn:
-            def cursor(self, *args, **kwargs):
-                return Cursor()
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, exc, tb):
-                return False
-
-        conn = Conn()
+        conn = FakeConnection(FakeCursor(fetchall_results=[[{"class_id": "class-1", "teacher_id": "teacher-1"}]]))
         with patch("app.services.pg.pg_db._get_conn", return_value=conn):
             class_id, owner_id = await graph._get_class_and_owner_from_files(["file-1"])
         self.assertEqual((class_id, owner_id), ("class-1", "teacher-1"))
 
-        class MultiRowCursor(Cursor):
-            def fetchall(self):
-                return [
-                    {"class_id": "class-1", "teacher_id": "teacher-1"},
-                    {"class_id": "class-2", "teacher_id": "teacher-2"},
+        multi_conn = FakeConnection(
+            FakeCursor(
+                fetchall_results=[
+                    [
+                        {"class_id": "class-1", "teacher_id": "teacher-1"},
+                        {"class_id": "class-2", "teacher_id": "teacher-2"},
+                    ]
                 ]
-
-        class MultiConn(Conn):
-            def cursor(self, *args, **kwargs):
-                return MultiRowCursor()
-
-        with patch("app.services.pg.pg_db._get_conn", return_value=MultiConn()):
+            )
+        )
+        with patch("app.services.pg.pg_db._get_conn", return_value=multi_conn):
             self.assertEqual(await graph._get_class_and_owner_from_files(["file-1"]), (None, None))
 
         with patch("app.services.pg.pg_db._get_conn", side_effect=RuntimeError("db down")):

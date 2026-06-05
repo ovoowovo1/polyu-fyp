@@ -16,17 +16,14 @@ export function dedupe(key, fn, options = {}) {
     // return cached value if still fresh
     const cached = _cache.get(key);
     if (cached && ttl > 0 && now - cached.ts < ttl) {
-        console.debug(`[dedupe] cache hit for ${key}`);
         return Promise.resolve(cached.value);
     }
 
     // return pending promise if already running
     if (_pending.has(key)) {
-        console.debug(`[dedupe] pending promise reused for ${key}`);
         return _pending.get(key);
     }
 
-    console.debug(`[dedupe] creating new request for ${key}`);
     const p = Promise.resolve()
         .then(() => fn())
         .then((res) => {

@@ -1,40 +1,38 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from types import SimpleNamespace
+from contextlib import contextmanager
 import unittest
 from unittest.mock import AsyncMock, patch
 
 from app.agents.nodes import reviewer
-from app.agents.schemas import ExamQuestion, MarkingCriterion
+from app.agents.schemas import MarkingCriterion
+from tests.support import make_chat_client, make_exam_question, make_message_response
 
 
 def make_question(**overrides):
-    data = {
-        "question_id": "q-1",
-        "question_type": "multiple_choice",
+    defaults = {
         "bloom_level": "analyze",
         "question_text": "Why does 2PC block?",
-        "choices": ["A", "B", "C", "D"],
-        "correct_answer_index": 1,
         "model_answer": "Because the coordinator may be unavailable.",
-        "marks": 2,
         "marking_scheme": [MarkingCriterion(criterion="Mentions blocking", marks=2, explanation="Explains coordinator wait states.")],
         "rationale": "Tests understanding of commit coordination.",
-        "image_description": None,
-        "image_path": None,
-        "source_chunk_ids": [],
+        "marks": 2,
     }
-    data.update(overrides)
-    return ExamQuestion(**data)
+    defaults.update(overrides)
+    return make_exam_question(**defaults)
 
 
-def make_response():
-    return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="unused"))])
+def _review_client():
+    return make_chat_client(make_message_response())
 
 
-class _FakeClient:
-    def __init__(self):
-        self.chat = SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: make_response()))
+@contextmanager
+def patched_review_text(text, client=None):
+    with patch("app.agents.nodes.reviewer.get_llm_client", return_value=client or _review_client()), patch(
+        "app.agents.nodes.reviewer.extract_chat_completion_text",
+        return_value=text,
+    ):
+        yield
 
 
 class ReviewerNodeTests(unittest.IsolatedAsyncioTestCase):
@@ -58,6 +56,7 @@ class ReviewerNodeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reviewer._strip_code_fences("```json\n{}\n```"), "{}")
         self.assertEqual(reviewer._strip_code_fences("```\n{}\n```"), "{}")
         self.assertEqual(reviewer._get_absolute_image_path("plain/path.png"), "plain/path.png")
+        self.assertIn("Mentions blocking", reviewer._format_marking_scheme(make_question()))
 
     async def test_load_image_and_run_review_cover_parsing_edge_cases(self):
         with TemporaryDirectory() as tmpdir:
@@ -68,43 +67,19 @@ class ReviewerNodeTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(mime_type, "image/jpeg")
             self.assertTrue(encoded)
 
-            with patch("app.agents.nodes.reviewer.get_llm_client", return_value=_FakeClient()), patch(
-                "app.agents.nodes.reviewer.extract_chat_completion_text",
-                return_value='prefix {"overall_score": 90, "is_valid": true, "decision": "PASS", "summary": "ok", "issues": []} suffix',
+            with patched_review_text(
+                'prefix {"overall_score": 90, "is_valid": true, "decision": "PASS", "summary": "ok", "issues": []} suffix'
             ):
                 result = await reviewer._run_review("key", "prompt", "model")
             self.assertEqual(result["decision"], "PASS")
 
-            with patch("app.agents.nodes.reviewer.get_llm_client", return_value=_FakeClient()), patch(
-                "app.agents.nodes.reviewer.extract_chat_completion_text",
-                return_value="   ",
-            ):
-                with self.assertRaises(RuntimeError):
-                    await reviewer._run_review("key", "prompt", "model")
-
-            with patch("app.agents.nodes.reviewer.get_llm_client", return_value=_FakeClient()), patch(
-                "app.agents.nodes.reviewer.extract_chat_completion_text",
-                return_value="not-json",
-            ):
-                with self.assertRaises(RuntimeError):
-                    await reviewer._run_review("key", "prompt", "model")
-
-            with patch("app.agents.nodes.reviewer.get_llm_client", return_value=_FakeClient()), patch(
-                "app.agents.nodes.reviewer.extract_chat_completion_text",
-                return_value="[]",
-            ):
-                with self.assertRaises(RuntimeError):
-                    await reviewer._run_review("key", "prompt", "model")
-
-            with patch("app.agents.nodes.reviewer.get_llm_client", return_value=_FakeClient()), patch(
-                "app.agents.nodes.reviewer.extract_chat_completion_text",
-                return_value='prefix {"bad": } suffix',
-            ):
-                with self.assertRaises(RuntimeError):
-                    await reviewer._run_review("key", "prompt", "model")
+            for response_text in ("   ", "not-json", "[]", 'prefix {"bad": } suffix'):
+                with self.subTest(response_text=response_text), patched_review_text(response_text):
+                    with self.assertRaises(RuntimeError):
+                        await reviewer._run_review("key", "prompt", "model")
 
     async def test_run_review_handles_missing_and_failed_images(self):
-        with patch("app.agents.nodes.reviewer.get_llm_client", return_value=_FakeClient()), patch(
+        with patch("app.agents.nodes.reviewer.get_llm_client", return_value=_review_client()), patch(
             "app.agents.nodes.reviewer.extract_chat_completion_text",
             return_value='{"overall_score": 88, "is_valid": true, "decision": "PASS", "summary": "ok", "issues": []}',
         ), patch(
@@ -124,13 +99,7 @@ class ReviewerNodeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["overall_score"], 88)
 
     async def test_run_review_appends_inline_image_parts_when_image_load_succeeds(self):
-        captured = {}
-
-        def create(**kwargs):
-            captured.update(kwargs)
-            return make_response()
-
-        client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+        client = make_chat_client(make_message_response())
         with patch("app.agents.nodes.reviewer.get_llm_client", return_value=client), patch(
             "app.agents.nodes.reviewer.extract_chat_completion_text",
             return_value='{"overall_score": 88, "is_valid": true, "decision": "PASS", "summary": "ok", "issues": []}',
@@ -143,6 +112,7 @@ class ReviewerNodeTests(unittest.IsolatedAsyncioTestCase):
         ):
             await reviewer._run_review("key", "prompt", "model", image_paths=["/static/images/chart.png"])
 
+        captured = client.chat.completions.create.call_args.kwargs
         self.assertEqual(len(captured["messages"][0]["content"]), 2)
 
     async def test_reviewer_node_covers_no_questions_and_exception_path(self):

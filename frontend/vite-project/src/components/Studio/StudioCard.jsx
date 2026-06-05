@@ -20,6 +20,7 @@ import { toggleStudioCardCollapse, setQuizReaderOpen } from '../../redux/studioS
 import { deleteQuiz, getAllQuizzes } from '../../api/quiz'
 import { getExamList, deleteExam, downloadExamPdf } from '../../api/exam'
 import { getCurrentUser } from '../../api/auth'
+import { formatStudioDate } from './studioCardLogic'
 
 
 function StudioCard({ widthSize = null }) {
@@ -177,25 +178,7 @@ function StudioCard({ widthSize = null }) {
         dispatch(setQuizReaderOpen(false));
     };
 
-    const formatDate = (timestamp) => {
-        if (!timestamp) return '';
-        // Handle both ISO string format and numeric timestamp
-        const date = typeof timestamp === 'string' 
-            ? new Date(timestamp) 
-            : new Date(parseInt(timestamp));
-        
-        // Check if date is valid
-        if (isNaN(date.getTime())) return '';
-        
-        // Format as DD/MM/YYYY HH:MM
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        
-        return `${day}/${month}/${year} ${hours}:${minutes}`;
-    };
+    const formatDate = formatStudioDate;
 
     return (
 

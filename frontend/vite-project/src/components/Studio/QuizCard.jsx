@@ -26,8 +26,6 @@ export default function QuizCard({ onQuizGenerated }) {
             return;
         }
 
-        //console.log('Generate Quiz Parameters:', { difficulty, numQuestions, selectedFileIds });
-
         setLoading(true);
         try {
             const response = await generateQuiz(selectedFileIds, {
@@ -36,15 +34,12 @@ export default function QuizCard({ onQuizGenerated }) {
             });
 
             message.success(`Successfully generated ${response.data.questions.length} quiz questions!`);
-            //console.log('生成的測驗:', response.data);
-
             // Notify parent component to refresh list
             if (onQuizGenerated) {
                 onQuizGenerated();
             }
 
         } catch (error) {
-            //console.error('生成測驗失敗:', error);
             message.error(error.response?.data?.detail || 'Generate Quiz Failed, Please try again later');
         } finally {
             setLoading(false);
@@ -60,7 +55,6 @@ export default function QuizCard({ onQuizGenerated }) {
 
 
     const handleCancel = () => {
-        console.log('Clicked cancel button');
         setOpen(false);
     };
 

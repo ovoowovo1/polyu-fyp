@@ -1,12 +1,10 @@
-# -*- coding: utf-8 -*-
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.services.core.exceptions import PermissionDeniedError, ValidationServiceError
 from app.services.pg.pg_db import (
     execute_returning,
     fetch_bool,
     fetch_bool_with_cursor,
-    fetch_one,
     fetch_one_with_cursor,
     map_rows,
     with_cursor,
@@ -23,8 +21,8 @@ def is_user_teacher(user_id: str) -> bool:
 
 
 def create_class_for_teacher(
-    teacher_user_id: str, name: str, code: Optional[str] = None
-) -> Dict[str, Any]:
+    teacher_user_id: str, name: str, code: str | None = None
+) -> dict[str, Any]:
     if not name or not name.strip():
         raise ValidationServiceError("Class name must not be empty")
 
@@ -42,7 +40,7 @@ def create_class_for_teacher(
     return _format_class(row)
 
 
-def list_classes_by_teacher(teacher_user_id: str) -> List[Dict[str, Any]]:
+def list_classes_by_teacher(teacher_user_id: str) -> list[dict[str, Any]]:
     if not is_user_teacher(teacher_user_id):
         raise PermissionDeniedError("Only teachers can view their classes")
 
@@ -72,7 +70,7 @@ def list_classes_by_teacher(teacher_user_id: str) -> List[Dict[str, Any]]:
     )
 
 
-def list_classes_for_student(student_user_id: str) -> List[Dict[str, Any]]:
+def list_classes_for_student(student_user_id: str) -> list[dict[str, Any]]:
     if not _is_student_exists(student_user_id):
         raise PermissionDeniedError("Only students can view enrolled classes")
 
@@ -90,7 +88,7 @@ def list_classes_for_student(student_user_id: str) -> List[Dict[str, Any]]:
     )
 
 
-def _format_class(row: Dict[str, Any]) -> Dict[str, Any]:
+def _format_class(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": str(row["id"]),
         "teacher_id": str(row["teacher_id"]),
@@ -100,20 +98,16 @@ def _format_class(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _format_class_with_count(row: Dict[str, Any]) -> Dict[str, Any]:
+def _format_class_with_count(row: dict[str, Any]) -> dict[str, Any]:
     formatted = _format_class(row)
     formatted["student_count"] = int(row.get("student_count") or 0)
     return formatted
 
 
-def _format_teacher_class(row: Dict[str, Any]) -> Dict[str, Any]:
+def _format_teacher_class(row: dict[str, Any]) -> dict[str, Any]:
     formatted = _format_class_with_count(row)
     formatted["students"] = row.get("students") or []
     return formatted
-
-
-def _get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
-    return fetch_one("SELECT * FROM app_security.lookup_student_for_invite(%s)", (email,))
 
 
 def _is_student_exists(user_id: str) -> bool:
@@ -124,17 +118,9 @@ def _is_student_exists(user_id: str) -> bool:
     )
 
 
-def _is_class_owned_by_teacher(class_id: str, teacher_user_id: str) -> bool:
-    return fetch_bool(
-        "SELECT app_security.is_class_owned_by_teacher(%s::uuid, %s::uuid) AS owns_class",
-        (class_id, teacher_user_id),
-        column="owns_class",
-    )
-
-
 def invite_student_to_class(
     teacher_user_id: str, class_id: str, student_email: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     if not is_user_teacher(teacher_user_id):
         raise PermissionDeniedError("Only teachers can invite students to classes")
     if not student_email or not student_email.strip():
@@ -196,14 +182,3 @@ def invite_student_to_class(
             },
         }
 
-
-__all__ = [
-    "_get_user_by_email",
-    "_is_class_owned_by_teacher",
-    "_is_student_exists",
-    "create_class_for_teacher",
-    "invite_student_to_class",
-    "is_user_teacher",
-    "list_classes_by_teacher",
-    "list_classes_for_student",
-]

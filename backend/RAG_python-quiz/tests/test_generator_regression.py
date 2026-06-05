@@ -1,8 +1,11 @@
 import json
 import unittest
+from contextlib import contextmanager
 from unittest.mock import patch
 
 import app.agents.nodes.generator as generator_module
+
+SECTION_NAMES = ("multiple_choice", "short_answer", "essay")
 
 
 def _build_state(
@@ -87,101 +90,119 @@ def _section_payload(question_type, items):
     return json.dumps({generator_module.SECTION_TO_ARRAY[question_type]: items})
 
 
+def _default_section_payload(section_name):
+    items = {
+        "multiple_choice": _mc_item,
+        "short_answer": _sa_item,
+        "essay": _essay_item,
+    }
+    return _section_payload(section_name, [items[section_name]()])
+
+
+@contextmanager
+def _patched_generator(fake_retry):
+    with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
+        "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
+    ):
+        yield
+
+
+def _fake_retry_for(payloads=None):
+    payloads = payloads or {}
+
+    async def fake_retry(operation_name, _operation_func, _prompt, _model_name, _schema, section_name, error_type=RuntimeError):
+        assert section_name in operation_name
+        payload = payloads.get(section_name)
+        return payload() if callable(payload) else payload or _default_section_payload(section_name)
+
+    return fake_retry
+
+
+def _counting_retry(testcase, handler, *, assert_section_array=False, assert_rubric_prompt=False):
+    call_counts = {section: 0 for section in SECTION_NAMES}
+
+    async def fake_retry(operation_name, _operation_func, prompt, _model_name, _schema, section_name, error_type=RuntimeError):
+        testcase.assertIn(section_name, operation_name)
+        if assert_section_array:
+            testcase.assertIn(generator_module.SECTION_TO_ARRAY[section_name], prompt)
+        if assert_rubric_prompt and section_name != "multiple_choice":
+            testcase.assertIn("prefer structured rubric objects", prompt)
+            testcase.assertIn("criterion", prompt)
+            testcase.assertIn("explanation", prompt)
+        call_counts[section_name] += 1
+        return handler(section_name, call_counts[section_name], prompt)
+
+    return call_counts, fake_retry
+
+
+def _assert_section_counts(testcase, call_counts, *, multiple_choice=1, short_answer=1, essay=1):
+    testcase.assertEqual(
+        call_counts,
+        {"multiple_choice": multiple_choice, "short_answer": short_answer, "essay": essay},
+    )
+
+
 class GeneratorRegressionTests(unittest.IsolatedAsyncioTestCase):
     async def test_generator_retries_only_failed_multiple_choice_section(self):
-        call_counts = {"multiple_choice": 0, "short_answer": 0, "essay": 0}
-
-        async def fake_retry(operation_name, _operation_func, prompt, _model_name, _schema, section_name, error_type=RuntimeError):
-            self.assertIn(section_name, operation_name)
-            self.assertIn(generator_module.SECTION_TO_ARRAY[section_name], prompt)
-            if section_name != "multiple_choice":
-                self.assertIn("prefer structured rubric objects", prompt)
-                self.assertIn("criterion", prompt)
-                self.assertIn("explanation", prompt)
-            call_counts[section_name] += 1
+        def retry_payload(section_name, call_count, _prompt):
             if section_name == "multiple_choice":
-                if call_counts[section_name] == 1:
+                if call_count == 1:
                     return '{"multiple_choice_questions":[{"question_type":"multiple_choice"'
                 return _section_payload("multiple_choice", [_mc_item()])
-            if section_name == "short_answer":
-                return _section_payload("short_answer", [_sa_item()])
-            return _section_payload("essay", [_essay_item()])
+            return _default_section_payload(section_name)
 
-        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
-        ):
+        call_counts, fake_retry = _counting_retry(
+            self,
+            retry_payload,
+            assert_section_array=True,
+            assert_rubric_prompt=True,
+        )
+        with _patched_generator(fake_retry):
             result = await generator_module.generator_node(_build_state())
 
-        self.assertEqual(call_counts["multiple_choice"], 2)
-        self.assertEqual(call_counts["short_answer"], 1)
-        self.assertEqual(call_counts["essay"], 1)
+        _assert_section_counts(self, call_counts, multiple_choice=2)
         self.assertEqual(len(result["questions"]), 3)
         self.assertEqual(result["exam_name"], "Database Security and Availability")
 
     async def test_generator_retries_only_failed_short_answer_section(self):
-        call_counts = {"multiple_choice": 0, "short_answer": 0, "essay": 0}
-
-        async def fake_retry(operation_name, _operation_func, prompt, _model_name, _schema, section_name, error_type=RuntimeError):
-            self.assertIn(section_name, operation_name)
-            call_counts[section_name] += 1
+        def retry_payload(section_name, call_count, prompt):
             if section_name == "multiple_choice":
                 return _section_payload("multiple_choice", [_mc_item()])
             if section_name == "short_answer":
-                if call_counts[section_name] == 1:
+                if call_count == 1:
                     return _section_payload("short_answer", ["Bare string item"])
                 self.assertIn("Previous short_answer generation returned an unusable payload.", prompt)
                 return _section_payload("short_answer", [_sa_item()])
-            return _section_payload("essay", [_essay_item()])
+            return _default_section_payload(section_name)
 
-        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
-        ):
+        call_counts, fake_retry = _counting_retry(self, retry_payload)
+        with _patched_generator(fake_retry):
             result = await generator_module.generator_node(_build_state())
 
-        self.assertEqual(call_counts["multiple_choice"], 1)
-        self.assertEqual(call_counts["short_answer"], 2)
-        self.assertEqual(call_counts["essay"], 1)
+        _assert_section_counts(self, call_counts, short_answer=2)
         self.assertEqual(
             [question.question_type for question in result["questions"]],
             ["multiple_choice", "short_answer", "essay"],
         )
 
     async def test_generator_retries_only_failed_essay_section_for_count_mismatch(self):
-        call_counts = {"multiple_choice": 0, "short_answer": 0, "essay": 0}
-
-        async def fake_retry(operation_name, _operation_func, prompt, _model_name, _schema, section_name, error_type=RuntimeError):
-            self.assertIn(section_name, operation_name)
-            call_counts[section_name] += 1
-            if section_name == "multiple_choice":
-                return _section_payload("multiple_choice", [_mc_item()])
-            if section_name == "short_answer":
-                return _section_payload("short_answer", [_sa_item()])
-            if call_counts[section_name] == 1:
+        def retry_payload(section_name, call_count, prompt):
+            if section_name == "essay" and call_count == 1:
                 return _section_payload("essay", [])
-            self.assertIn("Previous essay generation returned an unusable payload.", prompt)
-            return _section_payload("essay", [_essay_item()])
+            if section_name == "essay":
+                self.assertIn("Previous essay generation returned an unusable payload.", prompt)
+            return _default_section_payload(section_name)
 
-        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
-        ):
+        call_counts, fake_retry = _counting_retry(self, retry_payload)
+        with _patched_generator(fake_retry):
             result = await generator_module.generator_node(_build_state())
 
-        self.assertEqual(call_counts["multiple_choice"], 1)
-        self.assertEqual(call_counts["short_answer"], 1)
-        self.assertEqual(call_counts["essay"], 2)
+        _assert_section_counts(self, call_counts, essay=2)
         self.assertEqual(len(result["questions"]), 3)
 
     async def test_generator_fails_entire_exam_when_one_section_never_recovers(self):
-        async def fake_retry(operation_name, _operation_func, _prompt, _model_name, _schema, section_name, error_type=RuntimeError):
-            self.assertIn(section_name, operation_name)
-            if section_name == "multiple_choice":
-                return _section_payload("multiple_choice", [_mc_item()])
-            if section_name == "short_answer":
-                return _section_payload("short_answer", [_sa_item()])
-            return '{"essay_questions":[{"question_type":"essay"'
-
-        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
+        with _patched_generator(
+            _fake_retry_for({"essay": '{"essay_questions":[{"question_type":"essay"'})
         ), self.assertLogs("app.agents.nodes.generator", level="ERROR") as log_context:
             with self.assertRaises(RuntimeError) as ctx:
                 await generator_module.generator_node(_build_state())
@@ -195,17 +216,7 @@ class GeneratorRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Full invalid payload:", combined_logs)
 
     async def test_exam_name_uses_explicit_state_value_before_topic(self):
-        async def fake_retry(operation_name, _operation_func, _prompt, _model_name, _schema, section_name, error_type=RuntimeError):
-            self.assertIn(section_name, operation_name)
-            if section_name == "multiple_choice":
-                return _section_payload("multiple_choice", [_mc_item()])
-            if section_name == "short_answer":
-                return _section_payload("short_answer", [_sa_item()])
-            return _section_payload("essay", [_essay_item()])
-
-        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
-        ):
+        with _patched_generator(_fake_retry_for()):
             result = await generator_module.generator_node(
                 _build_state(topic="Topic Name", exam_name="Teacher Provided Exam Name")
             )
@@ -213,13 +224,7 @@ class GeneratorRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["exam_name"], "Teacher Provided Exam Name")
 
     async def test_exam_name_falls_back_to_generated_exam_when_state_and_topic_are_empty(self):
-        async def fake_retry(operation_name, _operation_func, _prompt, _model_name, _schema, section_name, error_type=RuntimeError):
-            self.assertIn(section_name, operation_name)
-            return _section_payload("multiple_choice", [_mc_item()])
-
-        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
-        ):
+        with _patched_generator(_fake_retry_for()):
             result = await generator_module.generator_node(
                 _build_state(
                     question_types={"multiple_choice": 1, "short_answer": 0, "essay": 0},
@@ -255,16 +260,14 @@ class GeneratorRegressionTests(unittest.IsolatedAsyncioTestCase):
             ],
         }
 
-        async def fake_retry(operation_name, _operation_func, _prompt, _model_name, _schema, section_name, error_type=RuntimeError):
-            self.assertIn(section_name, operation_name)
-            if section_name == "multiple_choice":
-                return _section_payload("multiple_choice", [mc_item])
-            if section_name == "short_answer":
-                return _section_payload("short_answer", [short_answer_item])
-            return _section_payload("essay", [essay_item])
-
-        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
+        with _patched_generator(
+            _fake_retry_for(
+                {
+                    "multiple_choice": _section_payload("multiple_choice", [mc_item]),
+                    "short_answer": _section_payload("short_answer", [short_answer_item]),
+                    "essay": _section_payload("essay", [essay_item]),
+                }
+            )
         ):
             result = await generator_module.generator_node(_build_state())
 
@@ -291,13 +294,7 @@ class GeneratorRegressionTests(unittest.IsolatedAsyncioTestCase):
         mc_item.pop("marking_criteria")
         mc_item["marks"] = 7
 
-        async def fake_retry(operation_name, _operation_func, _prompt, _model_name, _schema, section_name, error_type=RuntimeError):
-            self.assertIn(section_name, operation_name)
-            return _section_payload("multiple_choice", [mc_item])
-
-        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
-        ):
+        with _patched_generator(_fake_retry_for({"multiple_choice": _section_payload("multiple_choice", [mc_item])})):
             result = await generator_module.generator_node(
                 _build_state(
                     question_types={"multiple_choice": 1, "short_answer": 0, "essay": 0},
@@ -312,17 +309,7 @@ class GeneratorRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(question.marking_scheme, [])
 
     async def test_string_only_marking_criteria_still_normalize_with_explanation_fallback(self):
-        async def fake_retry(operation_name, _operation_func, _prompt, _model_name, _schema, section_name, error_type=RuntimeError):
-            self.assertIn(section_name, operation_name)
-            if section_name == "multiple_choice":
-                return _section_payload("multiple_choice", [_mc_item()])
-            if section_name == "short_answer":
-                return _section_payload("short_answer", [_sa_item()])
-            return _section_payload("essay", [_essay_item()])
-
-        with patch("app.agents.nodes.generator.with_llm_retry_async", side_effect=fake_retry), patch(
-            "app.agents.nodes.generator.get_default_llm_model_name", return_value="test-model"
-        ):
+        with _patched_generator(_fake_retry_for()):
             result = await generator_module.generator_node(_build_state())
 
         short_question = result["questions"][1]

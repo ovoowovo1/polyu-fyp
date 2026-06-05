@@ -5,7 +5,7 @@ from typing import List, Sequence
 
 from app.config import get_settings
 from app.logger import get_logger
-from app.services.pg import pg_service
+from app.services.pg import pg_retrieval_service as pg_service
 from app.utils.api_key_manager import get_embedding_model, get_fallback_embedding_model
 from app.utils.ingest_errors import EmbeddingProviderError
 

@@ -1,35 +1,15 @@
 import unittest
-from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
-from app.services.ai import ai_service
 from app.services.ai import exam_ai_grading_service, quiz_feedback_service
 from app.services.ai.llm import structured_json, text_completion
-
-
-def make_chat_client(response):
-    return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=Mock(return_value=response))))
-
-
-class AiServiceFacadeTests(unittest.TestCase):
-    def test_facade_exports_backward_compatible_functions(self):
-        self.assertIs(ai_service.generate_structured_json, structured_json.generate_structured_json)
-        self.assertIs(ai_service.generate_text_completion, text_completion.generate_text_completion)
-        self.assertIs(ai_service.generate_quiz_feedback_text, quiz_feedback_service.generate_quiz_feedback_text)
-        self.assertIs(ai_service.ai_grade_answer, exam_ai_grading_service.ai_grade_answer)
-        self.assertIs(
-            ai_service.ai_generate_exam_overall_comment,
-            exam_ai_grading_service.ai_generate_exam_overall_comment,
-        )
+from tests.support import fake_llm_retry, make_chat_client, make_completion_response
 
 
 class LlmServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_generate_structured_json_success_and_empty_response(self):
-        response = SimpleNamespace()
+        response = make_completion_response()
         client = make_chat_client(response)
-
-        async def fake_retry(_name, func, *args, error_type=RuntimeError):
-            return await func("api-key", *args)
 
         with patch("app.services.ai.llm.structured_json.get_llm_client", return_value=client), patch(
             "app.services.ai.llm.structured_json.get_default_llm_model_name",
@@ -39,7 +19,7 @@ class LlmServiceTests(unittest.IsolatedAsyncioTestCase):
             return_value='{"ok": true}',
         ), patch(
             "app.services.ai.llm.structured_json.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             result = await structured_json.generate_structured_json(
                 "prompt",
@@ -62,7 +42,7 @@ class LlmServiceTests(unittest.IsolatedAsyncioTestCase):
             return_value="",
         ), patch(
             "app.services.ai.llm.structured_json.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             with self.assertRaises(RuntimeError):
                 await structured_json.generate_structured_json(
@@ -72,11 +52,8 @@ class LlmServiceTests(unittest.IsolatedAsyncioTestCase):
                 )
 
     async def test_generate_text_completion_success_and_empty_response(self):
-        response = SimpleNamespace()
+        response = make_completion_response()
         client = make_chat_client(response)
-
-        async def fake_retry(_name, func, *args, error_type=RuntimeError):
-            return await func("api-key", *args)
 
         with patch("app.services.ai.llm.text_completion.get_llm_client", return_value=client), patch(
             "app.services.ai.llm.text_completion.get_default_llm_model_name",
@@ -86,7 +63,7 @@ class LlmServiceTests(unittest.IsolatedAsyncioTestCase):
             return_value="  hello world  ",
         ), patch(
             "app.services.ai.llm.text_completion.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             text = await text_completion.generate_text_completion(
                 "prompt",
@@ -106,7 +83,7 @@ class LlmServiceTests(unittest.IsolatedAsyncioTestCase):
             return_value="",
         ), patch(
             "app.services.ai.llm.text_completion.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             with self.assertRaises(RuntimeError):
                 await text_completion.generate_text_completion(
@@ -117,11 +94,8 @@ class LlmServiceTests(unittest.IsolatedAsyncioTestCase):
 
 class QuizFeedbackServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_generate_quiz_feedback_text_success_and_empty_response(self):
-        response = SimpleNamespace()
+        response = make_completion_response()
         client = make_chat_client(response)
-
-        async def fake_retry(_name, func, *args, error_type=RuntimeError):
-            return await func("api-key", *args)
 
         with patch("app.services.ai.quiz_feedback_service.get_default_llm_model_name", return_value="model"), patch(
             "app.services.ai.quiz_feedback_service.get_llm_client",
@@ -131,7 +105,7 @@ class QuizFeedbackServiceTests(unittest.IsolatedAsyncioTestCase):
             return_value="Nice work",
         ), patch(
             "app.services.ai.quiz_feedback_service.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             feedback = await quiz_feedback_service.generate_quiz_feedback_text(
                 "Quiz",
@@ -155,7 +129,7 @@ class QuizFeedbackServiceTests(unittest.IsolatedAsyncioTestCase):
             return_value="",
         ), patch(
             "app.services.ai.quiz_feedback_service.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             with self.assertRaises(RuntimeError):
                 await quiz_feedback_service.generate_quiz_feedback_text("Quiz", 8, 10, 80, [], [])
@@ -163,11 +137,12 @@ class QuizFeedbackServiceTests(unittest.IsolatedAsyncioTestCase):
 
 class ExamAiGradingServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_ai_grade_answer_parses_json_and_clamps_marks(self):
-        response = SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop")])
+        response = make_completion_response()
         client = make_chat_client(response)
 
-        async def fake_retry(_name, func, *args, error_type=RuntimeError):
-            return await func("api-key", *args)
+        self.assertIn("No specific marking criteria", exam_ai_grading_service._format_marking_criteria(None))
+        self.assertIn("Reference/Model Answer", exam_ai_grading_service._format_reference_answer("It blocks"))
+        self.assertEqual(exam_ai_grading_service._clamp_marks({"marks_earned": 99}, 3)["marks_earned"], 3)
 
         wrapped_json = """```json\n{"marks_earned": 99, "feedback": "Good", "is_correct": true, "analysis": "ok"}\n```"""
         with patch("app.services.ai.exam_ai_grading_service.get_llm_client", return_value=client), patch(
@@ -178,7 +153,7 @@ class ExamAiGradingServiceTests(unittest.IsolatedAsyncioTestCase):
             return_value=wrapped_json,
         ), patch(
             "app.services.ai.exam_ai_grading_service.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             result = await exam_ai_grading_service.ai_grade_answer(
                 question_text="Explain 2PC",
@@ -193,11 +168,8 @@ class ExamAiGradingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["feedback"], "Good")
 
     async def test_ai_grade_answer_covers_empty_text_regex_lower_bound_and_manual_fallback(self):
-        response = SimpleNamespace(choices=None)
+        response = make_completion_response(choices=False)
         client = make_chat_client(response)
-
-        async def fake_retry(_name, func, *args, error_type=RuntimeError):
-            return await func("api-key", *args)
 
         with patch("app.services.ai.exam_ai_grading_service.get_llm_client", return_value=client), patch(
             "app.services.ai.exam_ai_grading_service.get_default_llm_model_name",
@@ -207,7 +179,7 @@ class ExamAiGradingServiceTests(unittest.IsolatedAsyncioTestCase):
             return_value="",
         ), patch(
             "app.services.ai.exam_ai_grading_service.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             result = await exam_ai_grading_service.ai_grade_answer(
                 question_text="Explain 2PC",
@@ -222,7 +194,7 @@ class ExamAiGradingServiceTests(unittest.IsolatedAsyncioTestCase):
         wrapped_raw = 'noise {"marks_earned": -1, "feedback": "Too low", "is_correct": false, "analysis": "ok"}'
         with patch(
             "app.services.ai.exam_ai_grading_service.get_llm_client",
-            return_value=make_chat_client(SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop")])),
+            return_value=make_chat_client(make_completion_response()),
         ), patch(
             "app.services.ai.exam_ai_grading_service.get_default_llm_model_name",
             return_value="model",
@@ -231,7 +203,7 @@ class ExamAiGradingServiceTests(unittest.IsolatedAsyncioTestCase):
             return_value=wrapped_raw,
         ), patch(
             "app.services.ai.exam_ai_grading_service.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             result = await exam_ai_grading_service.ai_grade_answer(
                 question_text="Explain 2PC",
@@ -245,7 +217,7 @@ class ExamAiGradingServiceTests(unittest.IsolatedAsyncioTestCase):
 
         with patch(
             "app.services.ai.exam_ai_grading_service.get_llm_client",
-            return_value=make_chat_client(SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop")])),
+            return_value=make_chat_client(make_completion_response()),
         ), patch(
             "app.services.ai.exam_ai_grading_service.get_default_llm_model_name",
             return_value="model",
@@ -254,7 +226,7 @@ class ExamAiGradingServiceTests(unittest.IsolatedAsyncioTestCase):
             return_value="not-json",
         ), patch(
             "app.services.ai.exam_ai_grading_service.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             result = await exam_ai_grading_service.ai_grade_answer(
                 question_text="Explain 2PC",
@@ -279,11 +251,8 @@ class ExamAiGradingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Please grade manually", result["feedback"])
 
     async def test_ai_generate_exam_overall_comment_success_and_fallback(self):
-        response = SimpleNamespace()
+        response = make_completion_response()
         client = make_chat_client(response)
-
-        async def fake_retry(_name, func, *args, error_type=RuntimeError):
-            return await func("api-key", *args)
 
         with patch("app.services.ai.exam_ai_grading_service.get_llm_client", return_value=client), patch(
             "app.services.ai.exam_ai_grading_service.get_default_llm_model_name",
@@ -293,7 +262,7 @@ class ExamAiGradingServiceTests(unittest.IsolatedAsyncioTestCase):
             return_value="Great effort",
         ), patch(
             "app.services.ai.exam_ai_grading_service.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             comment = await exam_ai_grading_service.ai_generate_exam_overall_comment("summary", 8, 10)
         self.assertEqual(comment, "Great effort")
@@ -306,7 +275,7 @@ class ExamAiGradingServiceTests(unittest.IsolatedAsyncioTestCase):
             return_value="",
         ), patch(
             "app.services.ai.exam_ai_grading_service.with_llm_retry_async",
-            side_effect=fake_retry,
+            side_effect=fake_llm_retry,
         ):
             comment = await exam_ai_grading_service.ai_generate_exam_overall_comment("summary", 8, 10)
         self.assertEqual(comment, "AI comment generation failed.")

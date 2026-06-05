@@ -1,19 +1,5 @@
-import axios from 'axios';
-import { API_BASE_URL } from '../config.js';
 import { dedupe } from '../utils/requestDeduper.js';
-import { getToken } from './auth.js';
-
-const getAuthConfig = (axiosConfig = {}) => {
-    const token = getToken();
-    const headers = {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(axiosConfig.headers || {}),
-    };
-    return {
-        ...axiosConfig,
-        ...(Object.keys(headers).length > 0 ? { headers } : {}),
-    };
-};
+import { apiDelete, apiGet, apiPost, apiPut } from './apiClient.js';
 
 /**
  * 生成測驗題目
@@ -47,15 +33,9 @@ export const generateQuiz = async (fileIds, options = {}) => {
         formData.append('num_questions', options.numQuestions);
     }
     
-    console.log('發送測驗生成請求:', { fileIds, options });
-    console.log('FormData entries:');
-    for (let pair of formData.entries()) {
-        console.log(pair[0] + ': ' + pair[1]);
-    }
-    
-    return axios.post(`${API_BASE_URL}/quiz/generate`, formData, getAuthConfig({
+    return apiPost('/quiz/generate', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-    }));
+    });
 };
 
 
@@ -64,7 +44,7 @@ export const generateQuiz = async (fileIds, options = {}) => {
  * @returns {Promise} - Bloom 層級列表
  */
 export const getBloomLevels = async () => {
-    return axios.get(`${API_BASE_URL}/quiz/bloom-levels`);
+    return apiGet('/quiz/bloom-levels');
 };
 
 
@@ -73,7 +53,7 @@ export const getBloomLevels = async () => {
  * @returns {Promise} - 難度級別列表
  */
 export const getDifficulties = async () => {
-    return axios.get(`${API_BASE_URL}/quiz/difficulties`);
+    return apiGet('/quiz/difficulties');
 };
 
 
@@ -84,12 +64,10 @@ export const getDifficulties = async () => {
  */
 export const getAllQuizzes = async (classId, axiosConfig = {}) => {
     const key = `quiz:list:${classId || '__all__'}`;
-    console.log(`[api.quiz] getAllQuizzes called, classId=${classId}, key=${key}`);
-    const config = getAuthConfig(axiosConfig);
     // use dedupe utility; we keep a small TTL to merge very close sequential calls
-    return dedupe(key, () => axios.get(`${API_BASE_URL}/quiz/list`, {
+    return dedupe(key, () => apiGet('/quiz/list', {
         params: { class_id: classId },
-        ...config,
+        ...axiosConfig,
     }), { ttl: 1000 });
 };
 
@@ -100,7 +78,7 @@ export const getAllQuizzes = async (classId, axiosConfig = {}) => {
  * @returns {Promise} - 測驗詳情
  */
 export const getQuizById = async (quizId) => {
-    return axios.get(`${API_BASE_URL}/quiz/${quizId}`, getAuthConfig());
+    return apiGet(`/quiz/${quizId}`);
 };
 
 
@@ -110,7 +88,7 @@ export const getQuizById = async (quizId) => {
  * @returns {Promise} - 刪除結果
  */
 export const deleteQuiz = async (quizId) => {
-    return axios.delete(`${API_BASE_URL}/quiz/${quizId}`, getAuthConfig());
+    return apiDelete(`/quiz/${quizId}`);
 };
 
 /**
@@ -118,7 +96,7 @@ export const deleteQuiz = async (quizId) => {
  * @param {Object} quiz - 包含 name, questions (array), file_ids (optional), class_id (optional)
  */
 export const createQuiz = async (quiz) => {
-    return axios.post(`${API_BASE_URL}/quiz`, quiz, getAuthConfig());
+    return apiPost('/quiz', quiz);
 };
 
 /**
@@ -127,7 +105,7 @@ export const createQuiz = async (quiz) => {
  * @param {Object} quiz - 同 createQuiz
  */
 export const updateQuiz = async (quizId, quiz) => {
-    return axios.put(`${API_BASE_URL}/quiz/${quizId}`, quiz, getAuthConfig());
+    return apiPut(`/quiz/${quizId}`, quiz);
 };
 
 /**
@@ -136,7 +114,7 @@ export const updateQuiz = async (quizId, quiz) => {
  * @param {Object} payload - { answers: [], score: number, total_questions: number }
  */
 export const submitQuiz = async (quizId, payload) => {
-    return axios.post(`${API_BASE_URL}/quiz/${quizId}/submit`, payload, getAuthConfig());
+    return apiPost(`/quiz/${quizId}/submit`, payload);
 };
 
 /**
@@ -145,7 +123,7 @@ export const submitQuiz = async (quizId, payload) => {
  * @param {Object} payload - { score, total_questions, percentage, bloom_summary, questions }
  */
 export const generateQuizFeedback = async (quizId, payload) => {
-    return axios.post(`${API_BASE_URL}/quiz/${quizId}/feedback`, payload, getAuthConfig());
+    return apiPost(`/quiz/${quizId}/feedback`, payload);
 };
 
 /**
@@ -153,7 +131,7 @@ export const generateQuizFeedback = async (quizId, payload) => {
  * @param {string} quizId
  */
 export const getQuizResults = async (quizId) => {
-    return axios.get(`${API_BASE_URL}/quiz/${quizId}/results`, getAuthConfig());
+    return apiGet(`/quiz/${quizId}/results`);
 };
 
 /**
@@ -161,5 +139,5 @@ export const getQuizResults = async (quizId) => {
  * @param {string} quizId
  */
 export const getMyQuizResult = async (quizId) => {
-    return axios.get(`${API_BASE_URL}/quiz/${quizId}/my-result`, getAuthConfig());
+    return apiGet(`/quiz/${quizId}/my-result`);
 };

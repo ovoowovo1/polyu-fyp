@@ -32,8 +32,13 @@ def can_access_class(user_id: str, class_id: str) -> bool:
     )
 
 
+def _require_bool(sql: str, params: tuple, *, column: str) -> None:
+    if not fetch_bool(sql, params, column=column):
+        raise PermissionDeniedError("Permission denied")
+
+
 def require_class_teacher(user_id: str, class_id: str) -> None:
-    if not fetch_bool(
+    _require_bool(
         """
         SELECT EXISTS (
             SELECT 1 FROM classes
@@ -42,8 +47,7 @@ def require_class_teacher(user_id: str, class_id: str) -> None:
         """,
         (class_id, user_id),
         column="owns_class",
-    ):
-        raise PermissionDeniedError("Permission denied")
+    )
 
 
 def can_access_document(user_id: str, file_id: str) -> bool:
@@ -65,7 +69,7 @@ def can_access_document(user_id: str, file_id: str) -> bool:
 
 
 def require_document_teacher(user_id: str, file_id: str) -> None:
-    if not fetch_bool(
+    _require_bool(
         """
         SELECT EXISTS (
             SELECT 1
@@ -76,8 +80,7 @@ def require_document_teacher(user_id: str, file_id: str) -> None:
         """,
         (file_id, user_id),
         column="owns_document",
-    ):
-        raise PermissionDeniedError("Permission denied")
+    )
 
 
 def can_access_chunk(user_id: str, chunk_id: str) -> bool:
@@ -121,7 +124,7 @@ def can_access_exam(user_id: str, exam_id: str) -> bool:
 
 
 def require_exam_teacher(user_id: str, exam_id: str) -> None:
-    if not fetch_bool(
+    _require_bool(
         """
         SELECT EXISTS (
             SELECT 1
@@ -133,12 +136,11 @@ def require_exam_teacher(user_id: str, exam_id: str) -> None:
         """,
         (exam_id, user_id, user_id),
         column="owns_exam",
-    ):
-        raise PermissionDeniedError("Permission denied")
+    )
 
 
 def require_submission_owner(student_id: str, submission_id: str) -> None:
-    if not fetch_bool(
+    _require_bool(
         """
         SELECT EXISTS (
             SELECT 1 FROM exam_submissions
@@ -147,12 +149,11 @@ def require_submission_owner(student_id: str, submission_id: str) -> None:
         """,
         (submission_id, student_id),
         column="owns_submission",
-    ):
-        raise PermissionDeniedError("Permission denied")
+    )
 
 
 def require_submission_teacher(teacher_id: str, submission_id: str) -> None:
-    if not fetch_bool(
+    _require_bool(
         """
         SELECT EXISTS (
             SELECT 1
@@ -165,8 +166,7 @@ def require_submission_teacher(teacher_id: str, submission_id: str) -> None:
         """,
         (submission_id, teacher_id, teacher_id),
         column="owns_submission",
-    ):
-        raise PermissionDeniedError("Permission denied")
+    )
 
 
 def can_access_quiz(user_id: str, quiz_id: str) -> bool:
@@ -196,7 +196,7 @@ def can_access_quiz(user_id: str, quiz_id: str) -> bool:
 
 
 def require_quiz_teacher(user_id: str, quiz_id: str) -> None:
-    if not fetch_bool(
+    _require_bool(
         """
         SELECT EXISTS (
             SELECT 1
@@ -211,8 +211,7 @@ def require_quiz_teacher(user_id: str, quiz_id: str) -> None:
         """,
         (quiz_id, user_id, user_id),
         column="owns_quiz",
-    ):
-        raise PermissionDeniedError("Permission denied")
+    )
 
 
 def can_manage_documents(user_id: str, file_ids: Iterable[str]) -> bool:
@@ -232,20 +231,3 @@ def can_manage_documents(user_id: str, file_ids: Iterable[str]) -> bool:
         column="can_manage",
     )
     return row_count
-
-
-__all__ = [
-    "can_access_chunk",
-    "can_access_class",
-    "can_access_document",
-    "can_access_exam",
-    "can_access_quiz",
-    "can_manage_documents",
-    "is_user_student",
-    "require_class_teacher",
-    "require_document_teacher",
-    "require_exam_teacher",
-    "require_quiz_teacher",
-    "require_submission_owner",
-    "require_submission_teacher",
-]

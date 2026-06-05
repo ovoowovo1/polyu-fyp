@@ -19,6 +19,48 @@ def _paragraph_texts(elements):
     return texts
 
 
+def _first_table(elements):
+    return next(element for element in elements if isinstance(element, Table))
+
+
+def criterion(text, marks=1, explanation=None):
+    return MarkingCriterion(criterion=text, marks=marks, explanation=explanation or text)
+
+
+def exam_question(question_type="multiple_choice", **overrides):
+    defaults = {
+        "question_id": {"multiple_choice": "q1", "short_answer": "q2", "essay": "q3"}[question_type],
+        "question_type": question_type,
+        "bloom_level": {"multiple_choice": "analyze", "short_answer": "analyze", "essay": "evaluate"}[question_type],
+        "question_text": {"multiple_choice": "MCQ", "short_answer": "Short", "essay": "Essay"}[question_type],
+        "marks": {"multiple_choice": 1, "short_answer": 3, "essay": 5}[question_type],
+        "rationale": {"multiple_choice": "MCQ explanation", "short_answer": "Short explanation", "essay": "Essay explanation"}[question_type],
+    }
+    if question_type == "multiple_choice":
+        defaults.update(choices=["A", "B", "C", "D"], correct_answer_index=1)
+    else:
+        defaults["model_answer"] = {"short_answer": "Short answer", "essay": "Essay answer"}[question_type]
+    defaults.update(overrides)
+    return ExamQuestion(**defaults)
+
+
+def raw_mcq_question(**overrides):
+    defaults = {
+        "question_id": "q1",
+        "question_type": "multiple_choice",
+        "bloom_level": "analyze",
+        "question_text": "MCQ",
+        "choices": ["A", "B", "C", "D"],
+        "correct_answer_index": 1,
+        "marks": 1,
+        "rationale": "MCQ explanation",
+        "model_answer": None,
+        "marking_scheme": [],
+    }
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
+
+
 class PdfGeneratorTests(unittest.TestCase):
     def test_register_chinese_fonts_covers_success_and_fallback(self):
         with patch("app.utils.pdf_generator.os.path.exists", side_effect=lambda path: path.endswith("msyh.ttc")), patch(
@@ -41,89 +83,30 @@ class PdfGeneratorTests(unittest.TestCase):
 
     def test_cover_page_and_answer_table_use_question_marks(self):
         questions = [
-            ExamQuestion(
-                question_id="q1",
-                question_type="multiple_choice",
-                bloom_level="analyze",
-                question_text="MCQ",
-                choices=["A", "B", "C", "D"],
-                correct_answer_index=1,
-                marks=1,
-                rationale="MCQ explanation",
-            ),
-            ExamQuestion(
-                question_id="q2",
-                question_type="short_answer",
-                bloom_level="analyze",
-                question_text="Short",
-                model_answer="Short answer",
-                marks=3,
-                marking_scheme=[
-                    MarkingCriterion(criterion="Point 1", marks=2, explanation="Point 1"),
-                    MarkingCriterion(criterion="Point 2", marks=1, explanation="Point 2"),
-                ],
-                rationale="Short explanation",
-            ),
-            ExamQuestion(
-                question_id="q3",
-                question_type="essay",
-                bloom_level="evaluate",
-                question_text="Essay",
-                model_answer="Essay answer",
-                marks=5,
-                marking_scheme=[
-                    MarkingCriterion(criterion="Argument", marks=3, explanation="Argument"),
-                    MarkingCriterion(criterion="Support", marks=2, explanation="Support"),
-                ],
-                rationale="Essay explanation",
-            ),
+            exam_question(),
+            exam_question("short_answer", marking_scheme=[criterion("Point 1", 2), criterion("Point 2")]),
+            exam_question("essay", marking_scheme=[criterion("Argument", 3), criterion("Support", 2)]),
         ]
 
         styles = pdf_generator_module._create_styles()
         total_marks = sum(question.marks for question in questions)
 
         cover_elements = pdf_generator_module._build_cover_page("Generated Exam", len(questions), total_marks, styles)
-        cover_table = next(element for element in cover_elements if isinstance(element, Table))
+        cover_table = _first_table(cover_elements)
         self.assertEqual(cover_table._cellvalues[0][1], "3")
         self.assertEqual(cover_table._cellvalues[1][1], "9")
 
         answer_elements = pdf_generator_module._build_answer_key(questions, styles)
-        answer_table = next(element for element in answer_elements if isinstance(element, Table))
+        answer_table = _first_table(answer_elements)
         self.assertEqual(answer_table._cellvalues[1], ["1", "MCQ", "B", "1"])
         self.assertEqual(answer_table._cellvalues[2], ["2", "Short", "See Expl.", "3"])
         self.assertEqual(answer_table._cellvalues[3], ["3", "Essay", "See Expl.", "5"])
 
     def test_build_questions_section_covers_images_answers_and_rationale(self):
         questions = [
-            ExamQuestion(
-                question_id="q1",
-                question_type="multiple_choice",
-                bloom_level="analyze",
-                question_text="MCQ",
-                choices=["A", "B", "C", "D"],
-                correct_answer_index=1,
-                marks=1,
-                rationale="MCQ explanation",
-                image_path="/static/images/q1.png",
-            ),
-            ExamQuestion(
-                question_id="q2",
-                question_type="short_answer",
-                bloom_level="analyze",
-                question_text="Short",
-                model_answer="Short answer",
-                marks=3,
-                rationale="Short explanation",
-            ),
-            ExamQuestion(
-                question_id="q3",
-                question_type="essay",
-                bloom_level="evaluate",
-                question_text="Essay",
-                model_answer="Essay answer",
-                marks=5,
-                rationale="Essay explanation",
-            ),
+            exam_question(image_path="/static/images/q1.png"),
+            exam_question("short_answer"),
+            exam_question("essay"),
         ]
         styles = pdf_generator_module._create_styles()
 
@@ -150,18 +133,9 @@ class PdfGeneratorTests(unittest.TestCase):
         self.assertTrue(elements)
 
     def test_build_questions_section_hits_image_spacers_and_plain_choices(self):
-        question = SimpleNamespace(
-            question_id="q1",
-            question_type="multiple_choice",
+        question = raw_mcq_question(
             bloom_level="remember",
-            question_text="MCQ",
-            choices=["A", "B", "C", "D"],
-            correct_answer_index=1,
-            marks=1,
-            rationale="MCQ explanation",
             image_path="/static/images/q1.png",
-            model_answer=None,
-            marking_scheme=[],
         )
         styles = pdf_generator_module._create_styles()
         fake_image = SimpleNamespace(hAlign=None)
@@ -180,32 +154,8 @@ class PdfGeneratorTests(unittest.TestCase):
 
     def test_answer_key_hides_mcq_marking_scheme(self):
         questions = [
-            ExamQuestion(
-                question_id="q1",
-                question_type="multiple_choice",
-                bloom_level="analyze",
-                question_text="MCQ",
-                choices=["A", "B", "C", "D"],
-                correct_answer_index=0,
-                marks=1,
-                marking_scheme=[
-                    MarkingCriterion(criterion="Should not render", marks=1, explanation="Ignore"),
-                ],
-                rationale="MCQ explanation",
-            ),
-            ExamQuestion(
-                question_id="q2",
-                question_type="short_answer",
-                bloom_level="analyze",
-                question_text="Short",
-                model_answer="Short answer",
-                marks=3,
-                marking_scheme=[
-                    MarkingCriterion(criterion="Point 1", marks=2, explanation="Point 1"),
-                    MarkingCriterion(criterion="Point 2", marks=1, explanation="Point 2"),
-                ],
-                rationale="Short explanation",
-            ),
+            exam_question(correct_answer_index=0, marking_scheme=[criterion("Should not render", explanation="Ignore")]),
+            exam_question("short_answer", marking_scheme=[criterion("Point 1", 2), criterion("Point 2")]),
         ]
 
         styles = pdf_generator_module._create_styles()
@@ -223,26 +173,13 @@ class PdfGeneratorTests(unittest.TestCase):
 
     def test_answer_key_renders_rubric_explanations_without_duplicates(self):
         questions = [
-            ExamQuestion(
+            exam_question(
+                "short_answer",
                 question_id="q1",
-                question_type="short_answer",
-                bloom_level="analyze",
-                question_text="Short",
-                model_answer="Short answer",
-                marks=3,
                 marking_scheme=[
-                    MarkingCriterion(
-                        criterion="Definition Accuracy",
-                        marks=2,
-                        explanation="Correctly differentiates between principal and subject.",
-                    ),
-                    MarkingCriterion(
-                        criterion="Conceptual Insight",
-                        marks=1,
-                        explanation="Conceptual Insight",
-                    ),
+                    criterion("Definition Accuracy", 2, "Correctly differentiates between principal and subject."),
+                    criterion("Conceptual Insight"),
                 ],
-                rationale="Short explanation",
             ),
         ]
 
@@ -258,40 +195,17 @@ class PdfGeneratorTests(unittest.TestCase):
             ["• Conceptual Insight (1 marks)"],
         )
 
-
     def test_answer_key_uses_question_mark_for_invalid_mcq_index(self):
-        question = SimpleNamespace(
-            question_id="q1",
-            question_type="multiple_choice",
-            bloom_level="analyze",
-            question_text="MCQ",
-            choices=["A", "B", "C", "D"],
-            correct_answer_index=5,
-            marks=1,
-            rationale="MCQ explanation",
-            model_answer=None,
-            marking_scheme=[],
-        )
+        question = raw_mcq_question(correct_answer_index=5)
         styles = pdf_generator_module._create_styles()
         answer_elements = pdf_generator_module._build_answer_key([question], styles)
-        answer_table = next(element for element in answer_elements if isinstance(element, Table))
+        answer_table = _first_table(answer_elements)
         self.assertEqual(answer_table._cellvalues[1], ["1", "MCQ", "?", "1"])
 
     def test_generate_exam_pdf_builds_document_and_returns_relative_path(self):
         import asyncio
 
-        questions = [
-            ExamQuestion(
-                question_id="q1",
-                question_type="multiple_choice",
-                bloom_level="analyze",
-                question_text="MCQ",
-                choices=["A", "B", "C", "D"],
-                correct_answer_index=1,
-                marks=1,
-                rationale="MCQ explanation",
-            )
-        ]
+        questions = [exam_question()]
 
         class FakeDoc:
             def __init__(self, *args, **kwargs):

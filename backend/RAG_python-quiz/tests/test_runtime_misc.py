@@ -9,20 +9,24 @@ from unittest.mock import patch
 from pypdf import PdfWriter
 
 from app.logger import logger as logger_module
-from app.services.documents import crawler
+from app.services.documents import document_service
 from app.services.pg import pg_db
 from app.services.pg import rls_context
 from app.services.realtime import progress_bus
 from app.utils import datetime_utils, pdf_utils
-from tests.support import FakeConnection, FakeCursor
+from tests.support import FakeConnection, FakeCursor, make_settings
 
 
 class RuntimeMiscTests(unittest.TestCase):
-    def test_iso_returns_none_for_missing_datetime(self):
-        self.assertIsNone(datetime_utils.iso(None))
+    def test_iso_handles_missing_and_present_datetime(self):
+        cases = (
+            (None, None),
+            (datetime(2025, 1, 2, 3, 4, 5), "2025-01-02T03:04:05"),
+        )
 
-    def test_iso_returns_isoformat_for_datetime(self):
-        self.assertEqual(datetime_utils.iso(datetime(2025, 1, 2, 3, 4, 5)), "2025-01-02T03:04:05")
+        for value, expected in cases:
+            with self.subTest(value=value):
+                self.assertEqual(datetime_utils.iso(value), expected)
 
     def test_get_logger_reuses_existing_handlers(self):
         logger = logging.getLogger("tests.runtime.misc")
@@ -37,7 +41,7 @@ class RuntimeMiscTests(unittest.TestCase):
 
     def test_pg_db_get_conn_uses_real_dict_cursor_and_settings(self):
         rls_context.clear_current_rls_user()
-        settings = SimpleNamespace(pg_dsn="postgres://example")
+        settings = make_settings(pg_dsn="postgres://example")
         with patch("app.services.pg.pg_db.get_settings", return_value=settings), patch(
             "app.services.pg.pg_db.psycopg2.connect",
             return_value="connection",
@@ -49,7 +53,7 @@ class RuntimeMiscTests(unittest.TestCase):
         self.assertEqual(connect.call_args.kwargs["application_name"], "pg_service")
 
     def test_pg_db_get_conn_sets_transaction_local_rls_user_when_present(self):
-        settings = SimpleNamespace(pg_dsn="postgres://example")
+        settings = make_settings(pg_dsn="postgres://example")
         cursor = FakeCursor()
         conn = FakeConnection(cursor)
         try:
@@ -90,12 +94,10 @@ class RuntimeMiscTests(unittest.TestCase):
 
         with patch("app.services.pg.pg_db._get_conn", return_value=conn):
             row = pg_db.execute_returning("UPDATE x SET y=%s RETURNING id", ("y",))
-            pg_db.execute_write("DELETE FROM x WHERE id=%s", ("updated",))
 
         self.assertEqual(row, {"id": "updated"})
         self.assertTrue(conn.committed)
         self.assertEqual(cursor.executed[0], ("UPDATE x SET y=%s RETURNING id", ("y",)))
-        self.assertEqual(cursor.executed[1], ("DELETE FROM x WHERE id=%s", ("updated",)))
 
     def test_pg_db_with_cursor_write_controls_commit(self):
         read_conn = FakeConnection(FakeCursor())
@@ -116,9 +118,6 @@ class RuntimeMiscTests(unittest.TestCase):
                 {"id": "required"},
                 None,
                 {"enabled": 1},
-                {"exists": False},
-                {"flag": True},
-                {"active": True},
             ],
             fetchall_results=[[{"id": "a"}, {"id": "b"}]],
         )
@@ -129,11 +128,10 @@ class RuntimeMiscTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 pg_db.require_row("SELECT missing", error=ValueError("missing"))
             self.assertTrue(pg_db.fetch_bool("SELECT enabled", column="enabled"))
-            self.assertFalse(pg_db.execute_exists("SELECT exists"))
             self.assertEqual(pg_db.map_rows("SELECT rows", mapper=lambda row: row["id"].upper()), ["A", "B"])
 
         self.assertEqual(cursor.executed[0], ("SELECT required", None))
-        self.assertEqual(cursor.executed[4], ("SELECT rows", None))
+        self.assertEqual(cursor.executed[3], ("SELECT rows", None))
 
         direct_cursor = FakeCursor(fetchone_results=[{"id": "cursor-row"}, {"active": True}])
         self.assertEqual(pg_db.fetch_one_with_cursor(direct_cursor, "SELECT cursor")["id"], "cursor-row")
@@ -154,11 +152,11 @@ class RuntimeMiscTests(unittest.TestCase):
         transformer = SimpleNamespace(transform_documents=lambda docs: ["hello"])
 
         async def run():
-            with patch("app.services.documents.crawler.AsyncHtmlLoader", return_value=loader), patch(
-                "app.services.documents.crawler.MarkdownifyTransformer",
+            with patch("app.services.documents.document_service.AsyncHtmlLoader", return_value=loader), patch(
+                "app.services.documents.document_service.MarkdownifyTransformer",
                 return_value=transformer,
             ):
-                return await crawler.load_markdown("https://example.com")
+                return await document_service.load_markdown("https://example.com")
 
         self.assertEqual(asyncio.run(run()), ["hello"])
 
@@ -190,13 +188,11 @@ class ProgressBusTests(unittest.IsolatedAsyncioTestCase):
         await progress_bus.remove_queue("client-1")
         self.assertNotIn("client-1", progress_bus._queues)
 
-    async def test_publish_progress_ignores_missing_client_id(self):
-        await progress_bus.publish_progress(None, {"type": "noop"})
-        self.assertEqual(progress_bus._queues, {})
-
-    async def test_publish_progress_ignores_missing_queue(self):
-        await progress_bus.publish_progress("client-1", {"type": "noop"})
-        self.assertEqual(progress_bus._queues, {})
+    async def test_publish_progress_ignores_missing_client_or_queue(self):
+        for client_id in (None, "client-1"):
+            with self.subTest(client_id=client_id):
+                await progress_bus.publish_progress(client_id, {"type": "noop"})
+                self.assertEqual(progress_bus._queues, {})
 
     async def test_publish_progress_puts_event_on_queue(self):
         queue = await progress_bus.get_queue("client-1")

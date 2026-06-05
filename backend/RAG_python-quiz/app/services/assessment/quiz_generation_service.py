@@ -7,7 +7,8 @@ from pydantic import BaseModel
 
 from app.config import get_settings
 from app.logger import get_logger
-from app.services.pg import pg_service
+from app.services.pg.pg_files_service import get_files_text_content
+from app.services.pg.pg_quiz_service import save_quiz
 from app.utils.api_key_manager import get_llm_client, with_llm_retry_async
 from app.utils.aqg import (
     DIFFICULTY_TO_BLOOM,
@@ -47,7 +48,7 @@ def _merge_selected_levels(bloom_levels: Optional[List[BloomLevel]], difficulty:
 
 async def _load_source_text(file_ids: List[str]) -> str:
     try:
-        source_text = await asyncio.to_thread(pg_service.get_files_text_content, file_ids)
+        source_text = await asyncio.to_thread(get_files_text_content, file_ids)
     except Exception as error:
         raise HTTPException(status_code=404, detail=f"Failed to load source content: {error}") from error
     if not source_text or not source_text.strip():
@@ -166,7 +167,7 @@ async def generate_quiz_from_files(
                 "source_text_length": len(processed_text),
                 "was_summarized": was_summarized,
             }
-            saved_info = await asyncio.to_thread(pg_service.save_quiz, quiz_data, file_ids, generated["quiz_name"], class_id)
+            saved_info = await asyncio.to_thread(save_quiz, quiz_data, file_ids, generated["quiz_name"], class_id)
             logger.info("[QuizGeneration] saved quiz id=%s name=%s", saved_info["quiz_id"], saved_info.get("name", "N/A"))
         except Exception as save_error:
             logger.error("[QuizGeneration] failed to save quiz: %s", save_error)
@@ -178,4 +179,3 @@ async def generate_quiz_from_files(
         raise HTTPException(status_code=500, detail=f"Quiz generation failed: {error}") from error
 
 
-__all__ = ["QuizGenerateResponse", "generate_quiz_from_files"]

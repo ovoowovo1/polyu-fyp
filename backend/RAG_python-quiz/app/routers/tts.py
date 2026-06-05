@@ -2,16 +2,13 @@ import base64
 import io
 import re
 import struct
-from typing import Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from google import genai
 from google.genai import types
 
-from app.config import get_settings
 from app.logger import get_logger
 from app.routers.service_helpers import error_detail
 from app.utils.api_key_manager import get_llm_client, with_llm_retry_sync
@@ -23,9 +20,9 @@ router = APIRouter(prefix="", tags=["tts"])
 
 class TTSRequest(BaseModel):
     text: str
-    voice_name: Optional[str] = "Zephyr"
-    model: Optional[str] = None
-    target_mime: Optional[str] = "audio/wav"
+    voice_name: str | None = "Zephyr"
+    model: str | None = None
+    target_mime: str | None = "audio/wav"
 
 
 def _to_bytes(audio_data) -> bytes:
@@ -80,38 +77,30 @@ def pcm_to_wav(
     return wav_data
 
 
-def _find_inline_audio_part(resp: types.GenerateContentResponse) -> Optional[types.Part]:
-    if hasattr(resp, "parts") and resp.parts:
-        for part in resp.parts:
-            inline_data = getattr(part, "inline_data", None)
-            mime_type = getattr(inline_data, "mime_type", "")
-            if inline_data and mime_type.lower().startswith("audio/"):
-                return part
-
+def _iter_response_parts(resp: types.GenerateContentResponse):
+    yield from getattr(resp, "parts", []) or []
     for candidate in getattr(resp, "candidates", []) or []:
         content = getattr(candidate, "content", None)
-        if not content:
-            continue
-        for part in getattr(content, "parts", []) or []:
-            inline_data = getattr(part, "inline_data", None)
-            mime_type = getattr(inline_data, "mime_type", "")
-            if inline_data and mime_type.lower().startswith("audio/"):
-                return part
+        if content:
+            yield from getattr(content, "parts", []) or []
+
+
+def _find_inline_audio_part(resp: types.GenerateContentResponse) -> types.Part | None:
+    for part in _iter_response_parts(resp):
+        inline_data = getattr(part, "inline_data", None)
+        mime_type = getattr(inline_data, "mime_type", "")
+        if inline_data and mime_type.lower().startswith("audio/"):
+            return part
     return None
-
-
-def _make_client(api_key: str) -> genai.Client:
-    return get_llm_client(api_key)
 
 
 def _synthesize_once(
     api_key: str,
     text: str,
-    voice_name: Optional[str],
-    model_name: Optional[str],
-) -> Tuple[bytes, str]:
+    voice_name: str | None,
+    model_name: str | None,
+) -> tuple[bytes, str]:
     del model_name
-    _settings = get_settings()
     _model = "tts-1"
 
     client = get_llm_client(api_key)

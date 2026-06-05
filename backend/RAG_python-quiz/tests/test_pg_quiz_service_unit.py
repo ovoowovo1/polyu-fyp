@@ -1,8 +1,9 @@
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 
-from app.services.pg import pg_service
 from app.services.core.exceptions import PermissionDeniedError
+from app.services.pg import pg_quiz_service as pg_service
 from tests.pg_service_test_support import FixedDateTime, PgServiceBase
 from tests.support import FakeConnection, FakeCursor
 
@@ -13,13 +14,13 @@ class PgQuizServiceTests(PgServiceBase):
     def test_default_quiz_name_covers_single_multiple_and_empty_file_sets(self):
         with patch("app.services.pg.pg_quiz_service.datetime", FixedDateTime):
             cursor = FakeCursor(fetchall_results=[[{"name": "lesson.pdf"}]])
-            self.assertIn("lesson -", pg_service._default_quiz_name(cursor, ["file-1"]))
+            self.assertIn("lesson - Quiz", pg_service._default_quiz_name(cursor, ["file-1"]))
 
             cursor = FakeCursor(fetchall_results=[[{"name": "a.pdf"}, {"name": "b.pdf"}]])
-            self.assertIn("2", pg_service._default_quiz_name(cursor, ["file-1", "file-2"]))
+            self.assertIn("2 documents - Quiz", pg_service._default_quiz_name(cursor, ["file-1", "file-2"]))
 
             cursor = FakeCursor(fetchall_results=[[]])
-            self.assertIn("(01/02 03:04)", pg_service._default_quiz_name(cursor, []))
+            self.assertEqual(pg_service._default_quiz_name(cursor, []), "Quiz (01/02 03:04)")
 
     def test_save_quiz_covers_custom_and_generated_names(self):
         created_at = datetime(2025, 1, 2, 3, 4, 5)
@@ -44,7 +45,7 @@ class PgQuizServiceTests(PgServiceBase):
             "app.services.pg.pg_shared.psycopg2.extras.execute_values"
         ):
             generated = pg_service.save_quiz({"questions": [{"q": 1}]}, ["file-1"])
-        self.assertIn("lesson -", generated["name"])
+        self.assertIn("lesson - Quiz", generated["name"])
         self.assertEqual(generated["created_at"], "raw")
 
     def test_update_quiz_covers_validation_missing_quiz_and_document_replacement(self):
@@ -75,7 +76,7 @@ class PgQuizServiceTests(PgServiceBase):
         with self.patch_conn(cursor):
             quizzes = pg_service.get_all_quizzes()
         self.assertEqual(quizzes[0]["documents"][0]["name"], "lesson.pdf")
-        self.assertEqual(quizzes[0]["name"], "未命名測驗")
+        self.assertEqual(quizzes[0]["name"], pg_service.UNTITLED_QUIZ_NAME)
 
         cursor = FakeCursor(fetchone_results=[{"role": "teacher"}], fetchall_results=[rows, docs])
         with self.patch_conn(cursor):
@@ -112,6 +113,7 @@ class PgQuizServiceTests(PgServiceBase):
         cursor = FakeCursor(fetchone_results=[{"id": "quiz-1"}])
         with self.patch_conn(cursor, module_path="app.services.pg.pg_db"):
             deleted = pg_service.delete_quiz("quiz-1")
+        self.assertEqual(deleted["message"], "Quiz deleted successfully")
         self.assertEqual(deleted["quiz_id"], "quiz-1")
 
         cursor = FakeCursor(fetchone_results=[{"id": "quiz-1"}])
@@ -122,6 +124,13 @@ class PgQuizServiceTests(PgServiceBase):
         with self.patch_conn(FakeCursor(fetchone_results=[None]), module_path="app.services.pg.pg_db"):
             with self.assertRaises(RuntimeError):
                 pg_service.delete_quiz("missing")
+
+    def test_app_source_does_not_contain_known_mojibake_tokens(self):
+        app_dir = Path(__file__).resolve().parents[1] / "app"
+        source_text = "\n".join(path.read_text(encoding="utf-8") for path in app_dir.rglob("*.py"))
+
+        for token in ("皜祇", "芸", "葫", "靽", "隞", ""):
+            self.assertNotIn(token, source_text)
 
     def test_get_quiz_by_id_enforces_access_and_parses_question_payloads(self):
         created_at = datetime(2025, 1, 2, 3, 4, 5)
@@ -144,6 +153,7 @@ class PgQuizServiceTests(PgServiceBase):
         with self.patch_conn(cursor):
             teacher_view = pg_service.get_quiz_by_id("quiz-1", user_id="teacher-1")
         self.assertEqual(teacher_view["questions"][0]["question"], "What?")
+        self.assertEqual(teacher_view["name"], pg_service.UNTITLED_QUIZ_NAME)
 
         cursor = FakeCursor(fetchone_results=[quiz_row, {"role": "student"}, {"ok": 1}], fetchall_results=[docs_rows])
         with self.patch_conn(cursor):

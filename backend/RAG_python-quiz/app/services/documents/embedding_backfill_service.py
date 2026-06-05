@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 
 from app.logger import get_logger
 from app.services.documents import document_service
-from app.services.pg import pg_service
+from app.services.pg import pg_retrieval_service as pg_service
 from app.utils.api_key_manager import create_embedding_model
 
 logger = get_logger(__name__)

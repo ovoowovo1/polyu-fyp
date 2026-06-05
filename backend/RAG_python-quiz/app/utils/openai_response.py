@@ -15,25 +15,19 @@ def _get_attr(obj: Any, name: str, default: Any = None) -> Any:
 
 
 def _truncate_text(value: Any, limit: int = _SUMMARY_LIMIT) -> str:
-    if value is None:
-        return "None"
+    return _clip("None" if value is None else str(value), limit)
 
-    text = str(value).replace("\n", "\\n")
-    if len(text) > limit:
-        return text[: limit - 3] + "..."
-    return text
+
+def _clip(text: str, limit: int) -> str:
+    text = text.replace("\n", "\\n")
+    return text[: limit - 3] + "..." if len(text) > limit else text
 
 
 def _safe_repr(value: Any, limit: int = _SUMMARY_LIMIT) -> str:
     try:
-        text = repr(value)
+        return _clip(repr(value), limit)
     except Exception:
-        text = f"<unrepresentable {type(value).__name__}>"
-
-    text = text.replace("\n", "\\n")
-    if len(text) > limit:
-        return text[: limit - 3] + "..."
-    return text
+        return _clip(f"<unrepresentable {type(value).__name__}>", limit)
 
 
 def _build_response_summary(response: Any) -> str:

@@ -3,18 +3,18 @@ import unittest
 
 from app.utils import openai_response
 from app.utils.openai_response import extract_chat_completion_text
+from tests.support import make_openai_choice as make_choice
+from tests.support import make_openai_response as make_response
 
 
-def make_response(*, choices, model="test-model"):
-    return SimpleNamespace(model=model, choices=choices)
+def assert_extract_error(testcase, response, expected_parts):
+    expected_parts = expected_parts if isinstance(expected_parts, tuple) else (expected_parts,)
+    with testcase.assertRaises(RuntimeError) as ctx:
+        extract_chat_completion_text(response, "unit-test")
 
-
-def make_choice(*, content=None, finish_reason="stop", refusal=None, include_message=True):
-    if include_message:
-        message = SimpleNamespace(content=content, refusal=refusal)
-    else:
-        message = None
-    return SimpleNamespace(message=message, finish_reason=finish_reason)
+    message = str(ctx.exception)
+    for expected in expected_parts:
+        testcase.assertIn(expected, message)
 
 
 class ExtractChatCompletionTextTests(unittest.TestCase):
@@ -60,56 +60,21 @@ class ExtractChatCompletionTextTests(unittest.TestCase):
 
         self.assertEqual(text, '{"ok": true}')
 
-    def test_raises_when_choices_is_none(self):
-        response = make_response(choices=None)
-
-        with self.assertRaises(RuntimeError) as ctx:
-            extract_chat_completion_text(response, "unit-test")
-
-        self.assertIn("choices is None", str(ctx.exception))
-
-    def test_raises_when_choices_is_empty(self):
-        response = make_response(choices=[])
-
-        with self.assertRaises(RuntimeError) as ctx:
-            extract_chat_completion_text(response, "unit-test")
-
-        self.assertIn("choices is empty", str(ctx.exception))
-
-    def test_raises_when_response_is_none(self):
-        with self.assertRaises(RuntimeError) as ctx:
-            extract_chat_completion_text(None, "unit-test")
-
-        self.assertIn("response is None", str(ctx.exception))
-
-    def test_raises_when_choices_has_unexpected_type(self):
-        response = make_response(choices="bad-shape")
-
-        with self.assertRaises(RuntimeError) as ctx:
-            extract_chat_completion_text(response, "unit-test")
-
-        self.assertIn("choices has unexpected type str", str(ctx.exception))
-
-    def test_raises_when_message_is_missing(self):
-        response = make_response(choices=[make_choice(include_message=False)])
-
-        with self.assertRaises(RuntimeError) as ctx:
-            extract_chat_completion_text(response, "unit-test")
-
-        self.assertIn("first choice has no message", str(ctx.exception))
-
-    def test_raises_with_refusal_when_content_is_none(self):
-        response = make_response(
-            choices=[make_choice(content=None, refusal="safety block", finish_reason="content_filter")]
-        )
-
-        with self.assertRaises(RuntimeError) as ctx:
-            extract_chat_completion_text(response, "unit-test")
-
-        message = str(ctx.exception)
-        self.assertIn("message.content is None", message)
-        self.assertIn("refusal='safety block'", message)
-        self.assertIn("finish_reason=content_filter", message)
+    def test_raises_for_invalid_response_shapes(self):
+        cases = [
+            (None, "response is None"),
+            (make_response(choices=None), "choices is None"),
+            (make_response(choices=[]), "choices is empty"),
+            (make_response(choices="bad-shape"), "choices has unexpected type str"),
+            (make_response(choices=[make_choice(include_message=False)]), "first choice has no message"),
+            (
+                make_response(choices=[make_choice(content=None, refusal="safety block", finish_reason="content_filter")]),
+                ("message.content is None", "refusal='safety block'", "finish_reason=content_filter"),
+            ),
+        ]
+        for response, expected_parts in cases:
+            with self.subTest(expected_parts=expected_parts):
+                assert_extract_error(self, response, expected_parts)
 
     def test_concatenates_text_parts_from_content_list(self):
         parts = [
@@ -127,15 +92,9 @@ class ExtractChatCompletionTextTests(unittest.TestCase):
     def test_raises_for_content_list_without_text(self):
         response = make_response(choices=[make_choice(content=[{"type": "image_url", "image_url": {"url": "ignored"}}])])
 
-        with self.assertRaises(RuntimeError) as ctx:
-            extract_chat_completion_text(response, "unit-test")
-
-        self.assertIn("contained no text parts", str(ctx.exception))
+        assert_extract_error(self, response, "contained no text parts")
 
     def test_raises_for_unexpected_content_type(self):
         response = make_response(choices=[make_choice(content={"unexpected": True})])
 
-        with self.assertRaises(RuntimeError) as ctx:
-            extract_chat_completion_text(response, "unit-test")
-
-        self.assertIn("unexpected type dict", str(ctx.exception))
+        assert_extract_error(self, response, "unexpected type dict")
