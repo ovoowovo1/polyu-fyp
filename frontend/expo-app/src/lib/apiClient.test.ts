@@ -44,6 +44,7 @@ describe('apiClient', () => {
       const url = String(input);
       const auth = (init?.headers as Headers | undefined)?.get?.('Authorization');
       if (url.endsWith('/auth/refresh')) {
+        expect((init?.headers as Record<string, string>)['X-Client-Platform']).toBe('expo-native');
         return Promise.resolve(jsonResponse({
           session_token: 'new-access',
           access_token: 'new-access',
@@ -87,6 +88,7 @@ describe('apiClient', () => {
       const url = String(input);
       const auth = (init?.headers as Headers | undefined)?.get?.('Authorization');
       if (url.endsWith('/auth/refresh')) {
+        expect((init?.headers as Record<string, string>)['X-Client-Platform']).toBe('expo-native');
         return Promise.resolve(jsonResponse({
           session_token: 'new-access',
           access_token: 'new-access',
@@ -125,6 +127,7 @@ describe('apiClient', () => {
       const url = String(input);
       const auth = (init?.headers as Headers | undefined)?.get?.('Authorization');
       if (url.endsWith('/auth/refresh')) {
+        expect((init?.headers as Record<string, string>)['X-Client-Platform']).toBe('expo-native');
         return Promise.resolve(jsonResponse({
           session_token: 'new-access',
           access_token: 'new-access',

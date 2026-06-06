@@ -11,10 +11,11 @@ import {
     register,
     verifyToken,
 } from './auth.js';
+import { clearAuthSession, storeAuthSession } from './authSession.js';
 import { API_BASE_URL } from '../config.js';
 import { installAxiosMock, installLocalStorageMock } from '../testing/mockRuntime.js';
 
-test('login stores access token, refresh token, and user when authentication succeeds', async () => {
+test('login stores access token in memory and relies on HttpOnly refresh cookie', async () => {
     const storage = installLocalStorageMock();
     const user = { id: 'user-1', email: 'student@example.com' };
     const axiosMock = installAxiosMock({
@@ -22,7 +23,6 @@ test('login stores access token, refresh token, and user when authentication suc
             data: {
                 session_token: 'access-token-123',
                 access_token: 'access-token-123',
-                refresh_token: 'refresh-token-123',
                 user,
             },
         }),
@@ -32,7 +32,12 @@ test('login stores access token, refresh token, and user when authentication suc
         const result = await login('student@example.com', 'secret', 'student');
 
         assert.equal(result.session_token, 'access-token-123');
-        assert.deepEqual(axiosMock.calls.map(({ args }) => ({ url: args[0], body: args[1] })), [
+        assert.equal(getToken(), 'access-token-123');
+        assert.equal(getRefreshToken(), null);
+        assert.deepEqual(getCurrentUser(), user);
+        assert.equal(localStorage.getItem('session_token'), null);
+        assert.equal(localStorage.getItem('refresh_token'), null);
+        assert.deepEqual(axiosMock.calls.map(({ args }) => ({ url: args[0], body: args[1], config: args[2] })), [
             {
                 url: `${API_BASE_URL}/auth/login`,
                 body: {
@@ -40,19 +45,17 @@ test('login stores access token, refresh token, and user when authentication suc
                     password: 'secret',
                     role: 'student',
                 },
+                config: { withCredentials: true },
             },
         ]);
-        assert.equal(localStorage.getItem('session_token'), 'access-token-123');
-        assert.equal(localStorage.getItem('refresh_token'), 'refresh-token-123');
-        assert.equal(localStorage.getItem('user'), JSON.stringify(user));
     } finally {
+        clearAuthSession();
         axiosMock.restore();
         storage.restore();
     }
 });
 
 test('login uses backend response errors when authentication fails', async () => {
-    const storage = installLocalStorageMock();
     const axiosMock = installAxiosMock({
         post: async () => {
             throw { response: { data: { detail: { error: 'Invalid credentials' } } } };
@@ -65,13 +68,12 @@ test('login uses backend response errors when authentication fails', async () =>
             { message: 'Invalid credentials' },
         );
     } finally {
+        clearAuthSession();
         axiosMock.restore();
-        storage.restore();
     }
 });
 
 test('login converts request errors into a network message', async () => {
-    const storage = installLocalStorageMock();
     const axiosMock = installAxiosMock({
         post: async () => {
             throw { request: {} };
@@ -84,8 +86,8 @@ test('login converts request errors into a network message', async () => {
             { message: 'Network connection failed. Please check your server connection.' },
         );
     } finally {
+        clearAuthSession();
         axiosMock.restore();
-        storage.restore();
     }
 });
 
@@ -131,12 +133,8 @@ test('register uses backend error messages when registration fails', async () =>
     }
 });
 
-test('verifyToken sends the stored access token and returns verified user data', async () => {
-    const storage = installLocalStorageMock({
-        session_token: 'access-token-456',
-        refresh_token: 'refresh-token-456',
-        user: JSON.stringify({ id: 'user-1' }),
-    });
+test('verifyToken sends the in-memory access token and returns verified user data', async () => {
+    storeAuthSession({ session_token: 'access-token-456', user: { id: 'user-1' } });
     const axiosMock = installAxiosMock({
         get: async () => ({ data: { valid: true, user: { id: 'user-1' } } }),
     });
@@ -152,21 +150,23 @@ test('verifyToken sends the stored access token and returns verified user data',
                     headers: {
                         Authorization: 'Bearer access-token-456',
                     },
+                    withCredentials: true,
                 },
             },
         ]);
     } finally {
+        clearAuthSession();
         axiosMock.restore();
-        storage.restore();
     }
 });
 
-test('verifyToken refreshes and stores new tokens when access token verification fails', async () => {
+test('verifyToken refreshes from cookie and stores only the new access token in memory', async () => {
     const storage = installLocalStorageMock({
-        session_token: 'expired-access',
-        refresh_token: 'refresh-token-456',
-        user: JSON.stringify({ id: 'user-1' }),
+        session_token: 'legacy-access',
+        refresh_token: 'legacy-refresh',
+        user: JSON.stringify({ id: 'legacy-user' }),
     });
+    storeAuthSession({ session_token: 'expired-access', user: { id: 'user-1' } });
     const axiosMock = installAxiosMock({
         get: async () => {
             throw { response: { data: { detail: { error: 'Token expired' } } } };
@@ -175,7 +175,6 @@ test('verifyToken refreshes and stores new tokens when access token verification
             data: {
                 session_token: 'new-access',
                 access_token: 'new-access',
-                refresh_token: 'new-refresh',
                 user: { id: 'user-1', role: 'student' },
             },
         }),
@@ -185,27 +184,32 @@ test('verifyToken refreshes and stores new tokens when access token verification
         const result = await verifyToken();
 
         assert.equal(result.session_token, 'new-access');
-        assert.deepEqual(axiosMock.calls.filter(({ method }) => method === 'post').map(({ args }) => ({ url: args[0], body: args[1] })), [
+        assert.equal(getToken(), 'new-access');
+        assert.equal(getRefreshToken(), null);
+        assert.deepEqual(getCurrentUser(), { id: 'user-1', role: 'student' });
+        assert.deepEqual(axiosMock.calls.filter(({ method }) => method === 'post').map(({ args }) => ({ url: args[0], body: args[1], config: args[2] })), [
             {
                 url: `${API_BASE_URL}/auth/refresh`,
-                body: { refresh_token: 'refresh-token-456' },
+                body: {},
+                config: { withCredentials: true },
             },
         ]);
-        assert.equal(localStorage.getItem('session_token'), 'new-access');
-        assert.equal(localStorage.getItem('refresh_token'), 'new-refresh');
-        assert.equal(localStorage.getItem('user'), JSON.stringify({ id: 'user-1', role: 'student' }));
+        assert.equal(localStorage.getItem('session_token'), null);
+        assert.equal(localStorage.getItem('refresh_token'), null);
     } finally {
+        clearAuthSession();
         axiosMock.restore();
         storage.restore();
     }
 });
 
-test('verifyToken clears storage when access verification and refresh both fail', async () => {
+test('verifyToken clears memory and legacy storage when access verification and refresh both fail', async () => {
     const storage = installLocalStorageMock({
-        session_token: 'expired-token',
-        refresh_token: 'bad-refresh',
-        user: JSON.stringify({ id: 'user-1' }),
+        session_token: 'legacy-access',
+        refresh_token: 'legacy-refresh',
+        user: JSON.stringify({ id: 'legacy-user' }),
     });
+    storeAuthSession({ session_token: 'expired-token', user: { id: 'user-1' } });
     const axiosMock = installAxiosMock({
         get: async () => {
             throw { response: { data: { detail: { error: 'Token expired' } } } };
@@ -220,45 +224,44 @@ test('verifyToken clears storage when access verification and refresh both fail'
             () => verifyToken(),
             { message: 'Invalid refresh token' },
         );
+        assert.equal(getToken(), null);
+        assert.equal(getCurrentUser(), null);
         assert.equal(localStorage.getItem('session_token'), null);
         assert.equal(localStorage.getItem('refresh_token'), null);
         assert.equal(localStorage.getItem('user'), null);
-        assert.deepEqual(axiosMock.calls.filter(({ method }) => method === 'post').map(({ args }) => ({ url: args[0], body: args[1] })), [
-            {
-                url: `${API_BASE_URL}/auth/refresh`,
-                body: { refresh_token: 'bad-refresh' },
-            },
-        ]);
     } finally {
+        clearAuthSession();
         axiosMock.restore();
         storage.restore();
     }
 });
 
-test('verifyToken uses refresh token when access token is missing', async () => {
-    const storage = installLocalStorageMock({ refresh_token: 'refresh-only' });
+test('verifyToken uses refresh cookie when access token is missing', async () => {
+    clearAuthSession();
     const axiosMock = installAxiosMock({
-        post: async () => ({ data: { session_token: 'new-access', refresh_token: 'new-refresh' } }),
+        post: async () => ({ data: { session_token: 'new-access', user: { id: 'user-1' } } }),
     });
 
     try {
         const result = await verifyToken();
 
         assert.equal(result.session_token, 'new-access');
-        assert.equal(localStorage.getItem('session_token'), 'new-access');
-        assert.equal(localStorage.getItem('refresh_token'), 'new-refresh');
+        assert.equal(getToken(), 'new-access');
+        assert.deepEqual(axiosMock.calls.map(({ args }) => ({ url: args[0], body: args[1], config: args[2] })), [
+            {
+                url: `${API_BASE_URL}/auth/refresh`,
+                body: {},
+                config: { withCredentials: true },
+            },
+        ]);
     } finally {
+        clearAuthSession();
         axiosMock.restore();
-        storage.restore();
     }
 });
 
-test('logout clears stored authentication data and revokes refresh token', () => {
-    const storage = installLocalStorageMock({
-        session_token: 'token-789',
-        refresh_token: 'refresh-789',
-        user: JSON.stringify({ id: 'user-1' }),
-    });
+test('logout clears memory and asks backend to clear the refresh cookie', () => {
+    storeAuthSession({ session_token: 'token-789', user: { id: 'user-1' } });
     const axiosMock = installAxiosMock({
         post: async () => ({ data: { message: 'ok' } }),
     });
@@ -266,45 +269,50 @@ test('logout clears stored authentication data and revokes refresh token', () =>
     try {
         logout();
 
-        assert.equal(localStorage.getItem('session_token'), null);
-        assert.equal(localStorage.getItem('refresh_token'), null);
-        assert.equal(localStorage.getItem('user'), null);
-        assert.deepEqual(axiosMock.calls.map(({ args }) => ({ url: args[0], body: args[1] })), [
+        assert.equal(getToken(), null);
+        assert.equal(getCurrentUser(), null);
+        assert.deepEqual(axiosMock.calls.map(({ args }) => ({ url: args[0], body: args[1], config: args[2] })), [
             {
                 url: `${API_BASE_URL}/auth/logout`,
-                body: { refresh_token: 'refresh-789' },
+                body: {},
+                config: { withCredentials: true },
             },
         ]);
     } finally {
+        clearAuthSession();
         axiosMock.restore();
-        storage.restore();
     }
 });
 
-test('auth localStorage helpers expose tokens, user, and auth status', () => {
+test('auth helpers expose memory-backed access token, user, and auth status only', () => {
     const storage = installLocalStorageMock({
-        session_token: 'token-abc',
-        refresh_token: 'refresh-abc',
-        user: JSON.stringify({ id: 'user-1', role: 'student' }),
+        session_token: 'legacy-token',
+        refresh_token: 'legacy-refresh',
+        user: JSON.stringify({ id: 'legacy-user' }),
     });
 
     try {
-        assert.equal(getToken(), 'token-abc');
-        assert.equal(getRefreshToken(), 'refresh-abc');
-        assert.deepEqual(getCurrentUser(), { id: 'user-1', role: 'student' });
-        assert.equal(isAuthenticated(), true);
-
-        localStorage.removeItem('session_token');
-        assert.equal(isAuthenticated(), true);
-
-        localStorage.removeItem('refresh_token');
-        localStorage.setItem('user', '{not valid json');
-
         assert.equal(getToken(), null);
         assert.equal(getRefreshToken(), null);
         assert.equal(getCurrentUser(), null);
         assert.equal(isAuthenticated(), false);
+
+        storeAuthSession({ session_token: 'token-abc', user: { id: 'user-1', role: 'student' } });
+
+        assert.equal(getToken(), 'token-abc');
+        assert.equal(getRefreshToken(), null);
+        assert.deepEqual(getCurrentUser(), { id: 'user-1', role: 'student' });
+        assert.equal(isAuthenticated(), true);
+
+        clearAuthSession();
+
+        assert.equal(getToken(), null);
+        assert.equal(getCurrentUser(), null);
+        assert.equal(isAuthenticated(), false);
+        assert.equal(localStorage.getItem('session_token'), null);
+        assert.equal(localStorage.getItem('refresh_token'), null);
     } finally {
+        clearAuthSession();
         storage.restore();
     }
 });

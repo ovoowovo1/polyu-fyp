@@ -14,7 +14,9 @@ export const login = async (email, password, role = null) => {
     try {
         const body = { email, password };
         if (role) body.role = role;
-        const response = await axios.post(`${API_BASE_URL}/auth/login`, body);
+        const response = await axios.post(`${API_BASE_URL}/auth/login`, body, {
+            withCredentials: true,
+        });
         storeAuthSession(response.data);
         return response.data;
     } catch (error) {
@@ -56,6 +58,7 @@ export const verifyToken = async () => {
             headers: {
                 Authorization: `Bearer ${token}`,
             },
+            withCredentials: true,
         });
         return response.data;
     } catch (error) {
@@ -69,13 +72,10 @@ export const verifyToken = async () => {
 };
 
 export const logout = () => {
-    const refreshTokenValue = getRefreshToken();
     clearAuthSession();
-    if (refreshTokenValue) {
-        void axios.post(`${API_BASE_URL}/auth/logout`, {
-            refresh_token: refreshTokenValue,
-        }).catch(() => {});
-    }
+    void axios.post(`${API_BASE_URL}/auth/logout`, {}, {
+        withCredentials: true,
+    }).catch(() => {});
 };
 
 export { getCurrentUser, getRefreshToken, getToken, isAuthenticated };

@@ -35,9 +35,34 @@ class AuthApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["session_token"], "access-token")
         self.assertEqual(response.json()["access_token"], "access-token")
-        self.assertEqual(response.json()["refresh_token"], "refresh-token")
+        self.assertNotIn("refresh_token", response.json())
+        self.assertNotIn("refresh_token", response.json()["data"])
         self.assertEqual(response.json()["message"], "Login successful")
         self.assertEqual(response.json()["data"]["session_token"], "access-token")
+        self.assertEqual(response.cookies.get("refresh_token"), "refresh-token")
+        self.assertIn("HttpOnly", response.headers["set-cookie"])
+        self.assertIn("SameSite=lax", response.headers["set-cookie"])
+
+    def test_login_returns_refresh_token_body_for_expo_clients(self):
+        with patch(
+            "app.routers.auth.auth_login",
+            return_value={
+                "session_token": "access-token",
+                "access_token": "access-token",
+                "refresh_token": "refresh-token",
+                "expires_in": 900,
+                "token_type": "Bearer",
+            },
+        ):
+            response = self.client.post(
+                "/auth/login",
+                json={"email": "teacher@example.com", "password": "secret", "role": "teacher"},
+                headers={"X-Client-Platform": "expo-native"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["refresh_token"], "refresh-token")
+        self.assertEqual(response.json()["data"]["refresh_token"], "refresh-token")
 
     def test_register_success(self):
         with patch("app.routers.auth.auth_register", return_value={"message": "ok"}):
@@ -98,15 +123,55 @@ class AuthApiTests(unittest.TestCase):
         refresh_session.assert_called_once_with("old-refresh")
         self.assertEqual(response.json()["message"], "Token refreshed")
         self.assertEqual(response.json()["session_token"], "new-access")
+        self.assertNotIn("refresh_token", response.json())
+        self.assertEqual(response.cookies.get("refresh_token"), "new-refresh")
+
+    def test_refresh_uses_cookie_token_when_present(self):
+        with patch(
+            "app.routers.auth.auth_refresh_session",
+            return_value={
+                "session_token": "new-access",
+                "access_token": "new-access",
+                "refresh_token": "new-refresh",
+                "expires_in": 900,
+                "token_type": "Bearer",
+            },
+        ) as refresh_session:
+            response = self.client.post("/auth/refresh", cookies={"refresh_token": "cookie-refresh"})
+
+        self.assertEqual(response.status_code, 200)
+        refresh_session.assert_called_once_with("cookie-refresh")
+        self.assertEqual(response.cookies.get("refresh_token"), "new-refresh")
+
+    def test_refresh_returns_refresh_token_body_for_expo_clients(self):
+        with patch(
+            "app.routers.auth.auth_refresh_session",
+            return_value={
+                "session_token": "new-access",
+                "access_token": "new-access",
+                "refresh_token": "new-refresh",
+                "expires_in": 900,
+                "token_type": "Bearer",
+            },
+        ) as refresh_session:
+            response = self.client.post(
+                "/auth/refresh",
+                json={"refresh_token": "old-refresh"},
+                headers={"X-Client-Platform": "expo"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        refresh_session.assert_called_once_with("old-refresh")
         self.assertEqual(response.json()["refresh_token"], "new-refresh")
 
     def test_logout_success_revokes_refresh_token(self):
         with patch("app.routers.auth.auth_logout", return_value={"message": "Logout successful"}) as logout:
-            response = self.client.post("/auth/logout", json={"refresh_token": "refresh"})
+            response = self.client.post("/auth/logout", cookies={"refresh_token": "refresh"})
 
         self.assertEqual(response.status_code, 200)
         logout.assert_called_once_with("refresh")
         self.assertEqual(response.json()["message"], "Logout successful")
+        self.assertIn("Max-Age=0", response.headers["set-cookie"])
 
     def test_service_errors_return_expected_status(self):
         login_payload = {"email": "teacher@example.com", "password": "secret"}

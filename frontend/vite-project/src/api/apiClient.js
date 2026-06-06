@@ -3,7 +3,6 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config.js';
 import {
     clearAuthSession,
-    getRefreshToken,
     getToken,
     storeAuthSession,
 } from './authSession.js';
@@ -42,14 +41,9 @@ const isAuthPath = (path) => {
 };
 
 export const refreshAccessToken = async () => {
-    const refreshTokenValue = getRefreshToken();
-    if (!refreshTokenValue) {
-        throw new Error('Refresh token missing');
-    }
-
     if (!refreshPromise) {
-        refreshPromise = axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refresh_token: refreshTokenValue,
+        refreshPromise = axios.post(`${API_BASE_URL}/auth/refresh`, {}, {
+            withCredentials: true,
         }).then((response) => {
             storeAuthSession(response.data);
             return response.data;

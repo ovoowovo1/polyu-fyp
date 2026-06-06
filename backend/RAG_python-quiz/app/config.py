@@ -12,7 +12,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     port: int = 3000
-    cors_origins: List[str] = ["*"]
+    cors_origins: List[str] = [
+        "http://localhost:5173",
+        "http://localhost:8081",
+        "http://127.0.0.1:8081",
+    ]
 
     llm_api_keys: str = ""
     llm_api_key: str = ""
@@ -39,6 +43,8 @@ class Settings(BaseSettings):
     pg_dsn: str = "postgresql://postgres:password@localhost:5432/postgres"
 
     jwt_secret_key: str = ""
+    auth_cookie_secure: bool = True
+    auth_cookie_samesite: str = "lax"
 
 
 @lru_cache

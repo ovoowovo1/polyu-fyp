@@ -217,6 +217,8 @@ def make_settings(**overrides):
         "eval_embedding_base_url": "",
         "eval_embedding_model": "",
         "jwt_secret_key": "test-secret",
+        "auth_cookie_secure": False,
+        "auth_cookie_samesite": "lax",
         "cors_origins": ["*"],
         "port": 3000,
         "pg_dsn": "",

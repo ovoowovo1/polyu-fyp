@@ -1,26 +1,58 @@
-import React, { useEffect } from 'react'
-import { Navigate, useLocation, Outlet } from 'react-router-dom'
-import { isAuthenticated } from '../api/auth'
+import React, { useEffect, useState } from 'react'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { Spin } from 'antd'
 import { useDispatch } from 'react-redux'
+
+import { isAuthenticated, verifyToken } from '../api/auth'
 import { resetDocumentState } from '../redux/documentSlice'
 import { resetStudioState } from '../redux/studioSlice'
 
-// 路由保護元件：未登入則導回登入頁
 export default function ProtectedRoute() {
   const dispatch = useDispatch()
   const location = useLocation()
-  const authed = isAuthenticated()
+  const [authStatus, setAuthStatus] = useState(() => (isAuthenticated() ? 'authenticated' : 'checking'))
 
   useEffect(() => {
-    if (!authed) {
+    let active = true
+
+    const verifySession = async () => {
+      if (isAuthenticated()) {
+        if (active) setAuthStatus('authenticated')
+        return
+      }
+
+      try {
+        await verifyToken()
+        if (active) setAuthStatus('authenticated')
+      } catch {
+        if (active) setAuthStatus('unauthenticated')
+      }
+    }
+
+    verifySession()
+    return () => {
+      active = false
+    }
+  }, [location.pathname])
+
+  useEffect(() => {
+    if (authStatus === 'unauthenticated') {
       dispatch(resetDocumentState())
       dispatch(resetStudioState())
     }
-  }, [authed, dispatch])
+  }, [authStatus, dispatch])
 
-  if (!authed) {
+  if (authStatus === 'checking') {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <Spin size="large" />
+      </div>
+    )
+  }
+
+  if (authStatus === 'unauthenticated') {
     return <Navigate to="/" replace state={{ from: location.pathname }} />
   }
+
   return <Outlet />
 }
-

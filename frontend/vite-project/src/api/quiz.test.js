@@ -13,6 +13,7 @@ import {
     submitQuiz,
     updateQuiz,
 } from './quiz.js';
+import { clearAuthSession, storeAuthSession } from './authSession.js';
 import { API_BASE_URL } from '../config.js';
 import { clearDedupeCache } from '../utils/requestDeduper.js';
 import { installAxiosMock, installLocalStorageMock } from '../testing/mockRuntime.js';
@@ -44,7 +45,7 @@ test('generateQuiz posts multipart form data with selected files and options', a
 });
 
 test('getAllQuizzes uses the quiz list endpoint and dedupes repeated calls', async () => {
-    const storage = installLocalStorageMock({ session_token: 'quiz-token' });
+    storeAuthSession({ session_token: 'quiz-token' });
     const axiosMock = installAxiosMock({
         get: async () => ({ data: [{ id: 'quiz-1' }] }),
     });
@@ -65,14 +66,14 @@ test('getAllQuizzes uses the quiz list endpoint and dedupes repeated calls', asy
             },
         ]);
     } finally {
+        clearAuthSession();
         axiosMock.restore();
-        storage.restore();
         clearDedupeCache('quiz:list:class-1');
     }
 });
 
 test('quiz management APIs include auth when a session token exists', async () => {
-    const storage = installLocalStorageMock({ session_token: 'teacher-token' });
+    storeAuthSession({ session_token: 'teacher-token' });
     const axiosMock = installAxiosMock({
         get: async () => ({ data: { ok: true } }),
         post: async () => ({ data: { ok: true } }),
@@ -118,13 +119,13 @@ test('quiz management APIs include auth when a session token exists', async () =
             },
         ]);
     } finally {
+        clearAuthSession();
         axiosMock.restore();
-        storage.restore();
     }
 });
 
 test('quiz submission and feedback APIs include auth when a session token exists', async () => {
-    const storage = installLocalStorageMock({ session_token: 'token-123' });
+    storeAuthSession({ session_token: 'token-123' });
     const axiosMock = installAxiosMock({
         post: async () => ({ data: { ok: true } }),
     });
@@ -146,8 +147,8 @@ test('quiz submission and feedback APIs include auth when a session token exists
             },
         ]);
     } finally {
+        clearAuthSession();
         axiosMock.restore();
-        storage.restore();
     }
 });
 

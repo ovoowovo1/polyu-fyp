@@ -10,6 +10,25 @@ This file contains repository-specific instructions for AI agents working in thi
 
 ## Required Verification
 
+### Cross-Client Backend/API Impact
+
+This repository has two separate frontend clients:
+
+- Website: `frontend/vite-project`
+- Mobile/Expo app: `frontend/expo-app`
+
+If you modify backend API behavior, authentication/session behavior, CORS, response schemas, request schemas, route paths, static asset URLs, streaming/SSE behavior, or any shared frontend/backend contract under `backend/RAG_python-quiz`, you must explicitly check whether the change affects both clients.
+
+Do not assume the website and Expo app use the backend in the same way. They may have different storage, auth, networking, cookie, CORS, and runtime constraints.
+
+For backend/API contract changes:
+
+- Inspect both `frontend/vite-project` and `frontend/expo-app` call sites for the changed API or behavior.
+- Update tests for every affected client.
+- Run backend verification plus the relevant website and/or Expo verification commands.
+- If only one client is affected, state why the other client is unaffected in the final response.
+- If the impact cannot be fully verified, report the exact blocker and do not claim the full client impact is verified.
+
 ### Backend Changes
 
 If you modify backend code or backend tests under `backend/RAG_python-quiz`, you must run the backend test suite from `backend/RAG_python-quiz` with the project virtual environment:

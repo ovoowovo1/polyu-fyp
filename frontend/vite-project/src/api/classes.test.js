@@ -7,12 +7,14 @@ import {
     listMyClasses,
     listMyEnrolledClasses,
 } from './classes.js';
+import { clearAuthSession, storeAuthSession } from './authSession.js';
 import { API_BASE_URL } from '../config.js';
 import i18n from '../i18n/config.js';
 import { installAxiosMock, installLocalStorageMock } from '../testing/mockRuntime.js';
 
 test('class APIs reject with the localized not-logged-in message when no token exists', async () => {
     const storage = installLocalStorageMock();
+    clearAuthSession();
     await i18n.changeLanguage('en');
     const expected = i18n.t('auth.notLoggedIn');
 
@@ -27,7 +29,7 @@ test('class APIs reject with the localized not-logged-in message when no token e
 });
 
 test('list class APIs use Authorization and return response data', async () => {
-    const storage = installLocalStorageMock({ session_token: 'class-token' });
+    storeAuthSession({ session_token: 'class-token' });
     const axiosMock = installAxiosMock({
         get: async () => ({ data: [{ id: 'class-1' }] }),
     });
@@ -49,13 +51,13 @@ test('list class APIs use Authorization and return response data', async () => {
             },
         ]);
     } finally {
+        clearAuthSession();
         axiosMock.restore();
-        storage.restore();
     }
 });
 
 test('createClass posts the class name with Authorization', async () => {
-    const storage = installLocalStorageMock({ session_token: 'class-token' });
+    storeAuthSession({ session_token: 'class-token' });
     const axiosMock = installAxiosMock({
         post: async () => ({ data: { id: 'class-2', name: 'COMP 101' } }),
     });
@@ -72,13 +74,13 @@ test('createClass posts the class name with Authorization', async () => {
             },
         ]);
     } finally {
+        clearAuthSession();
         axiosMock.restore();
-        storage.restore();
     }
 });
 
 test('inviteStudent posts the invited email with Authorization', async () => {
-    const storage = installLocalStorageMock({ session_token: 'class-token' });
+    storeAuthSession({ session_token: 'class-token' });
     const axiosMock = installAxiosMock({
         post: async () => ({ data: { invited: true } }),
     });
@@ -95,7 +97,7 @@ test('inviteStudent posts the invited email with Authorization', async () => {
             },
         ]);
     } finally {
+        clearAuthSession();
         axiosMock.restore();
-        storage.restore();
     }
 });

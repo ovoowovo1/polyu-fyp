@@ -8,11 +8,12 @@ import {
     getExamPdfUrl,
     publishExam,
 } from './exam.js';
+import { clearAuthSession, storeAuthSession } from './authSession.js';
 import { API_BASE_URL } from '../config.js';
 import { installAxiosMock, installLocalStorageMock } from '../testing/mockRuntime.js';
 
 test('generateExam posts params with authorization when a token exists', async () => {
-    const storage = installLocalStorageMock({ session_token: 'exam-token' });
+    storeAuthSession({ session_token: 'exam-token' });
     const axiosMock = installAxiosMock({
         post: async () => ({ data: { id: 'exam-1' } }),
     });
@@ -34,13 +35,13 @@ test('generateExam posts params with authorization when a token exists', async (
             },
         ]);
     } finally {
+        clearAuthSession();
         axiosMock.restore();
-        storage.restore();
     }
 });
 
 test('getExamList and getExamById pass query params and auth header', async () => {
-    const storage = installLocalStorageMock({ session_token: 'exam-token' });
+    storeAuthSession({ session_token: 'exam-token' });
     const axiosMock = installAxiosMock({
         get: async () => ({ data: [] }),
     });
@@ -66,8 +67,8 @@ test('getExamList and getExamById pass query params and auth header', async () =
             },
         ]);
     } finally {
+        clearAuthSession();
         axiosMock.restore();
-        storage.restore();
     }
 });
 

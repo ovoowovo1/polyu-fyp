@@ -3,6 +3,8 @@ import type { LoginResponse } from '@/lib/types';
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:3000';
 export const QUERY_TIMEOUT_MS = 120_000;
+export const CLIENT_PLATFORM_HEADER = 'X-Client-Platform';
+export const CLIENT_PLATFORM = 'expo-native';
 
 const TOKEN_KEY = 'session_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
@@ -95,7 +97,10 @@ export async function refreshSession(refreshToken: string = refreshTokenValue ||
     refreshPromise = (async () => {
       const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          [CLIENT_PLATFORM_HEADER]: CLIENT_PLATFORM,
+        },
         body: JSON.stringify({ refresh_token: refreshToken }),
       });
       const text = await response.text();

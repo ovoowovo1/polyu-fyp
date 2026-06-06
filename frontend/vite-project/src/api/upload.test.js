@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { uploadLink, uploadMultiple } from './upload.js';
+import { clearAuthSession, storeAuthSession } from './authSession.js';
 import { API_BASE_URL } from '../config.js';
 import { installAxiosMock, installLocalStorageMock } from '../testing/mockRuntime.js';
 
 test('uploadMultiple posts files with client and class query params', async () => {
-    const storage = installLocalStorageMock({ session_token: 'upload-token' });
+    storeAuthSession({ session_token: 'upload-token' });
     const axiosMock = installAxiosMock({
         post: async () => ({ data: { ok: true } }),
     });
@@ -27,8 +28,8 @@ test('uploadMultiple posts files with client and class query params', async () =
             },
         });
     } finally {
+        clearAuthSession();
         axiosMock.restore();
-        storage.restore();
     }
 });
 

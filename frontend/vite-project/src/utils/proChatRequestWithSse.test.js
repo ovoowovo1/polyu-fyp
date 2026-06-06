@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { handleProChatRequestWithSse } from './proChatRequestWithSse.js';
+import { clearAuthSession, storeAuthSession } from '../api/authSession.js';
 import { API_BASE_URL } from '../config.js';
-import { installAxiosMock, installLocalStorageMock } from '../testing/mockRuntime.js';
+import { installAxiosMock } from '../testing/mockRuntime.js';
 
 const encoder = new TextEncoder();
 
@@ -108,20 +109,16 @@ test('handleProChatRequestWithSse returns backend 400 detail for fetch responses
 
 test('handleProChatRequestWithSse refreshes and retries when the stream request starts with 401', async () => {
   const originalFetch = global.fetch;
-  const storage = installLocalStorageMock({
-    session_token: 'expired-access',
-    refresh_token: 'refresh-123',
-  });
+  storeAuthSession({ session_token: 'expired-access' });
   const fetchCalls = [];
   const refreshCalls = [];
   const axiosMock = installAxiosMock({
-    post: async (url, body) => {
-      refreshCalls.push({ url, body });
+    post: async (url, body, config) => {
+      refreshCalls.push({ url, body, config });
       return {
         data: {
           session_token: 'new-access',
           access_token: 'new-access',
-          refresh_token: 'new-refresh',
         },
       };
     },
@@ -144,7 +141,8 @@ test('handleProChatRequestWithSse refreshes and retries when the stream request 
     assert.deepEqual(refreshCalls, [
       {
         url: `${API_BASE_URL}/auth/refresh`,
-        body: { refresh_token: 'refresh-123' },
+        body: {},
+        config: { withCredentials: true },
       },
     ]);
     assert.deepEqual(fetchCalls, [
@@ -159,8 +157,8 @@ test('handleProChatRequestWithSse refreshes and retries when the stream request 
     ]);
   } finally {
     global.fetch = originalFetch;
+    clearAuthSession();
     axiosMock.restore();
-    storage.restore();
   }
 });
 

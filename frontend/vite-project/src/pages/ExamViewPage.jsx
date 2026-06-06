@@ -3,16 +3,16 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Card, Spin, Typography, Space, Tag, Button, List, message } from 'antd';
 import { ArrowLeftOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { API_BASE_URL } from '../config.js';
 import { getExamById } from '../api/exam';
 import DocumentsTopBar from '../components/DocumentsTopBar';
 
 const { Title, Text, Paragraph } = Typography;
 
-// 方案A：将后端基址与相对路径拼接，避免从 5173 请求 /static
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+// Join backend-relative image paths with the configured API base URL.
 const toImageUrl = (p) => {
   if (!p) return '';
-  return p.startsWith('http://') || p.startsWith('https://') ? p : `${API_BASE}${p}`;
+  return p.startsWith('http://') || p.startsWith('https://') ? p : `${API_BASE_URL}${p}`;
 };
 
 export default function ExamViewPage() {
@@ -168,4 +168,3 @@ export default function ExamViewPage() {
     </>
   );
 }
-

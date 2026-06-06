@@ -37,6 +37,7 @@ describe('authApi', () => {
       role: 'teacher',
     });
     expect((init?.headers as Headers).get('Content-Type')).toBe('application/json');
+    expect((init?.headers as Headers).get('X-Client-Platform')).toBe('expo-native');
   });
 
   it('uses backend error messages for failed login', async () => {
@@ -59,6 +60,7 @@ describe('authApi', () => {
     const [, init] = fetchMock().mock.calls[0];
     expect(init?.method).toBe('POST');
     expect(JSON.parse(String(init?.body))).toEqual({ refresh_token: 'refresh-token' });
+    expect((init?.headers as Record<string, string>)['X-Client-Platform']).toBe('expo-native');
   });
 
   it('throws backend errors when logout revoke fails', async () => {

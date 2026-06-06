@@ -2,17 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { apiGet, apiPost } from './apiClient.js';
+import { clearAuthSession, getToken, storeAuthSession } from './authSession.js';
 import { API_BASE_URL } from '../config.js';
 import { installAxiosMock, installLocalStorageMock } from '../testing/mockRuntime.js';
 
 test('api client refreshes once and retries the original request with the new access token', async () => {
     const storage = installLocalStorageMock({
-        session_token: 'expired-access',
-        refresh_token: 'refresh-123',
-        user: JSON.stringify({ id: 'user-1' }),
+        session_token: 'legacy-access',
+        refresh_token: 'legacy-refresh',
     });
+    storeAuthSession({ session_token: 'expired-access', user: { id: 'user-1' } });
     const axiosMock = installAxiosMock({
-        get: async (url, config) => {
+        get: async () => {
             const getCalls = axiosMock.calls.filter((call) => call.method === 'get');
             if (getCalls.length === 1) {
                 throw { response: { status: 401, data: { detail: { error: 'Token expired' } } } };
@@ -23,7 +24,6 @@ test('api client refreshes once and retries the original request with the new ac
             data: {
                 session_token: 'new-access',
                 access_token: 'new-access',
-                refresh_token: 'new-refresh',
                 user: { id: 'user-1', role: 'student' },
             },
         }),
@@ -37,7 +37,7 @@ test('api client refreshes once and retries the original request with the new ac
             method,
             url: args[0],
             body: method === 'post' ? args[1] : undefined,
-            config: method === 'post' ? undefined : args[1],
+            config: method === 'post' ? args[2] : args[1],
         })), [
             {
                 method: 'get',
@@ -48,8 +48,8 @@ test('api client refreshes once and retries the original request with the new ac
             {
                 method: 'post',
                 url: `${API_BASE_URL}/auth/refresh`,
-                body: { refresh_token: 'refresh-123' },
-                config: undefined,
+                body: {},
+                config: { withCredentials: true },
             },
             {
                 method: 'get',
@@ -58,20 +58,23 @@ test('api client refreshes once and retries the original request with the new ac
                 config: { headers: { Authorization: 'Bearer new-access' } },
             },
         ]);
-        assert.equal(localStorage.getItem('session_token'), 'new-access');
-        assert.equal(localStorage.getItem('refresh_token'), 'new-refresh');
+        assert.equal(getToken(), 'new-access');
+        assert.equal(localStorage.getItem('session_token'), null);
+        assert.equal(localStorage.getItem('refresh_token'), null);
     } finally {
+        clearAuthSession();
         axiosMock.restore();
         storage.restore();
     }
 });
 
-test('api client clears auth storage when refresh fails', async () => {
+test('api client clears auth memory and legacy storage when refresh fails', async () => {
     const storage = installLocalStorageMock({
-        session_token: 'expired-access',
-        refresh_token: 'bad-refresh',
-        user: JSON.stringify({ id: 'user-1' }),
+        session_token: 'legacy-access',
+        refresh_token: 'legacy-refresh',
+        user: JSON.stringify({ id: 'legacy-user' }),
     });
+    storeAuthSession({ session_token: 'expired-access', user: { id: 'user-1' } });
     const axiosMock = installAxiosMock({
         post: async (url) => {
             if (url.endsWith('/auth/refresh')) {
@@ -83,20 +86,19 @@ test('api client clears auth storage when refresh fails', async () => {
 
     try {
         await assert.rejects(() => apiPost('/quiz/quiz-1/submit', { answers: [] }));
+        assert.equal(getToken(), null);
         assert.equal(localStorage.getItem('session_token'), null);
         assert.equal(localStorage.getItem('refresh_token'), null);
         assert.equal(localStorage.getItem('user'), null);
     } finally {
+        clearAuthSession();
         axiosMock.restore();
         storage.restore();
     }
 });
 
 test('api client shares one refresh request across concurrent 401 responses', async () => {
-    const storage = installLocalStorageMock({
-        session_token: 'expired-access',
-        refresh_token: 'refresh-123',
-    });
+    storeAuthSession({ session_token: 'expired-access' });
     let refreshCalls = 0;
     const axiosMock = installAxiosMock({
         get: async (url, config) => {
@@ -112,7 +114,6 @@ test('api client shares one refresh request across concurrent 401 responses', as
                 data: {
                     session_token: 'new-access',
                     access_token: 'new-access',
-                    refresh_token: 'new-refresh',
                 },
             };
         },
@@ -126,7 +127,7 @@ test('api client shares one refresh request across concurrent 401 responses', as
 
         assert.equal(refreshCalls, 1);
     } finally {
+        clearAuthSession();
         axiosMock.restore();
-        storage.restore();
     }
 });
