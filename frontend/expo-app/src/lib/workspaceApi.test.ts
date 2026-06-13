@@ -44,6 +44,15 @@ function expectAuthHeader(init: RequestInit | undefined) {
   expect((init?.headers as Headers).get('Authorization')).toBe('Bearer access-token');
 }
 
+function expectFormDataValues(body: BodyInit | null | undefined, name: string, expected: unknown[]) {
+  const formData = body as FormData & { _parts?: [string, unknown][] };
+  if (typeof formData.getAll === 'function') {
+    expect(formData.getAll(name)).toEqual(expected);
+    return;
+  }
+  expect((formData._parts ?? []).filter(([key]) => key === name).map(([, value]) => value)).toEqual(expected);
+}
+
 describe('workspaceApi', () => {
   beforeEach(() => {
     setApiTokens(null, null);
@@ -168,10 +177,10 @@ describe('workspaceApi', () => {
     fetchMock().mockResolvedValueOnce(jsonResponse({ quiz_id: 'quiz-1' }));
 
     await generateQuiz({
-      fileIds: ['file-1'],
+      fileIds: ['file-1', 'file-2'],
       difficulty: 'easy',
       numQuestions: 2,
-      bloomLevels: ['remember'],
+      bloomLevels: ['remember', 'apply'],
     });
 
     const [url, init] = lastRequest();
@@ -179,6 +188,10 @@ describe('workspaceApi', () => {
     expect(init?.method).toBe('POST');
     expectAuthHeader(init);
     expect(init?.body).toBeInstanceOf(FormData);
+    expectFormDataValues(init?.body, 'file_ids', ['file-1', 'file-2']);
+    expectFormDataValues(init?.body, 'bloom_levels', ['remember', 'apply']);
+    expectFormDataValues(init?.body, 'difficulty', ['easy']);
+    expectFormDataValues(init?.body, 'num_questions', ['2']);
   });
 
   it('uses shared FormData request auth for multi-file upload', async () => {

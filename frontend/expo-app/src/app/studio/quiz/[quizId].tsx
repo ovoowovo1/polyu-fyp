@@ -11,8 +11,16 @@ import { useLocalSearchParams } from 'expo-router';
 
 import { generateQuizFeedback, getMyQuizResult, getQuizById, submitQuiz } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import {
+  buildQuizFeedbackPayload,
+  buildQuizSubmitPayload,
+  calculateQuizScore,
+  createEmptyQuizAnswers,
+  resolveCorrectAnswerIndex,
+  type QuizScore,
+} from '@/lib/quiz-utils';
 import { colors, commonStyles } from '@/lib/styles';
-import type { QuizDetail, QuizQuestion, QuizResultSummary } from '@/lib/types';
+import type { QuizDetail, QuizResultSummary } from '@/lib/types';
 
 export default function QuizDetailScreen() {
   const { quizId } = useLocalSearchParams<{ quizId: string }>();
@@ -30,7 +38,7 @@ export default function QuizDetailScreen() {
   const [showResult, setShowResult] = useState(false);
   const [userAnswers, setUserAnswers] = useState<(number | null)[]>([]);
   const [isFinished, setIsFinished] = useState(false);
-  const [finalScore, setFinalScore] = useState<{ correct: number; total: number; percentage: number } | null>(null);
+  const [finalScore, setFinalScore] = useState<QuizScore | null>(null);
   const isTeacher = user?.role === 'teacher';
 
   useEffect(() => {
@@ -48,7 +56,7 @@ export default function QuizDetailScreen() {
         const nextQuiz = quizResult.quiz;
         setQuiz(nextQuiz);
         setResult(myResult.submission);
-        setUserAnswers(new Array(nextQuiz.questions?.length ?? 0).fill(null));
+        setUserAnswers(createEmptyQuizAnswers(nextQuiz.questions?.length ?? 0));
       } catch (error) {
         Alert.alert('Quiz load failed', error instanceof Error ? error.message : 'Unknown error');
       } finally {
@@ -103,7 +111,7 @@ export default function QuizDetailScreen() {
     setCurrentIndex((value) => value - 1);
   };
 
-  const requestFeedback = useCallback(async (score: { correct: number; total: number; percentage: number }) => {
+  const requestFeedback = useCallback(async (score: QuizScore) => {
     if (!quizId || !quiz?.questions?.length) {
       return;
     }
@@ -124,7 +132,7 @@ export default function QuizDetailScreen() {
     }
   }, [quiz, quizId, userAnswers]);
 
-  const requestSubmit = useCallback(async (score: { correct: number; total: number; percentage: number }) => {
+  const requestSubmit = useCallback(async (score: QuizScore) => {
     if (!quizId || !quiz?.questions?.length || isTeacher) {
       return;
     }
@@ -132,14 +140,7 @@ export default function QuizDetailScreen() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await submitQuiz(quizId, {
-        answers: userAnswers.map((answer, index) => ({
-          question_index: index,
-          answer_index: answer,
-        })),
-        score: score.correct,
-        total_questions: score.total,
-      });
+      await submitQuiz(quizId, buildQuizSubmitPayload(userAnswers, score));
       setResult({
         score: score.correct,
         total_questions: score.total,
@@ -158,7 +159,7 @@ export default function QuizDetailScreen() {
     }
 
     if (isFinished) {
-      const score = calculateScore(quiz.questions, userAnswers);
+      const score = calculateQuizScore(quiz.questions, userAnswers);
       setFinalScore(score);
       if (isTeacher) {
         setResult({
@@ -193,7 +194,7 @@ export default function QuizDetailScreen() {
     setCurrentIndex(0);
     setSelectedAnswer(null);
     setShowResult(false);
-    setUserAnswers(new Array(quiz?.questions?.length ?? 0).fill(null));
+    setUserAnswers(createEmptyQuizAnswers(quiz?.questions?.length ?? 0));
     setIsFinished(false);
     setFeedback('');
     setSubmitError(null);
@@ -409,71 +410,3 @@ export default function QuizDetailScreen() {
   );
 }
 
-function resolveCorrectAnswerIndex(question: QuizQuestion | null) {
-  if (!question) {
-    return null;
-  }
-  if (typeof question.correct_answer_index === 'number') {
-    return question.correct_answer_index;
-  }
-  if (typeof question.answer_index === 'number') {
-    return question.answer_index;
-  }
-  return null;
-}
-
-function calculateScore(questions: QuizQuestion[], userAnswers: (number | null)[]) {
-  const correct = questions.reduce((total, question, index) => {
-    const answer = userAnswers[index];
-    const correctIndex = resolveCorrectAnswerIndex(question);
-    return answer !== null && correctIndex === answer ? total + 1 : total;
-  }, 0);
-  const total = questions.length;
-  return {
-    correct,
-    total,
-    percentage: total > 0 ? Math.round((correct / total) * 100) : 0,
-  };
-}
-
-function buildQuizFeedbackPayload(
-  quiz: QuizDetail,
-  answers: (number | null)[],
-  score: { correct: number; total: number; percentage: number },
-) {
-  const questions = quiz.questions ?? [];
-  const bloomStats: Record<string, { correct: number; total: number }> = {};
-
-  questions.forEach((question, index) => {
-    const level = question.bloom_level || 'general';
-    if (!bloomStats[level]) {
-      bloomStats[level] = { correct: 0, total: 0 };
-    }
-    bloomStats[level].total += 1;
-    const correctIndex = resolveCorrectAnswerIndex(question);
-    if (answers[index] !== null && correctIndex === answers[index]) {
-      bloomStats[level].correct += 1;
-    }
-  });
-
-  return {
-    quiz_name: quiz.name || 'Quiz',
-    score: score.correct,
-    total_questions: score.total,
-    percentage: score.percentage,
-    bloom_summary: Object.entries(bloomStats).map(([level, stats]) => ({
-      level,
-      correct: stats.correct,
-      total: stats.total,
-      accuracy: stats.total ? Math.round((stats.correct / stats.total) * 100) : 0,
-    })),
-    questions: questions.map((question, index) => ({
-      question: question.question_text || question.question,
-      choices: question.choices || question.options,
-      correct_answer_index: resolveCorrectAnswerIndex(question),
-      user_answer_index: answers[index],
-      bloom_level: question.bloom_level || 'general',
-      rationale: question.rationale,
-    })),
-  };
-}

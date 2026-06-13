@@ -24,6 +24,14 @@ test('generateExam posts params with authorization when a token exists', async (
             topic: 'Recursion',
             difficulty: 'medium',
             num_questions: 3,
+            question_types: {
+                multiple_choice: 1,
+                short_answer: 1,
+                essay: 1,
+            },
+            exam_name: 'Midterm',
+            include_images: true,
+            custom_prompt: 'Focus on proofs',
         };
         await generateExam(params);
 
