@@ -1,10 +1,12 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, Body, Depends, Form, Query
+from fastapi import APIRouter, Body, Depends, Form, Query, Response
 
 from app.logger import get_logger
 from app.api_helpers import quiz_helpers
 from app.api_helpers.service_helpers import run_async_service
+from app.services.cache import redis_cache
+from app.services.cache import studio_cache
 from app.services.pg import pg_access_control as pg_service
 from app.services.pg import pg_quiz_service
 from app.services.pg.pg_classes_service import is_user_teacher
@@ -72,31 +74,59 @@ async def get_difficulties():
 
 @router.get("/list")
 async def get_all_quizzes(
+    response: Response,
     class_id: str = Query(...),
     user: dict = Depends(get_current_user),
 ):
     quiz_helpers.require_class_access(user, class_id, pg_service.can_access_class)
-    quizzes = await _run_quiz_service(
-        pg_quiz_service.get_quizzes_by_class,
-        class_id,
-        user["user_id"],
-        action="Get quizzes",
+
+    async def load():
+        quizzes = await _run_quiz_service(
+            pg_quiz_service.get_quizzes_by_class,
+            class_id,
+            user["user_id"],
+            action="Get quizzes",
+        )
+        return {"message": "Fetched quizzes", "quizzes": quizzes, "total": len(quizzes)}
+
+    result = await redis_cache.get_or_set_json_with_status(
+        "quiz:list",
+        {"user_id": user["user_id"], "class_id": class_id},
+        load,
+        version_namespaces=[studio_cache.quiz_list_namespace()],
     )
-    return {"message": "Fetched quizzes", "quizzes": quizzes, "total": len(quizzes)}
+    redis_cache.set_response_cache_headers(response, result)
+    return result.value
 
 
 @router.get("/{quiz_id}")
 async def get_quiz(
     quiz_id: str,
+    response: Response,
     user: dict = Depends(get_current_user),
 ):
-    quiz_payload = await _run_quiz_service(
-        pg_quiz_service.get_quiz_by_id,
-        quiz_id,
-        user["user_id"],
-        action="Get quiz",
+    async def load():
+        quiz_payload = await _run_quiz_service(
+            pg_quiz_service.get_quiz_by_id,
+            quiz_id,
+            user["user_id"],
+            action="Get quiz",
+        )
+        return {"message": "Fetched quiz", "quiz": quiz_payload}
+
+    if not redis_cache.is_enabled() or not studio_cache.can_use_cache(pg_service.can_access_quiz, user["user_id"], quiz_id):
+        result = await redis_cache.load_without_cache("quiz:detail", load, reason="disabled_or_access_check")
+        redis_cache.set_response_cache_headers(response, result)
+        return result.value
+
+    result = await redis_cache.get_or_set_json_with_status(
+        "quiz:detail",
+        {"user_id": user["user_id"], "quiz_id": quiz_id},
+        load,
+        version_namespaces=[studio_cache.quiz_detail_namespace(quiz_id)],
     )
-    return {"message": "Fetched quiz", "quiz": quiz_payload}
+    redis_cache.set_response_cache_headers(response, result)
+    return result.value
 
 
 @router.post("/")
@@ -123,6 +153,10 @@ async def create_quiz(
         class_id,
         action="Create quiz",
     )
+    redis_cache.invalidate_namespaces(
+        studio_cache.quiz_list_namespace(),
+        studio_cache.quiz_detail_namespace(str(saved.get("quiz_id") or "")),
+    )
     return {"message": "Quiz created", "quiz": saved}
 
 
@@ -145,6 +179,7 @@ async def update_quiz(
         payload.get("file_ids") if "file_ids" in payload else None,
         action="Update quiz",
     )
+    redis_cache.invalidate_namespaces(studio_cache.quiz_list_namespace(), studio_cache.quiz_detail_namespace(quiz_id))
     return {"message": "Quiz updated", "quiz": updated}
 
 
@@ -155,12 +190,14 @@ async def delete_quiz(
 ):
     quiz_helpers.require_quiz_teacher(user, "Only teachers can delete quizzes", is_user_teacher)
     quiz_helpers.require_quiz_access(user, quiz_id, pg_service.can_access_quiz)
-    return await _run_quiz_service(
+    result = await _run_quiz_service(
         pg_quiz_service.delete_quiz,
         quiz_id,
         user["user_id"],
         action="Delete quiz",
     )
+    redis_cache.invalidate_namespaces(studio_cache.quiz_list_namespace(), studio_cache.quiz_detail_namespace(quiz_id))
+    return result
 
 
 @router.post("/{quiz_id}/submit")

@@ -75,6 +75,7 @@ class QuizApiTests(unittest.TestCase):
             patch("app.routers.quiz.pg_service.can_access_class", return_value=True),
             patch("app.routers.quiz.pg_service.can_access_quiz", return_value=True),
             patch("app.routers.quiz.pg_service.can_manage_documents", return_value=True),
+            patch("app.routers.quiz.redis_cache.get_settings", return_value=make_settings()),
         )
 
     async def generate_quiz(self, **kwargs):
@@ -405,6 +406,73 @@ class QuizApiTests(unittest.TestCase):
 
         self.route_status("get", "/quiz/quiz-1", 404, service_mock=self.get_quiz_by_id, side_effect=NotFoundError("Quiz not found"))
         self.route_status("get", "/quiz/quiz-1", 500, service_mock=self.get_quiz_by_id, side_effect=RuntimeError("db"))
+
+    def test_quiz_list_and_detail_use_cache_when_enabled(self):
+        with patch(
+            "app.routers.quiz.redis_cache.get_or_set_json_with_status",
+            AsyncMock(
+                return_value=quiz.redis_cache.CacheResult(
+                    {"message": "Fetched quizzes", "quizzes": [{"id": "quiz-1"}], "total": 1},
+                    "MISS",
+                    "quiz:list",
+                )
+            ),
+        ) as get_or_set:
+            listed = self.client.get("/quiz/list", params={"class_id": "class-1"})
+
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.headers["X-Redis-Cache"], "MISS")
+        self.assertEqual(get_or_set.call_args.args[0], "quiz:list")
+        self.get_quizzes_by_class.assert_not_called()
+
+        with patch("app.routers.quiz.redis_cache.is_enabled", return_value=True), patch(
+            "app.routers.quiz.pg_service.can_access_quiz",
+            return_value=True,
+        ), patch(
+            "app.routers.quiz.redis_cache.get_or_set_json_with_status",
+            AsyncMock(
+                return_value=quiz.redis_cache.CacheResult(
+                    {"message": "Fetched quiz", "quiz": {"id": "quiz-1"}},
+                    "HIT",
+                    "quiz:detail",
+                )
+            ),
+        ) as get_detail:
+            detail = self.client.get("/quiz/quiz-1")
+
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.headers["X-Redis-Cache"], "HIT")
+        self.assertEqual(get_detail.call_args.args[0], "quiz:detail")
+        self.get_quiz_by_id.assert_not_called()
+
+    def test_quiz_detail_skips_cache_when_access_probe_fails(self):
+        self.get_quiz_by_id.return_value = {"id": "quiz-1"}
+        with patch("app.routers.quiz.redis_cache.is_enabled", return_value=True), patch(
+            "app.routers.quiz.pg_service.can_access_quiz",
+            side_effect=RuntimeError("access db"),
+        ), patch("app.routers.quiz.redis_cache.get_or_set_json_with_status", AsyncMock()) as get_or_set:
+            response = self.client.get("/quiz/quiz-1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["X-Redis-Cache"], "BYPASS")
+        get_or_set.assert_not_called()
+
+    def test_quiz_mutations_invalidate_cache_namespaces(self):
+        payload = {"questions": [make_question().model_dump()], "class_id": "class-1"}
+        self.save_quiz.return_value = {"quiz_id": "quiz-1"}
+        with patch("app.routers.quiz.redis_cache.invalidate_namespaces") as invalidate:
+            self.client.post("/quiz/", json=payload)
+        invalidate.assert_called_with("quiz:list", "quiz:detail:quiz-1")
+
+        self.update_quiz.return_value = {"quiz_id": "quiz-1"}
+        with patch("app.routers.quiz.redis_cache.invalidate_namespaces") as update_invalidate:
+            self.client.put("/quiz/quiz-1", json={"questions": [make_question().model_dump()]})
+        update_invalidate.assert_called_with("quiz:list", "quiz:detail:quiz-1")
+
+        self.delete_quiz.return_value = {"message": "deleted"}
+        with patch("app.routers.quiz.redis_cache.invalidate_namespaces") as delete_invalidate:
+            self.client.delete("/quiz/quiz-1")
+        delete_invalidate.assert_called_with("quiz:list", "quiz:detail:quiz-1")
 
     def test_create_update_delete_quiz_routes(self):
         payload = {

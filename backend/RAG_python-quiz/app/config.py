@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     port: int = 3000
     cors_origins: List[str] = [
         "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5000",
+        "http://localhost:5000",
         "http://localhost:8081",
         "http://127.0.0.1:8081",
     ]
@@ -45,6 +48,15 @@ class Settings(BaseSettings):
     jwt_secret_key: str = ""
     auth_cookie_secure: bool = True
     auth_cookie_samesite: str = "lax"
+
+    upstash_redis_rest_url: str = ""
+    upstash_redis_rest_token: str = ""
+    redis_cache_enabled: bool = False
+    redis_cache_ttl_seconds: int = 300
+    rag_embedding_cache_enabled: bool = True
+    rag_retrieval_cache_enabled: bool = True
+    rag_embedding_cache_ttl_seconds: int = 3600
+    rag_retrieval_cache_ttl_seconds: int = 300
 
 
 @lru_cache

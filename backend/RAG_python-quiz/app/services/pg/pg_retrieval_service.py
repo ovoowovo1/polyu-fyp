@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 import psycopg2.extras
 
 from app.config import get_settings
+from app.services.cache import redis_cache, studio_cache
 from app.services.pg.pg_db import _get_conn
 from app.services.pg import pg_retrieval_documents, pg_retrieval_keywords, pg_retrieval_vectors
 
@@ -76,12 +77,15 @@ def update_chunk_embeddings(
     *,
     embedding_column: str = "embedding_v2",
 ) -> int:
-    return pg_retrieval_vectors.update_chunk_embeddings(
+    updated = pg_retrieval_vectors.update_chunk_embeddings(
         get_conn=_get_conn,
         execute_values=psycopg2.extras.execute_values,
         chunk_vectors=chunk_vectors,
         embedding_column=embedding_column,
     )
+    if updated:
+        redis_cache.invalidate_namespaces(studio_cache.rag_retrieval_namespace())
+    return updated
 
 
 def retrieve_context_by_keywords(

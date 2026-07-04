@@ -92,15 +92,20 @@ class PgRetrievalServiceTests(PgServiceBase):
             result = pg_service.get_chunks_missing_embeddings(limit=2)
         self.assertEqual(result, [{"id": "chunk-1", "text": "A"}])
 
-        self.assertEqual(pg_service.update_chunk_embeddings([]), 0)
+        with patch("app.services.pg.pg_retrieval_service.redis_cache.invalidate_namespaces") as invalidate:
+            self.assertEqual(pg_service.update_chunk_embeddings([]), 0)
+        invalidate.assert_not_called()
 
         cursor = FakeCursor()
         with self.patch_conn(cursor), patch(
             "app.services.pg.pg_retrieval_service.psycopg2.extras.execute_values"
-        ) as execute_values:
+        ) as execute_values, patch(
+            "app.services.pg.pg_retrieval_service.redis_cache.invalidate_namespaces"
+        ) as invalidate:
             updated = pg_service.update_chunk_embeddings([{"id": "chunk-1", "embedding": [0.9]}])
         self.assertEqual(updated, 1)
         self.assertEqual(execute_values.call_args.args[2], [("chunk-1", "[0.90000000]")])
+        invalidate.assert_called_once_with("rag:retrieval")
 
     def test_retrieve_context_helpers_cover_empty_and_keyword_paths(self):
         cursor = FakeCursor(

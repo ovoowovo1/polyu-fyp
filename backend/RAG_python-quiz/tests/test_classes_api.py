@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from app.routers import classes
 from tests.support import build_authed_client
@@ -37,9 +37,56 @@ class ClassesApiTests(unittest.TestCase):
         response = self.route("get", "/classes/mine", "list_classes_by_teacher", return_value=[{"id": "class-1"}])
         self.assertEqual(response.json()["total"], 1)
 
+    def test_list_my_classes_uses_cache_when_enabled_and_role_valid(self):
+        with patch("app.routers.classes.redis_cache.is_enabled", return_value=True), patch(
+            "app.routers.classes.pg_service.is_user_teacher",
+            return_value=True,
+        ), patch("app.routers.classes.pg_service.list_classes_by_teacher") as list_classes, patch(
+            "app.routers.classes.redis_cache.get_or_set_json_with_status",
+            AsyncMock(return_value=classes.redis_cache.CacheResult({"classes": [{"id": "class-1"}], "total": 1}, "HIT", "classes:mine")),
+        ) as get_or_set:
+            response = self.client.get("/classes/mine")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["total"], 1)
+        self.assertEqual(response.headers["X-Redis-Cache"], "HIT")
+        self.assertEqual(response.headers["X-Redis-Cache-Scope"], "classes:mine")
+        list_classes.assert_not_called()
+        self.assertEqual(get_or_set.call_args.args[0], "classes:mine")
+
+    def test_list_my_classes_skips_cache_when_role_check_fails(self):
+        with patch("app.routers.classes.redis_cache.is_enabled", return_value=True), patch(
+            "app.routers.classes.pg_service.is_user_teacher",
+            side_effect=RuntimeError("role db"),
+        ), patch(
+            "app.routers.classes.pg_service.list_classes_by_teacher",
+            return_value=[{"id": "class-1"}],
+        ), patch("app.routers.classes.redis_cache.get_or_set_json_with_status", AsyncMock()) as get_or_set:
+            response = self.client.get("/classes/mine")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["X-Redis-Cache"], "BYPASS")
+        get_or_set.assert_not_called()
+
     def test_list_enrolled_classes_success(self):
         response = self.route("get", "/classes/enrolled", "list_classes_for_student", return_value=[{"id": "class-1"}])
         self.assertEqual(response.json()["total"], 1)
+
+    def test_list_enrolled_classes_uses_cache_when_enabled_and_role_valid(self):
+        with patch("app.routers.classes.redis_cache.is_enabled", return_value=True), patch(
+            "app.routers.classes.pg_service.is_user_student",
+            return_value=True,
+        ), patch("app.routers.classes.pg_service.list_classes_for_student") as list_classes, patch(
+            "app.routers.classes.redis_cache.get_or_set_json_with_status",
+            AsyncMock(return_value=classes.redis_cache.CacheResult({"classes": [{"id": "class-1"}], "total": 1}, "MISS", "classes:enrolled")),
+        ) as get_or_set:
+            response = self.client.get("/classes/enrolled")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["X-Redis-Cache"], "MISS")
+        self.assertEqual(response.headers["X-Redis-Cache-Scope"], "classes:enrolled")
+        list_classes.assert_not_called()
+        self.assertEqual(get_or_set.call_args.args[0], "classes:enrolled")
 
     def test_invite_student_success(self):
         response = self.route(
@@ -50,6 +97,20 @@ class ClassesApiTests(unittest.TestCase):
             json={"email": "student@example.com"},
         )
         self.assertEqual(response.json()["enrollment"]["id"], "enroll-1")
+
+    def test_class_mutations_invalidate_user_cache_namespaces(self):
+        with patch("app.routers.classes.pg_service.create_class_for_teacher", return_value={"id": "class-1"}), patch(
+            "app.routers.classes.redis_cache.invalidate_namespaces"
+        ) as invalidate:
+            self.client.post("/classes/", json={"name": "DB"})
+        invalidate.assert_called_with("classes:user:teacher-1")
+
+        with patch(
+            "app.routers.classes.pg_service.invite_student_to_class",
+            return_value={"student": {"id": "student-1"}},
+        ), patch("app.routers.classes.redis_cache.invalidate_namespaces") as invite_invalidate:
+            self.client.post("/classes/class-1/invite", json={"email": "student@example.com"})
+        invite_invalidate.assert_called_with("classes:user:teacher-1", "classes:user:student-1")
 
     def test_service_errors_return_expected_status(self):
         create_json = {"name": "DB"}

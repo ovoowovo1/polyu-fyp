@@ -59,6 +59,25 @@ class MainAppTests(unittest.TestCase):
         self.assertNotIn("/query-stream", routes)
         self.assertIn("/static", routes)
 
+    def test_create_app_allows_vite_loopback_cors_preflight(self):
+        origin = "http://127.0.0.1:5173"
+        settings = make_settings(cors_origins=[origin])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = main.create_app(settings=settings, static_dir=tmpdir)
+
+        client = TestClient(app)
+        response = client.options(
+            "/auth/login",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["access-control-allow-origin"], origin)
+        self.assertEqual(response.headers["access-control-allow-credentials"], "true")
+
     def test_main_entrypoint_runs_uvicorn_with_expected_host_and_port(self):
         settings = make_settings(port=4321)
         module_path = Path(main.__file__)

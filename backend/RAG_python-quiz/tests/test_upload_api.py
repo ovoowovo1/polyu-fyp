@@ -46,12 +46,13 @@ class UploadApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_upload_multiple_returns_200_for_all_success_including_duplicates(self):
-        response, payload, finished_event = self.upload_multiple(
-            [
-                make_success("file-1", is_new=True, chunks=4),
-                make_success("file-1", is_new=False, chunks=0),
-            ]
-        )
+        with patch("app.routers.upload.redis_cache.invalidate_namespaces") as invalidate:
+            response, payload, finished_event = self.upload_multiple(
+                [
+                    make_success("file-1", is_new=True, chunks=4),
+                    make_success("file-1", is_new=False, chunks=0),
+                ]
+            )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["status"], "success")
@@ -60,23 +61,27 @@ class UploadApiTests(unittest.TestCase):
         self.assertEqual(payload["data"]["status"], "success")
         self.assertEqual(finished_event["type"], "finished")
         self.assertEqual(finished_event["status"], "success")
+        invalidate.assert_called_with("files:list", "rag:retrieval", "files:detail:file-1")
 
     def test_upload_multiple_returns_207_for_partial_success(self):
-        response, payload, finished_event = self.upload_multiple([make_success("file-1"), make_embedding_error()])
+        with patch("app.routers.upload.redis_cache.invalidate_namespaces") as invalidate:
+            response, payload, finished_event = self.upload_multiple([make_success("file-1"), make_embedding_error()])
 
         self.assertEqual(response.status_code, 207)
         self.assertEqual(payload["status"], "partial")
         self.assertEqual(payload["summary"], {"total": 2, "succeeded": 1, "failed": 1})
         self.assertEqual(payload["results"][1]["error"]["code"], "EMBEDDING_UPSTREAM_FAILED")
         self.assertEqual(finished_event["status"], "partial")
+        invalidate.assert_called_with("files:list", "rag:retrieval", "files:detail:file-1")
 
     def test_upload_multiple_returns_502_when_all_files_fail(self):
-        response, payload, finished_event = self.upload_multiple(
-            [
-                make_embedding_error(),
-                DocumentIngestError(code="EMPTY_DOCUMENT", message="No extractable text was found in this PDF."),
-            ]
-        )
+        with patch("app.routers.upload.redis_cache.invalidate_namespaces") as invalidate:
+            response, payload, finished_event = self.upload_multiple(
+                [
+                    make_embedding_error(),
+                    DocumentIngestError(code="EMPTY_DOCUMENT", message="No extractable text was found in this PDF."),
+                ]
+            )
 
         self.assertEqual(response.status_code, 502)
         self.assertEqual(payload["status"], "failed")
@@ -84,11 +89,13 @@ class UploadApiTests(unittest.TestCase):
         self.assertEqual(payload["results"][0]["error"]["code"], "EMBEDDING_UPSTREAM_FAILED")
         self.assertEqual(payload["results"][1]["error"]["code"], "EMPTY_DOCUMENT")
         self.assertEqual(finished_event["status"], "failed")
+        invalidate.assert_called_with("files:list", "rag:retrieval")
 
     def test_upload_helper_functions_cover_unexpected_errors(self):
         result = upload_helpers.build_failure_result("broken.pdf", RuntimeError("boom"))
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["error"]["code"], "INGEST_FAILED")
+        self.assertEqual(upload._unique_string_ids([None, "", "file-1", "file-1", 2]), ["file-1", "2"])
 
     def test_upload_multiple_rejects_missing_files(self):
         response = self.client.post("/upload-multiple")
@@ -96,11 +103,14 @@ class UploadApiTests(unittest.TestCase):
         self.assertEqual(response.json()["error"], "Please provide at least one file.")
 
     def test_upload_link_success_and_error_paths(self):
-        with patch("app.routers.upload.ingest_website", AsyncMock(return_value={"fileId": "site-1"})):
+        with patch("app.routers.upload.ingest_website", AsyncMock(return_value={"fileId": "site-1"})), patch(
+            "app.routers.upload.redis_cache.invalidate_namespaces"
+        ) as invalidate:
             response = self.client.post("/upload-link", json={"url": " https://example.com "})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["result"]["fileId"], "site-1")
         self.assertEqual(response.json()["data"]["fileId"], "site-1")
+        invalidate.assert_called_with("files:list", "rag:retrieval", "files:detail:site-1")
 
         missing = self.client.post("/upload-link", json={"url": "   "})
         self.assertEqual(missing.status_code, 400)

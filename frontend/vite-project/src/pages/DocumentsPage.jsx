@@ -11,6 +11,11 @@ import DocumentsTopBar from '../components/DocumentsTopBar.jsx';
 
 import useMediaQuery from '../hooks/useMediaQuery';
 import useLayoutWidth from '../hooks/useLayoutWidth';
+import {
+    DESKTOP_PAGE_CLASS,
+    getDesktopLayoutClassName,
+    getPanelShellStyle,
+} from '../utils/documentsLayoutModel.js';
 
 const DocumentsPage = () => {
     const { classId } = useParams();
@@ -47,12 +52,12 @@ const DocumentsPage = () => {
                     />
                 </div>
             ) : (
-                <div className="h-screen bg-gray-100 flex flex-col">
+                <div className={DESKTOP_PAGE_CLASS}>
                     <DocumentsTopBar />
                     <div
                         ref={containerRef}
                         style={layoutStyle}
-                        className={`flex-1 min-h-0 p-4 flex overflow-hidden items-stretch ${activeResizer ? 'select-none cursor-col-resize' : ''}`}
+                        className={getDesktopLayoutClassName(activeResizer)}
                     >
                         <PanelShell width="var(--documents-left-width)">
                             <DocumentList widthSize="100%" isMediumScreen={isMediumScreen} />
@@ -75,8 +80,8 @@ const DocumentsPage = () => {
 function PanelShell({ width, children }) {
     return (
         <div
-            className="h-full shrink-0 min-w-0"
-            style={{ width }}
+            className="h-full min-w-0"
+            style={getPanelShellStyle(width)}
         >
             {children}
         </div>

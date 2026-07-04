@@ -10,6 +10,8 @@ export const LAYOUT_STORAGE_PREFIX = 'documents-page-layout';
 export const LEFT_WIDTH_VAR = '--documents-left-width';
 export const RIGHT_WIDTH_VAR = '--documents-right-width';
 export const CHAT_WIDTH_VAR = '--documents-chat-width';
+export const DESKTOP_PAGE_CLASS = 'h-screen w-full min-w-0 overflow-hidden bg-gray-100 flex flex-col';
+export const DESKTOP_LAYOUT_BASE_CLASS = 'flex-1 min-h-0 p-4 w-full min-w-0 box-border flex overflow-hidden items-stretch';
 
 export function getLayoutStorageKey(classId) {
     return `${LAYOUT_STORAGE_PREFIX}:${classId || 'global'}`;
@@ -50,6 +52,10 @@ export function getDefaultExpandedWidths(containerWidth) {
     const rightWidth = clamp(unclampedRight, MIN_STUDIO_CARD_WIDTH, maxRight);
 
     return { leftWidth, rightWidth };
+}
+
+export function hasMeasuredContainerWidth(containerWidth) {
+    return Number.isFinite(containerWidth) && containerWidth > 0;
 }
 
 export function clampWidths({
@@ -114,6 +120,13 @@ export function buildLayoutState({
     isDocumentListCollapsed,
     isStudioCardCollapsed,
 }) {
+    if (!hasMeasuredContainerWidth(containerWidth)) {
+        return buildUnmeasuredLayoutState({
+            isDocumentListCollapsed,
+            isStudioCardCollapsed,
+        });
+    }
+
     const fallbackWidths = getDefaultExpandedWidths(containerWidth);
     const expandedWidths = savedWidths || fallbackWidths;
     const clampedExpanded = clampWidths({
@@ -136,6 +149,27 @@ export function buildLayoutState({
         expandedLeftWidth: clampedExpanded.leftWidth,
         expandedRightWidth: clampedExpanded.rightWidth,
         chatWidthPx: chatWidth,
+    };
+}
+
+export function buildUnmeasuredLayoutState({
+    isDocumentListCollapsed,
+    isStudioCardCollapsed,
+}) {
+    const leftWidth = isDocumentListCollapsed
+        ? `${COLLAPSED_WIDTH}px`
+        : `${DEFAULT_DOCUMENT_LIST_RATIO * 100}%`;
+    const rightWidth = isStudioCardCollapsed
+        ? `${COLLAPSED_WIDTH}px`
+        : `${DEFAULT_STUDIO_CARD_RATIO * 100}%`;
+
+    return {
+        documentListWidth: leftWidth,
+        studioCardWidth: rightWidth,
+        chatWidth: `calc(100% - ${leftWidth} - ${rightWidth} - ${RESIZER_WIDTH * RESIZER_COUNT}px)`,
+        expandedLeftWidth: MIN_DOCUMENT_LIST_WIDTH,
+        expandedRightWidth: MIN_STUDIO_CARD_WIDTH,
+        chatWidthPx: 0,
     };
 }
 
@@ -169,6 +203,20 @@ export function getLayoutCssVariables(layout) {
         [RIGHT_WIDTH_VAR]: layout.studioCardWidth,
         [CHAT_WIDTH_VAR]: layout.chatWidth,
     };
+}
+
+export function getPanelShellStyle(width) {
+    return {
+        flex: `0 0 ${width}`,
+        width,
+        maxWidth: width,
+        minWidth: 0,
+        overflow: 'hidden',
+    };
+}
+
+export function getDesktopLayoutClassName(activeResizer) {
+    return `${DESKTOP_LAYOUT_BASE_CLASS}${activeResizer ? ' select-none cursor-col-resize' : ''}`;
 }
 
 function clamp(value, min, max) {

@@ -11,6 +11,10 @@ import { clearAuthSession, storeAuthSession } from './authSession.js';
 import { API_BASE_URL } from '../config.js';
 import i18n from '../i18n/config.js';
 import { installAxiosMock, installLocalStorageMock } from '../testing/mockRuntime.js';
+import { clearDedupeCache } from '../utils/requestDeduper.js';
+
+const MY_CLASSES_KEY = 'classes:mine';
+const ENROLLED_CLASSES_KEY = 'classes:enrolled';
 
 test('class APIs reject with the localized not-logged-in message when no token exists', async () => {
     const storage = installLocalStorageMock();
@@ -51,6 +55,66 @@ test('list class APIs use Authorization and return response data', async () => {
             },
         ]);
     } finally {
+        clearDedupeCache(MY_CLASSES_KEY);
+        clearDedupeCache(ENROLLED_CLASSES_KEY);
+        clearAuthSession();
+        axiosMock.restore();
+    }
+});
+
+test('listMyClasses dedupes concurrent owned class requests', async () => {
+    storeAuthSession({ session_token: 'class-token' });
+    let getCalls = 0;
+    const axiosMock = installAxiosMock({
+        get: async () => {
+            getCalls += 1;
+            return { data: { classes: [{ id: 'class-1' }] } };
+        },
+    });
+
+    try {
+        const [first, second] = await Promise.all([
+            listMyClasses(),
+            listMyClasses(),
+        ]);
+
+        assert.deepEqual(first, { classes: [{ id: 'class-1' }] });
+        assert.deepEqual(second, first);
+        assert.equal(getCalls, 1);
+        assert.deepEqual(axiosMock.calls.map(({ args }) => args[0]), [
+            `${API_BASE_URL}/classes/mine`,
+        ]);
+    } finally {
+        clearDedupeCache(MY_CLASSES_KEY);
+        clearAuthSession();
+        axiosMock.restore();
+    }
+});
+
+test('listMyEnrolledClasses dedupes concurrent enrolled class requests', async () => {
+    storeAuthSession({ session_token: 'class-token' });
+    let getCalls = 0;
+    const axiosMock = installAxiosMock({
+        get: async () => {
+            getCalls += 1;
+            return { data: { classes: [{ id: 'class-2' }] } };
+        },
+    });
+
+    try {
+        const [first, second] = await Promise.all([
+            listMyEnrolledClasses(),
+            listMyEnrolledClasses(),
+        ]);
+
+        assert.deepEqual(first, { classes: [{ id: 'class-2' }] });
+        assert.deepEqual(second, first);
+        assert.equal(getCalls, 1);
+        assert.deepEqual(axiosMock.calls.map(({ args }) => args[0]), [
+            `${API_BASE_URL}/classes/enrolled`,
+        ]);
+    } finally {
+        clearDedupeCache(ENROLLED_CLASSES_KEY);
         clearAuthSession();
         axiosMock.restore();
     }
@@ -74,6 +138,38 @@ test('createClass posts the class name with Authorization', async () => {
             },
         ]);
     } finally {
+        clearDedupeCache(MY_CLASSES_KEY);
+        clearAuthSession();
+        axiosMock.restore();
+    }
+});
+
+test('createClass clears the owned classes cache after a successful create', async () => {
+    storeAuthSession({ session_token: 'class-token' });
+    let getCalls = 0;
+    const axiosMock = installAxiosMock({
+        get: async () => {
+            getCalls += 1;
+            return { data: { classes: [{ id: `class-${getCalls}` }] } };
+        },
+        post: async () => ({ data: { id: 'class-new', name: 'COMP 101' } }),
+    });
+
+    try {
+        const beforeCreate = await listMyClasses();
+        await createClass('COMP 101');
+        const afterCreate = await listMyClasses();
+
+        assert.deepEqual(beforeCreate, { classes: [{ id: 'class-1' }] });
+        assert.deepEqual(afterCreate, { classes: [{ id: 'class-2' }] });
+        assert.equal(getCalls, 2);
+        assert.deepEqual(axiosMock.calls.map(({ method, args }) => ({ method, url: args[0] })), [
+            { method: 'get', url: `${API_BASE_URL}/classes/mine` },
+            { method: 'post', url: `${API_BASE_URL}/classes/` },
+            { method: 'get', url: `${API_BASE_URL}/classes/mine` },
+        ]);
+    } finally {
+        clearDedupeCache(MY_CLASSES_KEY);
         clearAuthSession();
         axiosMock.restore();
     }
@@ -97,6 +193,38 @@ test('inviteStudent posts the invited email with Authorization', async () => {
             },
         ]);
     } finally {
+        clearDedupeCache(MY_CLASSES_KEY);
+        clearAuthSession();
+        axiosMock.restore();
+    }
+});
+
+test('inviteStudent clears the owned classes cache after a successful invite', async () => {
+    storeAuthSession({ session_token: 'class-token' });
+    let getCalls = 0;
+    const axiosMock = installAxiosMock({
+        get: async () => {
+            getCalls += 1;
+            return { data: { classes: [{ id: 'class-3', student_count: getCalls }] } };
+        },
+        post: async () => ({ data: { invited: true } }),
+    });
+
+    try {
+        const beforeInvite = await listMyClasses();
+        await inviteStudent('class-3', 'student@example.com');
+        const afterInvite = await listMyClasses();
+
+        assert.deepEqual(beforeInvite, { classes: [{ id: 'class-3', student_count: 1 }] });
+        assert.deepEqual(afterInvite, { classes: [{ id: 'class-3', student_count: 2 }] });
+        assert.equal(getCalls, 2);
+        assert.deepEqual(axiosMock.calls.map(({ method, args }) => ({ method, url: args[0] })), [
+            { method: 'get', url: `${API_BASE_URL}/classes/mine` },
+            { method: 'post', url: `${API_BASE_URL}/classes/class-3/invite` },
+            { method: 'get', url: `${API_BASE_URL}/classes/mine` },
+        ]);
+    } finally {
+        clearDedupeCache(MY_CLASSES_KEY);
         clearAuthSession();
         axiosMock.restore();
     }

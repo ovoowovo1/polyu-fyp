@@ -1,7 +1,7 @@
 import os
 from typing import List, Optional
 
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query, Response
 from pydantic import BaseModel, model_validator
 
 from app.agents.schemas import ExamGenerationRequest, ExamGenerationResponse
@@ -9,6 +9,8 @@ from app.logger import get_logger
 from app.api_helpers import exam_helpers
 from app.api_helpers.service_helpers import require_allowed, run_service
 from app.services.assessment import exam_workflow_service
+from app.services.cache import redis_cache
+from app.services.cache import studio_cache
 from app.services.pg.pg_access_control import (
     can_access_class,
     can_access_exam,
@@ -107,7 +109,12 @@ async def generate_exam(request: ExamGenerationRequest = Body(...), user: dict =
     logger.info("[ExamAPI] generate exam user=%s", user.get("email", "unknown"))
     _require_teacher(user, "Only teachers can generate exams")
     _require_document_access(user, request.file_ids)
-    return await exam_workflow_service.generate_exam_with_pdf(request)
+    result = await exam_workflow_service.generate_exam_with_pdf(request)
+    redis_cache.invalidate_namespaces(
+        studio_cache.exam_list_namespace(),
+        studio_cache.exam_detail_namespace(studio_cache.id_from_result(result, "exam_id", "id")),
+    )
+    return result
 
 
 @router.post("/generate-questions-only")
@@ -115,14 +122,21 @@ async def generate_questions_only(request: ExamGenerationRequest = Body(...), us
     logger.info("[ExamAPI] generate questions only user=%s", user.get("email", "unknown"))
     _require_teacher(user, "Only teachers can generate exams")
     _require_document_access(user, request.file_ids)
-    return await exam_workflow_service.generate_questions_only(request)
+    result = await exam_workflow_service.generate_questions_only(request)
+    redis_cache.invalidate_namespaces(
+        studio_cache.exam_list_namespace(),
+        studio_cache.exam_detail_namespace(studio_cache.id_from_result(result, "exam_id", "id")),
+    )
+    return result
 
 
 @router.post("/{exam_id}/regenerate-pdf")
 async def regenerate_pdf(exam_id: str, questions: list = Body(..., embed=True), exam_name: str = Body("Exam", embed=True), user: dict = Depends(get_current_user)):
     _require_teacher_exam_access(user, exam_id, "Only teachers can regenerate exam PDFs")
     logger.info("[ExamAPI] regenerate pdf exam_id=%s", exam_id)
-    return await exam_workflow_service.regenerate_exam_pdf(exam_id, questions, exam_name)
+    result = await exam_workflow_service.regenerate_exam_pdf(exam_id, questions, exam_name)
+    redis_cache.invalidate_namespaces(studio_cache.exam_detail_namespace(exam_id))
+    return result
 
 
 @router.get("/{exam_id}/pdf")
@@ -177,30 +191,66 @@ async def get_question_types():
 
 
 @router.get("/list")
-async def get_exams_list(class_id: str = Query(..., description="Class ID"), user: dict = Depends(get_current_user)):
+async def get_exams_list(
+    response: Response,
+    class_id: str = Query(..., description="Class ID"),
+    user: dict = Depends(get_current_user),
+):
     require_allowed(can_access_class(user["user_id"], class_id))
-    exams = await _run_exam_service(
-        get_exams_by_class,
-        class_id,
-        user["user_id"],
-        action="Get exams",
+
+    async def load():
+        exams = await _run_exam_service(
+            get_exams_by_class,
+            class_id,
+            user["user_id"],
+            action="Get exams",
+        )
+        return {"message": "Fetched exams", "exams": exams, "total": len(exams)}
+
+    result = await redis_cache.get_or_set_json_with_status(
+        "exam:list",
+        {"user_id": user["user_id"], "class_id": class_id},
+        load,
+        version_namespaces=[studio_cache.exam_list_namespace()],
     )
-    return {"message": "Fetched exams", "exams": exams, "total": len(exams)}
+    redis_cache.set_response_cache_headers(response, result)
+    return result.value
 
 
 @router.get("/{exam_id}")
-async def get_exam(exam_id: str, include_answers: bool = Query(True, description="Include answers for teachers"), user: dict = Depends(get_current_user)):
+async def get_exam(
+    exam_id: str,
+    response: Response,
+    include_answers: bool = Query(True, description="Include answers for teachers"),
+    user: dict = Depends(get_current_user),
+):
     is_teacher = is_user_teacher(user["user_id"])
     if not is_teacher:
         include_answers = False
-    exam_payload = await _run_exam_service(
-        get_exam_by_id,
-        exam_id,
-        user["user_id"],
-        include_answers,
-        action="Get exam",
+
+    async def load():
+        exam_payload = await _run_exam_service(
+            get_exam_by_id,
+            exam_id,
+            user["user_id"],
+            include_answers,
+            action="Get exam",
+        )
+        return {"message": "Fetched exam", "exam": exam_payload}
+
+    if not redis_cache.is_enabled() or not studio_cache.can_use_cache(can_access_exam, user["user_id"], exam_id):
+        result = await redis_cache.load_without_cache("exam:detail", load, reason="disabled_or_access_check")
+        redis_cache.set_response_cache_headers(response, result)
+        return result.value
+
+    result = await redis_cache.get_or_set_json_with_status(
+        "exam:detail",
+        {"user_id": user["user_id"], "exam_id": exam_id, "include_answers": include_answers},
+        load,
+        version_namespaces=[studio_cache.exam_detail_namespace(exam_id)],
     )
-    return {"message": "Fetched exam", "exam": exam_payload}
+    redis_cache.set_response_cache_headers(response, result)
+    return result.value
 
 
 @router.put("/{exam_id}")
@@ -220,18 +270,21 @@ async def update_exam(exam_id: str, request: ExamUpdateRequest = Body(...), user
         request.end_at,
         action="Update exam",
     )
+    redis_cache.invalidate_namespaces(studio_cache.exam_list_namespace(), studio_cache.exam_detail_namespace(exam_id))
     return {"message": "Exam updated", "exam": result}
 
 
 @router.delete("/{exam_id}")
 async def delete_exam(exam_id: str, user: dict = Depends(get_current_user)):
     _require_teacher_exam_access(user, exam_id, "Only teachers can delete exams")
-    return await _run_exam_service(
+    result = await _run_exam_service(
         delete_exam_record,
         exam_id,
         user["user_id"],
         action="Delete exam",
     )
+    redis_cache.invalidate_namespaces(studio_cache.exam_list_namespace(), studio_cache.exam_detail_namespace(exam_id))
+    return result
 
 
 @router.post("/{exam_id}/publish")
@@ -244,6 +297,7 @@ async def publish_exam(exam_id: str, is_published: bool = Body(True, embed=True)
         is_published,
         action="Publish exam",
     )
+    redis_cache.invalidate_namespaces(studio_cache.exam_list_namespace(), studio_cache.exam_detail_namespace(exam_id))
     action = "published" if is_published else "unpublished"
     return {"message": f"Exam {action}", "exam": result}
 

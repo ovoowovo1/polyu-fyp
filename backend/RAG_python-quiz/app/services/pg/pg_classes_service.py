@@ -118,6 +118,10 @@ def _is_student_exists(user_id: str) -> bool:
     )
 
 
+def is_user_student(user_id: str) -> bool:
+    return _is_student_exists(user_id)
+
+
 def invite_student_to_class(
     teacher_user_id: str, class_id: str, student_email: str
 ) -> dict[str, Any]:

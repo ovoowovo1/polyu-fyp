@@ -117,6 +117,14 @@ const documentsSlice = createSlice({
         setCurrentClassId: (state, action) => {
             state.currentClassId = action.payload;
         },
+        clearClassSources: (state) => {
+            state.items = [];
+            state.documentsById = {};
+            state.error = null;
+            state.selectedFileIds = [];
+            state.selectedShowDocumentContentID = null;
+            state.searchTerm = '';
+        },
         resetDocumentState: () => {
             return { ...initialState }
         },
@@ -180,12 +188,14 @@ export const {
     toggleSelectAll,
     toggleDocumentListCollapse,
     setCurrentClassId,
+    clearClassSources,
     resetDocumentState,
 } = documentsSlice.actions;
 
 // Thunk to select a class and then load its documents
 export const selectClassAndLoadDocuments = (classId) => async (dispatch) => {
     dispatch(setCurrentClassId(classId));
+    dispatch(clearClassSources());
     // dispatch fetchDocuments and wait for it to complete
     await dispatch(fetchDocuments(classId));
 };

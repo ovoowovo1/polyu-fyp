@@ -4,10 +4,13 @@ import assert from 'node:assert/strict';
 import {
     COLLAPSED_WIDTH,
     CHAT_WIDTH_VAR,
+    DESKTOP_PAGE_CLASS,
     LEFT_WIDTH_VAR,
     MIN_CHAT_WIDTH,
     MIN_DOCUMENT_LIST_WIDTH,
     MIN_STUDIO_CARD_WIDTH,
+    RESIZER_COUNT,
+    RESIZER_WIDTH,
     RIGHT_WIDTH_VAR,
     buildLayoutState,
     buildDraggedExpandedWidths,
@@ -16,6 +19,8 @@ import {
     getLayoutCssVariables,
     getLayoutStorageKey,
     getMeasuredPanelWidth,
+    getDesktopLayoutClassName,
+    getPanelShellStyle,
     loadSavedExpandedWidths,
     saveExpandedWidths,
 } from './documentsLayoutModel.js';
@@ -31,6 +36,23 @@ test('uses default desktop widths when no saved widths exist', () => {
     assert.equal(layout.documentListWidth, '315px');
     assert.equal(layout.studioCardWidth, '394px');
     assert.equal(layout.chatWidth, '867px');
+});
+
+test('panel widths plus resize handles fill the measured content width', () => {
+    const layout = buildLayoutState({
+        containerWidth: 1600,
+        savedWidths: null,
+        isDocumentListCollapsed: false,
+        isStudioCardCollapsed: false,
+    });
+
+    assert.equal(
+        toPixels(layout.documentListWidth)
+            + toPixels(layout.chatWidth)
+            + toPixels(layout.studioCardWidth)
+            + (RESIZER_WIDTH * RESIZER_COUNT),
+        1600,
+    );
 });
 
 test('restores saved widths from storage', () => {
@@ -105,6 +127,63 @@ test('getMeasuredPanelWidth excludes horizontal padding from available panel wid
     assert.equal(measured, 1168);
 });
 
+test('layout uses measured width after preserving the 16px page gutter', () => {
+    const contentWidth = getMeasuredPanelWidth({
+        measuredWidth: 1440,
+        paddingLeft: 16,
+        paddingRight: 16,
+    });
+    const layout = buildLayoutState({
+        containerWidth: contentWidth,
+        savedWidths: null,
+        isDocumentListCollapsed: false,
+        isStudioCardCollapsed: false,
+    });
+
+    assert.equal(contentWidth, 1408);
+    assert.equal(
+        toPixels(layout.documentListWidth)
+            + toPixels(layout.chatWidth)
+            + toPixels(layout.studioCardWidth)
+            + (RESIZER_WIDTH * RESIZER_COUNT),
+        contentWidth,
+    );
+});
+
+test('saved widths that are too large clamp to the content width', () => {
+    const layout = buildLayoutState({
+        containerWidth: 1200,
+        savedWidths: { leftWidth: 900, rightWidth: 900 },
+        isDocumentListCollapsed: false,
+        isStudioCardCollapsed: false,
+    });
+
+    assert.equal(layout.documentListWidth, '436px');
+    assert.equal(layout.studioCardWidth, '320px');
+    assert.equal(layout.chatWidth, '420px');
+    assert.equal(
+        toPixels(layout.documentListWidth)
+            + toPixels(layout.chatWidth)
+            + toPixels(layout.studioCardWidth)
+            + (RESIZER_WIDTH * RESIZER_COUNT),
+        1200,
+    );
+});
+
+test('container width of 0 uses a proportional safe layout instead of fixed narrow columns', () => {
+    const layout = buildLayoutState({
+        containerWidth: 0,
+        savedWidths: null,
+        isDocumentListCollapsed: false,
+        isStudioCardCollapsed: false,
+    });
+
+    assert.equal(layout.documentListWidth, '20%');
+    assert.equal(layout.studioCardWidth, '25%');
+    assert.equal(layout.chatWidth, 'calc(100% - 20% - 25% - 24px)');
+    assert.notEqual(layout.chatWidth, `${MIN_CHAT_WIDTH}px`);
+});
+
 test('buildDraggedExpandedWidths clamps pointer-move preview widths', () => {
     const dragged = buildDraggedExpandedWidths({
         containerWidth: 1200,
@@ -135,6 +214,32 @@ test('getLayoutCssVariables returns CSS width variables for wrappers', () => {
     });
 });
 
+test('desktop layout class keeps the route and gutter container full width', () => {
+    assert.match(DESKTOP_PAGE_CLASS, /\bw-full\b/);
+    assert.match(DESKTOP_PAGE_CLASS, /\bmin-w-0\b/);
+    assert.match(DESKTOP_PAGE_CLASS, /\boverflow-hidden\b/);
+
+    const idleClassName = getDesktopLayoutClassName(null);
+    assert.match(idleClassName, /\bp-4\b/);
+    assert.match(idleClassName, /\bw-full\b/);
+    assert.match(idleClassName, /\bmin-w-0\b/);
+    assert.match(idleClassName, /\bbox-border\b/);
+
+    const draggingClassName = getDesktopLayoutClassName('left');
+    assert.match(draggingClassName, /\bselect-none\b/);
+    assert.match(draggingClassName, /\bcursor-col-resize\b/);
+});
+
+test('panel shell style keeps flex basis, width, and max width synchronized', () => {
+    assert.deepEqual(getPanelShellStyle('var(--documents-left-width)'), {
+        flex: '0 0 var(--documents-left-width)',
+        width: 'var(--documents-left-width)',
+        maxWidth: 'var(--documents-left-width)',
+        minWidth: 0,
+        overflow: 'hidden',
+    });
+});
+
 function createStorage() {
     const map = new Map();
     return {
@@ -145,4 +250,8 @@ function createStorage() {
             map.set(key, value);
         },
     };
+}
+
+function toPixels(value) {
+    return Number.parseFloat(value.replace('px', ''));
 }

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 from app.agents.schemas import ExamGenerationResponse
 from app.routers import exam
 from app.services.core.exceptions import AlreadySubmittedError, NotFoundError, NotReleasedError, PermissionDeniedError
-from tests.support import build_authed_client, start_patches
+from tests.support import build_authed_client, make_settings, start_patches
 
 
 def make_exam_response():
@@ -54,6 +54,7 @@ class ExamApiTests(unittest.TestCase):
             patch("app.routers.exam.can_manage_documents", return_value=True),
             patch("app.routers.exam.require_submission_owner", return_value=None),
             patch("app.routers.exam.require_submission_teacher", return_value=None),
+            patch("app.routers.exam.redis_cache.get_settings", return_value=make_settings()),
         )
 
     def test_grade_answer_item_requires_identifier(self):
@@ -162,6 +163,24 @@ class ExamApiTests(unittest.TestCase):
             failed = self.client.get("/exam/list", params={"class_id": "class-1"})
         self.assertEqual(failed.status_code, 500)
 
+    def test_get_exams_list_uses_cache_when_enabled(self):
+        with patch(
+            "app.routers.exam.redis_cache.get_or_set_json_with_status",
+            AsyncMock(
+                return_value=exam.redis_cache.CacheResult(
+                    {"message": "Fetched exams", "exams": [{"id": "exam-1"}], "total": 1},
+                    "MISS",
+                    "exam:list",
+                )
+            ),
+        ) as get_or_set, patch("app.routers.exam.get_exams_by_class") as get_exams:
+            response = self.client.get("/exam/list", params={"class_id": "class-1"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["X-Redis-Cache"], "MISS")
+        self.assertEqual(get_or_set.call_args.args[0], "exam:list")
+        get_exams.assert_not_called()
+
     def test_get_exam_handles_roles_and_errors(self):
         with patch("app.routers.exam.get_exam_by_id", return_value={"id": "exam-1"}):
             ok = self.client.get("/exam/exam-1")
@@ -185,6 +204,100 @@ class ExamApiTests(unittest.TestCase):
         with patch("app.routers.exam.get_exam_by_id", side_effect=RuntimeError("boom")):
             failed = self.client.get("/exam/exam-1")
         self.assertEqual(failed.status_code, 500)
+
+    def test_get_exam_uses_cache_with_effective_include_answers(self):
+        with patch("app.routers.exam.redis_cache.is_enabled", return_value=True), patch(
+            "app.routers.exam.can_access_exam",
+            return_value=True,
+        ), patch(
+            "app.routers.exam.redis_cache.get_or_set_json_with_status",
+            AsyncMock(
+                return_value=exam.redis_cache.CacheResult(
+                    {"message": "Fetched exam", "exam": {"id": "exam-1"}},
+                    "HIT",
+                    "exam:detail",
+                )
+            ),
+        ) as get_or_set, patch("app.routers.exam.get_exam_by_id") as get_exam_by_id:
+            response = self.client.get("/exam/exam-1", params={"include_answers": True})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["X-Redis-Cache"], "HIT")
+        self.assertEqual(get_or_set.call_args.args[0], "exam:detail")
+        self.assertTrue(get_or_set.call_args.args[1]["include_answers"])
+        get_exam_by_id.assert_not_called()
+
+        with patch("app.routers.exam.redis_cache.is_enabled", return_value=True), patch(
+            "app.routers.exam.is_user_teacher",
+            return_value=False,
+        ), patch("app.routers.exam.can_access_exam", return_value=True), patch(
+            "app.routers.exam.redis_cache.get_or_set_json_with_status",
+            AsyncMock(
+                return_value=exam.redis_cache.CacheResult(
+                    {"message": "Fetched exam", "exam": {"id": "exam-1"}},
+                    "HIT",
+                    "exam:detail",
+                )
+            ),
+        ) as student_get_or_set:
+            student_response = self.client.get("/exam/exam-1", params={"include_answers": True})
+
+        self.assertEqual(student_response.status_code, 200)
+        self.assertFalse(student_get_or_set.call_args.args[1]["include_answers"])
+
+    def test_get_exam_skips_cache_when_access_probe_fails(self):
+        with patch("app.routers.exam.redis_cache.is_enabled", return_value=True), patch(
+            "app.routers.exam.can_access_exam",
+            side_effect=RuntimeError("access db"),
+        ), patch("app.routers.exam.get_exam_by_id", return_value={"id": "exam-1"}), patch(
+            "app.routers.exam.redis_cache.get_or_set_json_with_status",
+            AsyncMock(),
+        ) as get_or_set:
+            response = self.client.get("/exam/exam-1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["X-Redis-Cache"], "BYPASS")
+        get_or_set.assert_not_called()
+
+    def test_exam_mutations_invalidate_cache_namespaces(self):
+        with patch("app.services.assessment.exam_workflow_service.run_exam_generation_with_pdf", AsyncMock(return_value=make_exam_response())), patch(
+            "app.routers.exam.redis_cache.invalidate_namespaces"
+        ) as generate_invalidate:
+            self.client.post("/exam/generate", json={"file_ids": ["file-1"]})
+        generate_invalidate.assert_called_with("exam:list", "exam:detail:exam-1")
+
+        with patch("app.services.assessment.exam_workflow_service.run_exam_generation", AsyncMock(return_value={"exam_id": "exam-2"})), patch(
+            "app.routers.exam.redis_cache.invalidate_namespaces"
+        ) as questions_invalidate:
+            self.client.post("/exam/generate-questions-only", json={"file_ids": ["file-1"]})
+        questions_invalidate.assert_called_with("exam:list", "exam:detail:exam-2")
+
+        with patch("app.services.assessment.exam_workflow_service.generate_exam_pdf", AsyncMock(return_value="/tmp/exam-1.pdf")), patch(
+            "app.routers.exam.redis_cache.invalidate_namespaces"
+        ) as pdf_invalidate:
+            self.client.post(
+                "/exam/exam-1/regenerate-pdf",
+                json={"questions": [make_question_dict()], "exam_name": "Database Exam"},
+            )
+        pdf_invalidate.assert_called_with("exam:detail:exam-1")
+
+        with patch("app.routers.exam.update_exam_record", return_value={"id": "exam-1"}), patch(
+            "app.routers.exam.redis_cache.invalidate_namespaces"
+        ) as update_invalidate:
+            self.client.put("/exam/exam-1", json={"title": "Updated"})
+        update_invalidate.assert_called_with("exam:list", "exam:detail:exam-1")
+
+        with patch("app.routers.exam.delete_exam_record", return_value={"message": "deleted"}), patch(
+            "app.routers.exam.redis_cache.invalidate_namespaces"
+        ) as delete_invalidate:
+            self.client.delete("/exam/exam-1")
+        delete_invalidate.assert_called_with("exam:list", "exam:detail:exam-1")
+
+        with patch("app.routers.exam.publish_exam_record", return_value={"id": "exam-1", "is_published": True}), patch(
+            "app.routers.exam.redis_cache.invalidate_namespaces"
+        ) as publish_invalidate:
+            self.client.post("/exam/exam-1/publish", json={"is_published": True})
+        publish_invalidate.assert_called_with("exam:list", "exam:detail:exam-1")
 
     def test_update_delete_and_publish_exam_routes(self):
         payload = {"title": "Updated", "questions": [make_question_dict()]}

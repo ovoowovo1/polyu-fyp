@@ -5,6 +5,7 @@ from typing import List, Sequence
 
 from app.config import get_settings
 from app.logger import get_logger
+from app.services.cache import rag_cache
 from app.services.pg import pg_retrieval_service as pg_service
 from app.utils.api_key_manager import get_embedding_model, get_fallback_embedding_model
 from app.utils.ingest_errors import EmbeddingProviderError
@@ -14,6 +15,22 @@ logger = get_logger(__name__)
 
 def is_retryable_embedding_error(error: Exception) -> bool:
     return isinstance(error, EmbeddingProviderError) and error.retryable
+
+
+async def _retrieve_graph_context(
+    query_vector: list[float],
+    k: int,
+    selected_file_ids: Sequence[str],
+    *,
+    embedding_column: str,
+) -> list[dict]:
+    return await asyncio.to_thread(
+        pg_service.retrieve_graph_context,
+        query_vector,
+        k,
+        list(selected_file_ids),
+        embedding_column=embedding_column,
+    )
 
 
 async def retrieve_vector_context(
@@ -31,10 +48,15 @@ async def retrieve_vector_context(
     if primary_embeddings is None:
         raise RuntimeError("Embedding API Key not configured, unable to perform vector retrieval")
 
-    query_text = question.strip()
+    query_text = rag_cache.normalize_query_text(question)
 
     try:
-        query_vector = await primary_embeddings.aembed_query(query_text)
+        query_vector = await rag_cache.get_or_set_query_embedding(
+            primary_embeddings,
+            query_text,
+            mode="primary",
+            settings=settings,
+        )
     except Exception as primary_error:
         if not is_retryable_embedding_error(primary_error):
             raise
@@ -52,7 +74,12 @@ async def retrieve_vector_context(
         )
 
         try:
-            fallback_vector = await fallback_embeddings.aembed_query(query_text)
+            fallback_vector = await rag_cache.get_or_set_query_embedding(
+                fallback_embeddings,
+                query_text,
+                mode="fallback",
+                settings=settings,
+            )
         except Exception as fallback_error:
             if is_retryable_embedding_error(fallback_error):
                 logger.error(
@@ -65,12 +92,24 @@ async def retrieve_vector_context(
                 )
             raise
 
-        fallback_results = await asyncio.to_thread(
-            pg_service.retrieve_graph_context,
+        async def load_fallback_results() -> list[dict]:
+            return await _retrieve_graph_context(
+                fallback_vector,
+                k,
+                selected_file_ids,
+                embedding_column=fallback_column,
+            )
+
+        fallback_results = await rag_cache.get_or_set_retrieval_rows(
             fallback_vector,
-            k,
-            list(selected_file_ids),
+            query_text=query_text,
+            selected_file_ids=selected_file_ids,
+            k=k,
             embedding_column=fallback_column,
+            model=fallback_embeddings,
+            mode="fallback",
+            settings=settings,
+            loader=load_fallback_results,
         )
         logger.info(
             "[%s] fallback succeeded with model=%s column=%s results=%s",
@@ -81,12 +120,24 @@ async def retrieve_vector_context(
         )
         return fallback_results, "fallback"
 
-    primary_results = await asyncio.to_thread(
-        pg_service.retrieve_graph_context,
+    async def load_primary_results() -> list[dict]:
+        return await _retrieve_graph_context(
+            query_vector,
+            k,
+            selected_file_ids,
+            embedding_column=primary_column,
+        )
+
+    primary_results = await rag_cache.get_or_set_retrieval_rows(
         query_vector,
-        k,
-        list(selected_file_ids),
+        query_text=query_text,
+        selected_file_ids=selected_file_ids,
+        k=k,
         embedding_column=primary_column,
+        model=primary_embeddings,
+        mode="primary",
+        settings=settings,
+        loader=load_primary_results,
     )
     logger.info(
         "[%s] primary succeeded with model=%s column=%s results=%s",

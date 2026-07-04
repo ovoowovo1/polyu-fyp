@@ -1,12 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { configureStore } from '@reduxjs/toolkit';
 
 import reducer, {
+    clearClassSources,
     deleteDocument,
     fetchDocumentContent,
     fetchDocuments,
     renameDocument,
     resetDocumentState,
+    selectClassAndLoadDocuments,
     setCurrentClassId,
     setSearchTerm,
     setSelectedShowDocumentContentID,
@@ -145,6 +148,31 @@ test('document reducer updates simple view state', () => {
     assert.equal(state.isDocumentListCollapsed, true);
 });
 
+test('clearClassSources clears source data and keeps layout preference', () => {
+    const dirtyState = {
+        ...reducer(undefined, { type: '@@INIT' }),
+        items: [{ id: 'doc-1' }],
+        documentsById: { 'doc-1': { content: 'cached' } },
+        currentClassId: 'class-1',
+        error: 'old error',
+        selectedFileIds: ['doc-1'],
+        selectedShowDocumentContentID: 'doc-1',
+        searchTerm: 'lecture',
+        isDocumentListCollapsed: true,
+    };
+
+    const state = reducer(dirtyState, clearClassSources());
+
+    assert.equal(state.currentClassId, 'class-1');
+    assert.equal(state.isDocumentListCollapsed, true);
+    assert.deepEqual(state.items, []);
+    assert.deepEqual(state.documentsById, {});
+    assert.equal(state.error, null);
+    assert.deepEqual(state.selectedFileIds, []);
+    assert.equal(state.selectedShowDocumentContentID, null);
+    assert.equal(state.searchTerm, '');
+});
+
 test('toggleFileSelection selects and deselects one file id', () => {
     const selected = reducer(undefined, toggleFileSelection('file-1'));
     const deselected = reducer(selected, toggleFileSelection('file-1'));
@@ -191,7 +219,15 @@ test('fetchDocumentContent fulfilled stores document content by file id', () => 
 });
 
 test('fetchDocuments pending and rejected update loading and error state', () => {
-    const pending = reducer(undefined, fetchDocuments.pending());
+    const dirtyState = {
+        ...reducer(undefined, { type: '@@INIT' }),
+        items: [{ id: 'doc-1' }],
+        documentsById: { 'doc-1': { content: 'cached' } },
+        selectedFileIds: ['doc-1'],
+        selectedShowDocumentContentID: 'doc-1',
+        searchTerm: 'lecture',
+    };
+    const pending = reducer(dirtyState, fetchDocuments.pending());
     const rejected = reducer({
         ...pending,
         items: [{ id: 'doc-1' }],
@@ -199,9 +235,72 @@ test('fetchDocuments pending and rejected update loading and error state', () =>
 
     assert.equal(pending.loading, true);
     assert.equal(pending.error, null);
+    assert.deepEqual(pending.items, [{ id: 'doc-1' }]);
+    assert.deepEqual(pending.selectedFileIds, ['doc-1']);
+    assert.equal(pending.searchTerm, 'lecture');
+    assert.equal(pending.selectedShowDocumentContentID, 'doc-1');
+    assert.deepEqual(pending.documentsById, { 'doc-1': { content: 'cached' } });
     assert.equal(rejected.loading, false);
     assert.equal(rejected.error, 'load failed');
     assert.deepEqual(rejected.items, []);
+});
+
+test('selectClassAndLoadDocuments clears stale sources before loading the selected class', async () => {
+    clearDedupeCache('docs:list:class-2');
+    let resolveGet;
+    const getPromise = new Promise((resolve) => {
+        resolveGet = resolve;
+    });
+    const axiosMock = installAxiosMock({
+        get: async () => getPromise,
+    });
+    const store = configureStore({
+        reducer: {
+            documents: reducer,
+        },
+        preloadedState: {
+            documents: {
+                ...reducer(undefined, { type: '@@INIT' }),
+                items: [{ id: 'old-doc' }],
+                documentsById: { 'old-doc': { content: 'old' } },
+                currentClassId: 'class-1',
+                error: 'old error',
+                selectedFileIds: ['old-doc'],
+                selectedShowDocumentContentID: 'old-doc',
+                searchTerm: 'old search',
+                isDocumentListCollapsed: true,
+            },
+        },
+    });
+
+    try {
+        const loadPromise = store.dispatch(selectClassAndLoadDocuments('class-2'));
+        const loadingState = store.getState().documents;
+
+        assert.equal(loadingState.currentClassId, 'class-2');
+        assert.equal(loadingState.loading, true);
+        assert.equal(loadingState.isDocumentListCollapsed, true);
+        assert.deepEqual(loadingState.items, []);
+        assert.deepEqual(loadingState.documentsById, {});
+        assert.deepEqual(loadingState.selectedFileIds, []);
+        assert.equal(loadingState.selectedShowDocumentContentID, null);
+        assert.equal(loadingState.searchTerm, '');
+        assert.equal(loadingState.error, null);
+
+        resolveGet({ data: { files: [{ id: 'new-doc' }] } });
+        await loadPromise;
+
+        assert.deepEqual(store.getState().documents.items, [{ id: 'new-doc' }]);
+        assert.deepEqual(axiosMock.calls.map(({ args }) => ({ url: args[0], config: args[1] })), [
+            {
+                url: `${API_BASE_URL}/files`,
+                config: { params: { class_id: 'class-2' } },
+            },
+        ]);
+    } finally {
+        axiosMock.restore();
+        clearDedupeCache('docs:list:class-2');
+    }
 });
 
 test('fetchDocumentContent with no doc id resolves to a null payload', async () => {

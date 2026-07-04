@@ -55,6 +55,10 @@ class PgClassesServiceTests(PgServiceBase):
             self.assertTrue(pg_service._is_student_exists("student-1"))
         self.assertIn("app_security.is_student", cursor.executed[0][0])
 
+        with patch("app.services.pg.pg_classes_service._is_student_exists", return_value=True) as exists:
+            self.assertTrue(pg_service.is_user_student("student-1"))
+        exists.assert_called_once_with("student-1")
+
         with self.patch_conn(FakeCursor(fetchone_results=[None])):
             with self.assertRaises(PermissionDeniedError):
                 pg_service.list_classes_for_student("student-1")

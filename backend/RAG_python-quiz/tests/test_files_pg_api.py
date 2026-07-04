@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from app.routers import files_pg
 from app.services.core.exceptions import NotFoundError
@@ -40,6 +40,25 @@ class FilesPgApiTests(unittest.TestCase):
         )
         self.assertEqual(response.json()["total"], 1)
 
+    def test_get_files_uses_cache_after_class_access_check(self):
+        with patch(
+            "app.routers.files_pg.redis_cache.get_or_set_json_with_status",
+            AsyncMock(
+                return_value=files_pg.redis_cache.CacheResult(
+                    {"message": "Files fetched", "files": [{"id": "file-1"}], "total": 1},
+                    "MISS",
+                    "files:list",
+                )
+            ),
+        ) as get_or_set, patch("app.routers.files_pg.get_files_list") as get_files_list:
+            response = self.client.get("/files", params={"class_id": "class-1"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["X-Redis-Cache"], "MISS")
+        self.assertEqual(response.json()["total"], 1)
+        self.assertEqual(get_or_set.call_args.args[0], "files:list")
+        get_files_list.assert_not_called()
+
     def test_delete_file_success(self):
         response = self.route(
             "delete",
@@ -49,6 +68,16 @@ class FilesPgApiTests(unittest.TestCase):
         )
         self.assertTrue(response.json()["success"])
 
+    def test_delete_file_invalidates_file_cache(self):
+        with patch(
+            "app.routers.files_pg.delete_file_record",
+            return_value={"message": "Deleted", "deletedFile": {"id": "file-1"}},
+        ), patch("app.routers.files_pg.redis_cache.invalidate_namespaces") as invalidate:
+            response = self.client.delete("/files/file-1")
+
+        self.assertEqual(response.status_code, 200)
+        invalidate.assert_called_with("files:list", "files:detail:file-1", "chunks:source-details", "rag:retrieval")
+
     def test_get_file_details_success(self):
         response = self.route(
             "get",
@@ -57,6 +86,41 @@ class FilesPgApiTests(unittest.TestCase):
             return_value={"file": {"id": "file-1"}, "chunks": [{"id": "chunk-1"}]},
         )
         self.assertEqual(response.json()["file"]["id"], "file-1")
+
+    def test_get_file_details_uses_cache_when_enabled_and_access_probe_passes(self):
+        with patch("app.routers.files_pg.redis_cache.is_enabled", return_value=True), patch(
+            "app.routers.files_pg.can_access_document",
+            return_value=True,
+        ), patch(
+            "app.routers.files_pg.redis_cache.get_or_set_json_with_status",
+            AsyncMock(
+                return_value=files_pg.redis_cache.CacheResult(
+                    {"message": "File details fetched", "file": {"id": "file-1"}, "chunks": []},
+                    "HIT",
+                    "files:detail",
+                )
+            ),
+        ) as get_or_set, patch("app.routers.files_pg.get_specific_file") as get_specific_file:
+            response = self.client.get("/files/file-1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["X-Redis-Cache"], "HIT")
+        self.assertEqual(get_or_set.call_args.args[0], "files:detail")
+        get_specific_file.assert_not_called()
+
+    def test_get_file_details_skips_cache_when_access_probe_fails(self):
+        with patch("app.routers.files_pg.redis_cache.is_enabled", return_value=True), patch(
+            "app.routers.files_pg.can_access_document",
+            side_effect=[True, RuntimeError("access db")],
+        ), patch(
+            "app.routers.files_pg.get_specific_file",
+            return_value={"file": {"id": "file-1"}, "chunks": []},
+        ), patch("app.routers.files_pg.redis_cache.get_or_set_json_with_status", AsyncMock()) as get_or_set:
+            response = self.client.get("/files/file-1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["X-Redis-Cache"], "BYPASS")
+        get_or_set.assert_not_called()
 
     def test_rename_file_success(self):
         response = self.route(
@@ -68,11 +132,56 @@ class FilesPgApiTests(unittest.TestCase):
         )
         self.assertEqual(response.json()["renamedFile"]["name"], "new.pdf")
 
+    def test_rename_file_invalidates_file_cache(self):
+        with patch(
+            "app.routers.files_pg.rename_file_record",
+            return_value={"message": "Renamed", "renamedFile": {"id": "file-1", "name": "new.pdf"}},
+        ), patch("app.routers.files_pg.redis_cache.invalidate_namespaces") as invalidate:
+            response = self.client.put("/files/file-1", params={"new_name": "new.pdf"})
+
+        self.assertEqual(response.status_code, 200)
+        invalidate.assert_called_with("files:list", "files:detail:file-1", "chunks:source-details", "rag:retrieval")
+
     def test_get_chunk_source_details_success(self):
         response = self.route(
             "get", "/chunks/chunk-1/source-details", "get_source_details_by_chunk_id", return_value={"page": 2}
         )
         self.assertEqual(response.json()["details"]["page"], 2)
+
+    def test_get_chunk_source_details_uses_cache_when_enabled_and_access_probe_passes(self):
+        with patch("app.routers.files_pg.redis_cache.is_enabled", return_value=True), patch(
+            "app.routers.files_pg.can_access_chunk",
+            return_value=True,
+        ), patch(
+            "app.routers.files_pg.redis_cache.get_or_set_json_with_status",
+            AsyncMock(
+                return_value=files_pg.redis_cache.CacheResult(
+                    {"message": "Source details fetched", "details": {"page": 2}},
+                    "HIT",
+                    "chunks:source-details",
+                )
+            ),
+        ) as get_or_set, patch("app.routers.files_pg.get_source_details_by_chunk_id") as source_details:
+            response = self.client.get("/chunks/chunk-1/source-details")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["X-Redis-Cache"], "HIT")
+        self.assertEqual(get_or_set.call_args.args[0], "chunks:source-details")
+        source_details.assert_not_called()
+
+    def test_get_chunk_source_details_skips_cache_when_access_probe_fails(self):
+        with patch("app.routers.files_pg.redis_cache.is_enabled", return_value=True), patch(
+            "app.routers.files_pg.can_access_chunk",
+            side_effect=[True, RuntimeError("access db")],
+        ), patch("app.routers.files_pg.get_source_details_by_chunk_id", return_value={"page": 2}), patch(
+            "app.routers.files_pg.redis_cache.get_or_set_json_with_status",
+            AsyncMock(),
+        ) as get_or_set:
+            response = self.client.get("/chunks/chunk-1/source-details")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["X-Redis-Cache"], "BYPASS")
+        get_or_set.assert_not_called()
 
     def test_file_routes_map_service_errors(self):
         cases = (
