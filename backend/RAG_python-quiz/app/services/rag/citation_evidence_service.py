@@ -7,9 +7,11 @@ from llama_index.core.base.response.schema import Response
 from llama_index.core.llms import CompletionResponse, CustomLLM, LLMMetadata
 from llama_index.core.query_engine import CitationQueryEngine
 from llama_index.core.schema import MetadataMode, NodeWithScore
+from pydantic import Field
 
 from app.logger import get_logger
 from app.services.ai.llm.text_completion import generate_text_completion
+from app.services.ai.llm.multimodal import build_multimodal_content
 from app.services.rag import citation_adapters, citation_markdown, citation_prompts, citation_synthesis
 from app.services.rag.citation_types import (
     CitationEvidenceResult,
@@ -91,6 +93,7 @@ class OpenAICompatibleCustomLLM(CustomLLM):
     context_window: int = 32768
     num_output: int = DEFAULT_NUM_OUTPUT
     api_key: Optional[str] = None
+    image_inputs: List[Dict[str, Any]] = Field(default_factory=list)
 
     @property
     def metadata(self) -> LLMMetadata:
@@ -103,11 +106,23 @@ class OpenAICompatibleCustomLLM(CustomLLM):
     def complete(self, prompt: str, formatted: bool = False, **kwargs: Any) -> CompletionResponse:
         del formatted
         client = get_llm_client(self.api_key)
-        response = client.chat.completions.create(
-            model=self.model_name or get_default_llm_model_name(),
-            messages=[{"role": "user", "content": prompt}],
-            temperature=kwargs.get("temperature", self.temperature),
-        )
+        messages = [{"role": "user", "content": build_multimodal_content(prompt, self.image_inputs)}]
+        try:
+            response = client.chat.completions.create(
+                model=self.model_name or get_default_llm_model_name(),
+                messages=messages,
+                temperature=kwargs.get("temperature", self.temperature),
+            )
+        except Exception as error:
+            if self.image_inputs:
+                logger.warning("[CitationEvidence] Vision input failed; retrying text-only: %s", error)
+                response = client.chat.completions.create(
+                    model=self.model_name or get_default_llm_model_name(),
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=kwargs.get("temperature", self.temperature),
+                )
+            else:
+                raise
         text = extract_chat_completion_text(response, "LlamaIndex citation synthesis").strip()
         return CompletionResponse(text=text, raw=response)
 
@@ -125,6 +140,7 @@ async def synthesize_markdown_answer(
     covered_concepts: Sequence[str] = (),
     missing_concepts: Sequence[str] = (),
     intent_type: str = "single",
+    image_inputs: Sequence[Dict[str, Any]] = (),
 ) -> str:
     return await citation_synthesis.synthesize_markdown_answer(
         question,
@@ -134,6 +150,7 @@ async def synthesize_markdown_answer(
         covered_concepts=covered_concepts,
         missing_concepts=missing_concepts,
         intent_type=intent_type,
+        image_inputs=image_inputs,
         generate_text_completion_func=generate_text_completion,
     )
 
@@ -147,6 +164,7 @@ async def _synthesize_markdown_answer_or_draft(
     covered: Sequence[str],
     missing: Sequence[str],
     intent_type: str,
+    image_inputs: Sequence[Dict[str, Any]] = (),
 ) -> str:
     return await citation_synthesis.synthesize_markdown_answer_or_draft(
         question,
@@ -156,12 +174,24 @@ async def _synthesize_markdown_answer_or_draft(
         covered=covered,
         missing=missing,
         intent_type=intent_type,
+        image_inputs=image_inputs,
         generate_text_completion_func=generate_text_completion,
     )
 
 
 def _run_citation_query(question: str, documents: Sequence[Dict[str, Any]]) -> Response:
-    llm = OpenAICompatibleCustomLLM(model_name=get_default_llm_model_name())
+    image_inputs = [
+        {
+            "image_data": document.get("image_data"),
+            "image_mimetype": document.get("image_mimetype"),
+        }
+        for document in documents
+        if document.get("image_data")
+    ]
+    llm = OpenAICompatibleCustomLLM(
+        model_name=get_default_llm_model_name(),
+        image_inputs=image_inputs,
+    )
     retriever = StaticNodeRetriever(_build_llamaindex_nodes(documents))
     query_engine = CitationQueryEngine(
         retriever=retriever,
@@ -229,6 +259,11 @@ async def generate_citation_evidence(
     synthesis_question = _build_synthesis_question(question, intent_type, required, covered, missing)
     response = await asyncio.to_thread(_run_citation_query, synthesis_question, normalized_docs)
     grounded_draft = _normalize_markdown_answer(response.response or "")
+    image_inputs = [
+        {"image_data": document.get("image_data"), "image_mimetype": document.get("image_mimetype")}
+        for document in documents
+        if document.get("image_data")
+    ]
     synthesized_answer = await _synthesize_markdown_answer_or_draft(
         question,
         grounded_draft,
@@ -237,6 +272,7 @@ async def generate_citation_evidence(
         covered=covered,
         missing=missing,
         intent_type=intent_type,
+        image_inputs=image_inputs,
     )
     answer_text, citations, answer_with_citations = _build_cited_answer_payload(
         _ensure_missing_concept_section(synthesized_answer or grounded_draft, missing, response.source_nodes),

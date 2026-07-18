@@ -38,11 +38,14 @@ CREATE TABLE IF NOT EXISTS class_students (
 CREATE TABLE IF NOT EXISTS documents (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     class_id uuid REFERENCES classes(id) ON DELETE SET NULL,
+    hash text,
     name text NOT NULL,
     size_bytes bigint DEFAULT 0,
     mimetype text DEFAULT 'application/octet-stream',
     created_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_class_hash ON documents(class_id, hash);
 
 CREATE TABLE IF NOT EXISTS chunks (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -51,6 +54,13 @@ CREATE TABLE IF NOT EXISTS chunks (
     page_start int,
     page_end int,
     chunk_index int NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS chunk_media (
+    chunk_id uuid PRIMARY KEY REFERENCES chunks(id) ON DELETE CASCADE,
+    mimetype text NOT NULL,
+    data bytea NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now()
 );
 

@@ -32,6 +32,13 @@ _build_document_grading_prompt = adaptive_grading.build_document_grading_prompt
 _collect_grading_outputs = adaptive_grading.collect_grading_outputs
 
 
+async def classify_query_intent(question: str) -> retrieval_intent.QueryIntent:
+    return await retrieval_intent.classify_query_intent(
+        question,
+        generate_structured_json_func=generate_structured_json,
+    )
+
+
 async def retrieve_documents_node(
     state: AdaptiveRetrievalState,
     emit: EventCallback,
@@ -49,6 +56,7 @@ async def retrieve_documents_node(
         retrieve_vector_context_func=retrieve_vector_context,
         retrieve_context_by_keywords_func=pg_service.retrieve_context_by_keywords,
         is_retryable_embedding_error_func=is_retryable_embedding_error,
+        classify_query_intent_func=classify_query_intent,
     )
 
 
@@ -79,6 +87,7 @@ async def rewrite_query_node(
         max_rewrite_attempts=max_rewrite_attempts,
         log_prefix=log_prefix,
         generate_structured_json_func=generate_structured_json,
+        classify_query_intent_func=classify_query_intent,
     )
 
 
@@ -102,7 +111,7 @@ async def run_adaptive_retrieval(
         max_docs_to_grade,
     )
 
-    initial_intent = retrieval_intent.analyze_query_intent(question.strip())
+    initial_intent = await classify_query_intent(question.strip())
 
     if not selected_file_ids:
         logger.warning("[%s] run_end empty_selection", log_prefix)

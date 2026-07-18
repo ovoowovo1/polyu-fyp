@@ -13,6 +13,7 @@ import {
 } from '../../redux/documentSlice';
 import { getCurrentUser } from '../../api/auth';
 import { useTranslation } from 'react-i18next';
+import { canUploadSources } from '../../utils/sourceUploadAccess.js';
 
 import {
     areAllFilteredDocumentsSelected,
@@ -42,7 +43,7 @@ function DocumentList({ widthSize, isMediumScreen }) {
     } = useSelector((state) => state.documents);
 
     const user = getCurrentUser();
-    const isTeacher = user?.role === 'teacher';
+    const isTeacher = canUploadSources(user);
 
     const [hoveredDocId, setHoveredDocId] = useState(null);
     const [dropdownOpen, setDropdownOpen] = useState(null);

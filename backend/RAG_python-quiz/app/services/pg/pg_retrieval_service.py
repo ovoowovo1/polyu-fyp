@@ -19,8 +19,17 @@ def _get_fulltext_search_backend() -> str:
     return backend
 
 
-def find_document_by_hash(file_hash: str) -> Optional[Dict[str, Any]]:
-    return pg_retrieval_documents.find_document_by_hash(_get_conn, file_hash)
+def find_document_by_hash(
+    file_hash: str,
+    class_id: Optional[str],
+    *,
+    user_id: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    return pg_retrieval_documents.find_document_by_hash(
+        lambda: _get_conn(user_id),
+        file_hash,
+        class_id,
+    )
 
 
 def create_graph_from_document(
@@ -28,6 +37,7 @@ def create_graph_from_document(
     chunks: list[dict],
     *,
     embedding_column: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> dict:
     """
     Upsert document, then batch insert chunks using:
@@ -36,11 +46,12 @@ def create_graph_from_document(
     - chunk_index: 0-based order within this document
     """
     return pg_retrieval_documents.create_graph_from_document(
-        get_conn=_get_conn,
+        get_conn=lambda: _get_conn(user_id),
         execute_values=psycopg2.extras.execute_values,
         document=document,
         chunks=chunks,
         embedding_column=embedding_column,
+        user_id=user_id,
     )
 
 

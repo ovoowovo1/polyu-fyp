@@ -179,5 +179,7 @@ describe('apiClient', () => {
     expect(safeJsonParse('{"ok":true}')).toEqual({ ok: true });
     expect(safeJsonParse('bad-json')).toBe('bad-json');
     expect(extractErrorMessage(null, 503)).toBe('HTTP 503');
+    expect(extractErrorMessage({ detail: { error: 'Only the teacher who owns this class can upload source documents.' } }, 403))
+      .toBe('Only the teacher who owns this class can upload source documents.');
   });
 });

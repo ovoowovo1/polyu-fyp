@@ -5,7 +5,49 @@ from app.services.rag import adaptive_rag_service
 from tests.support import EventRecorder
 
 
+def single_query_intent(question="question"):
+    return {
+        "mode": "single",
+        "intent_type": "single",
+        "required_concepts": [],
+        "subqueries": [],
+        "search_queries": [
+            {
+                "label": "original question",
+                "query": question,
+                "concept": None,
+                "query_kind": "original",
+            }
+        ],
+    }
+
+
+async def collect_stream(question, selected_file_ids):
+    with patch(
+        "app.services.rag.adaptive_rag_service.classify_query_intent",
+        AsyncMock(return_value=single_query_intent(question)),
+    ):
+        return [
+            event
+            async for event in adaptive_rag_service.run_adaptive_rag_stream(question, selected_file_ids)
+        ]
+
+
 class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_classify_query_intent_delegates_to_llm_planner(self):
+        expected = single_query_intent("question")
+        with patch(
+            "app.services.rag.adaptive_rag_service.retrieval_intent.classify_query_intent",
+            AsyncMock(return_value=expected),
+        ) as classifier:
+            result = await adaptive_rag_service.classify_query_intent("question")
+
+        self.assertEqual(result, expected)
+        classifier.assert_awaited_once_with(
+            "question",
+            generate_structured_json_func=adaptive_rag_service.generate_structured_json,
+        )
+
     async def test_helper_functions_and_node_delegates_work(self):
         recorder = EventRecorder()
 
@@ -335,7 +377,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             "app.services.rag.adaptive_rag_service.grade_generation_node",
             fake_grade_generation,
         ):
-            events = [event async for event in adaptive_rag_service.run_adaptive_rag_stream("question", ["file-1"])]
+            events = await collect_stream("question", ["file-1"])
 
         result_event = events[-1]
         self.assertEqual(result_event["type"], "result")
@@ -348,7 +390,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(events[1]["type"], "router")
 
     async def test_run_adaptive_rag_stream_covers_empty_reject_retry_and_rewrite_limit_paths(self):
-        empty_events = [event async for event in adaptive_rag_service.run_adaptive_rag_stream("question", [])]
+        empty_events = await collect_stream("question", [])
         self.assertEqual(empty_events[-1]["message"], "Please select at least one document for retrieval.")
 
         async def reject_route(state, emit):
@@ -357,7 +399,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             return state
 
         with patch("app.services.rag.adaptive_rag_service.route_question_node", reject_route):
-            reject_events = [event async for event in adaptive_rag_service.run_adaptive_rag_stream("question", ["file-1"])]
+            reject_events = await collect_stream("question", ["file-1"])
         self.assertEqual(reject_events[-1]["answer"], adaptive_rag_service.OUT_OF_SCOPE_ANSWER)
 
         async def retry_route(state, emit):
@@ -400,7 +442,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             "app.services.rag.adaptive_rag_service.grade_generation_node",
             retry_grade_generation,
         ):
-            retry_events = [event async for event in adaptive_rag_service.run_adaptive_rag_stream("question", ["file-1"])]
+            retry_events = await collect_stream("question", ["file-1"])
         self.assertEqual(retry_events[-1]["answer"], adaptive_rag_service.NO_DOCUMENTS_ANSWER)
 
         async def rewrite_limit_retrieve(state, emit):
@@ -416,7 +458,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             "app.services.rag.adaptive_rag_service.grade_documents_node",
             retry_grade_docs,
         ):
-            rewrite_events = [event async for event in adaptive_rag_service.run_adaptive_rag_stream("question", ["file-1"])]
+            rewrite_events = await collect_stream("question", ["file-1"])
         self.assertEqual(rewrite_events[-1]["result_reason"], adaptive_rag_service.NO_DOCUMENTS_RESULT_REASON)
 
     async def test_run_adaptive_rag_stream_retries_generation_then_rewrites_query(self):
@@ -475,7 +517,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             "app.services.rag.adaptive_rag_service.rewrite_query_node",
             rewrite_query,
         ):
-            events = [event async for event in adaptive_rag_service.run_adaptive_rag_stream("question", ["file-1"])]
+            events = await collect_stream("question", ["file-1"])
 
         self.assertEqual(events[-1]["result_reason"], adaptive_rag_service.UNRELIABLE_RESULT_REASON)
         self.assertIn("rewritten", [event.get("message") for event in events])
@@ -551,7 +593,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             "app.services.rag.adaptive_rag_service.grade_generation_node",
             grade_generation,
         ):
-            events = [event async for event in adaptive_rag_service.run_adaptive_rag_stream("what is SQL and NoSQL", ["file-1"])]
+            events = await collect_stream("what is SQL and NoSQL", ["file-1"])
 
         self.assertEqual(events[-1]["type"], "result")
         self.assertEqual(events[-1]["result_reason"], adaptive_rag_service.PARTIAL_COVERAGE_RESULT_REASON)

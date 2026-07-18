@@ -14,11 +14,14 @@ import {
 } from 'react-native';
 
 import { useDocumentWorkspace } from '@/lib/document-workspace-context';
+import { useAuth } from '@/lib/auth-context';
 import { useLanguage } from '@/lib/i18n';
+import { canUploadSources } from '@/lib/sourceUploadAccess';
 import { commonStyles } from '@/lib/styles';
 
 export default function SourceScreen() {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const {
     currentClass,
     documents,
@@ -36,6 +39,8 @@ export default function SourceScreen() {
   const [linkUrl, setLinkUrl] = useState('');
   const [uploadingLink, setUploadingLink] = useState(false);
   const [uploadingPdf, setUploadingPdf] = useState(false);
+  const supportedUploadTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/bmp'];
+  const isTeacher = canUploadSources(user);
 
   useEffect(() => {
     if (!currentClass?.id) return;
@@ -68,7 +73,7 @@ export default function SourceScreen() {
     setUploadingPdf(true);
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: 'application/pdf',
+        type: supportedUploadTypes,
         multiple: true,
         copyToCacheDirectory: true,
       });
@@ -77,7 +82,7 @@ export default function SourceScreen() {
         result.assets.map((asset) => ({
           uri: asset.uri,
           name: asset.name,
-          mimeType: asset.mimeType ?? 'application/pdf',
+          mimeType: asset.mimeType ?? 'application/octet-stream',
         })),
       );
     } catch (error) {
@@ -147,31 +152,33 @@ export default function SourceScreen() {
               </Pressable>
             </View>
 
-            <View style={commonStyles.actionPanel}>
-              <View style={commonStyles.sourceActionRow}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={pickPdf}
-                  style={({ pressed }) => [
-                    commonStyles.primaryButton,
-                    commonStyles.sourceActionButton,
-                    uploadingPdf && commonStyles.buttonDisabled,
-                    (pressed || uploadingPdf) && commonStyles.pressed,
-                  ]}>
-                  <Text style={commonStyles.primaryButtonText}>{t('source.uploadPdf')}</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setLinkModalOpen(true)}
-                  style={({ pressed }) => [
-                    commonStyles.secondaryButton,
-                    commonStyles.sourceActionButton,
-                    pressed && commonStyles.pressed,
-                  ]}>
-                  <Text style={commonStyles.secondaryButtonText}>{t('source.uploadLink')}</Text>
-                </Pressable>
+            {isTeacher && (
+              <View style={commonStyles.actionPanel}>
+                <View style={commonStyles.sourceActionRow}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={pickPdf}
+                    style={({ pressed }) => [
+                      commonStyles.primaryButton,
+                      commonStyles.sourceActionButton,
+                      uploadingPdf && commonStyles.buttonDisabled,
+                      (pressed || uploadingPdf) && commonStyles.pressed,
+                    ]}>
+                    <Text style={commonStyles.primaryButtonText}>{t('source.uploadPdf')}</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setLinkModalOpen(true)}
+                    style={({ pressed }) => [
+                      commonStyles.secondaryButton,
+                      commonStyles.sourceActionButton,
+                      pressed && commonStyles.pressed,
+                    ]}>
+                    <Text style={commonStyles.secondaryButtonText}>{t('source.uploadLink')}</Text>
+                  </Pressable>
+                </View>
               </View>
-            </View>
+            )}
 
             {uploadState.visible && (
               <View style={commonStyles.progressCard}>

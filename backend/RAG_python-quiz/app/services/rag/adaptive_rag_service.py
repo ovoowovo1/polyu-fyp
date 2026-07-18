@@ -13,6 +13,7 @@ from app.services.rag import (
     adaptive_rag_workflow,
     adaptive_retrieval_service,
     citation_evidence_service,
+    retrieval_intent,
 )
 from app.services.rag.rag_shared import safe_emit as _safe_emit
 
@@ -36,6 +37,7 @@ class AdaptiveRAGState(TypedDict, total=False):
     original_question: str
     selected_file_ids: List[str]
     current_query: str
+    classified_query: str
     route_decision: str
     rewrite_count: int
     generation_retry_count: int
@@ -60,6 +62,13 @@ _build_result_payload = adaptive_rag_events.build_result_payload
 _initial_rag_state = adaptive_rag_events.initial_rag_state
 _make_queue_emit = adaptive_rag_events.make_queue_emit
 _flush_events = adaptive_rag_events.flush_events
+
+
+async def classify_query_intent(question: str) -> Dict[str, Any]:
+    return await retrieval_intent.classify_query_intent(
+        question,
+        generate_structured_json_func=generate_structured_json,
+    )
 
 
 async def route_question_node(state: AdaptiveRAGState, emit: EventCallback) -> AdaptiveRAGState:
@@ -165,7 +174,8 @@ async def run_adaptive_rag_stream(question: str, selected_file_ids: List[str]) -
         return
 
     events: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
-    state = _initial_rag_state(question, selected_file_ids)
+    initial_intent = await classify_query_intent(question.strip())
+    state = _initial_rag_state(question, selected_file_ids, initial_intent)
     emit = _make_queue_emit(events)
     async for event in _run_rag_workflow(question, state, emit, events):
         yield event

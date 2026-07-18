@@ -16,6 +16,15 @@ def validate_pdf_upload(filename: str, mimetype: str, is_pdf_upload) -> None:
         )
 
 
+def validate_supported_upload(filename: str, mimetype: str, is_supported_upload) -> None:
+    if not is_supported_upload(filename, mimetype):
+        raise DocumentIngestError(
+            code="UNSUPPORTED_MEDIA_TYPE",
+            message="Only PDF and image uploads are supported.",
+            details=f"filename={filename}, mimetype={mimetype or '<empty>'}",
+        )
+
+
 def content_hash(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
@@ -39,9 +48,9 @@ def duplicate_website_result(existing: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-async def extract_pdf_pages(content: bytes, extract_text_by_page):
+async def extract_pdf_pages(content: bytes, extract_pdf_content_by_page):
     try:
-        return await extract_text_by_page(content)
+        return await extract_pdf_content_by_page(content)
     except Exception as err:
         raise DocumentIngestError(
             code="INGEST_FAILED",
@@ -51,8 +60,34 @@ async def extract_pdf_pages(content: bytes, extract_text_by_page):
 
 
 def build_pdf_chunks(filename: str, pages_text, text_splitter):
-    docs = document_sources.build_pdf_page_docs(filename, pages_text)
-    return document_sources.split_docs_to_chunks(docs, text_splitter=text_splitter)
+    image_chunks = []
+    for page in pages_text:
+        if not isinstance(page, dict):
+            continue
+        for image in page.get("images", []):
+            image_chunks.extend(
+                document_sources.build_image_chunks(
+                    filename,
+                    image["data"],
+                    image["mimetype"],
+                    page_number=int(page.get("pageNumber") or 1),
+                    image_index=int(image.get("imageIndex") or 1),
+                )
+            )
+
+    try:
+        docs = document_sources.build_pdf_page_docs(filename, pages_text)
+        text_chunks = document_sources.split_docs_to_chunks(docs, text_splitter=text_splitter)
+    except DocumentIngestError:
+        if not image_chunks:
+            raise
+        text_chunks = []
+
+    return text_chunks + image_chunks
+
+
+def build_image_chunks(filename: str, content: bytes, mimetype: str):
+    return document_sources.build_image_chunks(filename, content, mimetype)
 
 
 async def embed_document_chunks(chunks, embed_chunks_for_storage):
@@ -84,6 +119,7 @@ def build_and_store_document(
     file_hash: str,
     mimetype: str,
     class_id: Optional[str],
+    user_id: Optional[str],
     chunks_for_db,
     pg_service,
 ):
@@ -94,7 +130,7 @@ def build_and_store_document(
         mimetype=mimetype,
         class_id=class_id,
     )
-    return pg_service.create_graph_from_document(document_data, chunks_for_db)
+    return pg_service.create_graph_from_document(document_data, chunks_for_db, user_id=user_id)
 
 
 def build_uploaded_result(name: str, file_id: str, chunks_count: int) -> Dict[str, Any]:

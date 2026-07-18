@@ -7,7 +7,14 @@ import psycopg2.extras
 from app.config import get_settings
 from app.services.pg.rls_context import get_current_rls_user
 
-def _get_conn():
+
+def set_rls_user(cur, user_id: str | None) -> None:
+    """Bind an RLS user to the current transaction when one is available."""
+    if user_id:
+        cur.execute("SELECT set_config('app.user_id', %s, true)", (str(user_id),))
+
+
+def _get_conn(user_id: str | None = None):
     settings = get_settings()
     conn = psycopg2.connect(
         settings.pg_dsn,
@@ -15,10 +22,10 @@ def _get_conn():
         application_name="pg_service",
         keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=5,
     )
-    user_id = get_current_rls_user()
-    if user_id:
+    rls_user_id = str(user_id) if user_id else get_current_rls_user()
+    if rls_user_id:
         with conn.cursor() as cur:
-            cur.execute("SELECT set_config('app.user_id', %s, true)", (user_id,))
+            set_rls_user(cur, rls_user_id)
     return conn
 
 

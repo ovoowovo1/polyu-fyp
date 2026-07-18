@@ -159,6 +159,36 @@ AS $$
     )
 $$;
 
+CREATE OR REPLACE FUNCTION app_security.can_access_chunk_media(target_chunk_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, app_security
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM public.chunks c
+        WHERE c.id = target_chunk_id
+          AND app_security.can_access_document(c.document_id)
+    )
+$$;
+
+CREATE OR REPLACE FUNCTION app_security.can_manage_chunk_media(target_chunk_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, app_security
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM public.chunks c
+        WHERE c.id = target_chunk_id
+          AND app_security.can_manage_document(c.document_id)
+    )
+$$;
+
 CREATE OR REPLACE FUNCTION app_security.can_manage_document_class(target_class_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -408,6 +438,7 @@ ALTER TABLE public.classes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.class_students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chunks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chunk_media ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.quizzes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.quiz_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.quiz_submissions ENABLE ROW LEVEL SECURITY;
@@ -481,7 +512,10 @@ FOR DELETE USING (app_security.owns_class(class_id));
 
 DROP POLICY IF EXISTS documents_select_allowed ON public.documents;
 CREATE POLICY documents_select_allowed ON public.documents
-FOR SELECT USING (app_security.can_access_document(id));
+FOR SELECT USING (
+    app_security.can_access_document(id)
+    OR app_security.can_manage_document_class(class_id)
+);
 
 DROP POLICY IF EXISTS documents_insert_teacher ON public.documents;
 CREATE POLICY documents_insert_teacher ON public.documents
@@ -512,6 +546,18 @@ WITH CHECK (app_security.can_manage_document(document_id));
 DROP POLICY IF EXISTS chunks_delete_teacher ON public.chunks;
 CREATE POLICY chunks_delete_teacher ON public.chunks
 FOR DELETE USING (app_security.can_manage_document(document_id));
+
+DROP POLICY IF EXISTS chunk_media_select_allowed ON public.chunk_media;
+CREATE POLICY chunk_media_select_allowed ON public.chunk_media
+FOR SELECT USING (app_security.can_access_chunk_media(chunk_id));
+
+DROP POLICY IF EXISTS chunk_media_insert_teacher ON public.chunk_media;
+CREATE POLICY chunk_media_insert_teacher ON public.chunk_media
+FOR INSERT WITH CHECK (app_security.can_manage_chunk_media(chunk_id));
+
+DROP POLICY IF EXISTS chunk_media_delete_teacher ON public.chunk_media;
+CREATE POLICY chunk_media_delete_teacher ON public.chunk_media
+FOR DELETE USING (app_security.can_manage_chunk_media(chunk_id));
 
 DROP POLICY IF EXISTS quizzes_select_allowed ON public.quizzes;
 CREATE POLICY quizzes_select_allowed ON public.quizzes

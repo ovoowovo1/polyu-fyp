@@ -9,6 +9,15 @@ import useUploadProgress from '../hooks/useUploadProgress.jsx';
 const { Dragger } = Upload;
 const { Text } = Typography;
 
+const SUPPORTED_UPLOAD_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/bmp'];
+const SUPPORTED_UPLOAD_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.bmp'];
+
+const isSupportedUpload = (file) => {
+  const mime = (file.type || '').toLowerCase();
+  const name = (file.name || '').toLowerCase();
+  return SUPPORTED_UPLOAD_TYPES.includes(mime) || SUPPORTED_UPLOAD_EXTENSIONS.some((ext) => name.endsWith(ext));
+};
+
 const STATUS_META = {
   success: { alertType: 'success', label: 'Success' },
   partial: { alertType: 'warning', label: 'Partial' },
@@ -105,6 +114,7 @@ const UploadModal = ({ visible, onCancel, onSuccess }) => {
 
   const props = {
     multiple: true,
+    accept: [...SUPPORTED_UPLOAD_TYPES, ...SUPPORTED_UPLOAD_EXTENSIONS].join(','),
     onRemove: (file) => {
       setUploadResult(null);
       setFileList((current) => current.filter((item) => item.uid !== file.uid));
@@ -112,15 +122,15 @@ const UploadModal = ({ visible, onCancel, onSuccess }) => {
     beforeUpload: (file, newFiles) => {
       setUploadResult(null);
       const allFiles = [...fileList, ...newFiles];
-      const pdfFiles = allFiles.filter((candidate) => {
-        const isPdf = candidate.type === 'application/pdf' || candidate.name?.toLowerCase().endsWith('.pdf');
-        if (!isPdf) {
-          message.error(`${candidate.name} is not a PDF file and was removed.`);
+      const supportedFiles = allFiles.filter((candidate) => {
+        const supported = isSupportedUpload(candidate);
+        if (!supported) {
+          message.error(`${candidate.name} is not a supported PDF or image file and was removed.`);
         }
-        return isPdf;
+        return supported;
       });
 
-      const uniqueFiles = Array.from(new Map(pdfFiles.map((candidate) => [candidate.uid, candidate])).values());
+      const uniqueFiles = Array.from(new Map(supportedFiles.map((candidate) => [candidate.uid, candidate])).values());
       setFileList(uniqueFiles);
       return false;
     },
@@ -132,7 +142,7 @@ const UploadModal = ({ visible, onCancel, onSuccess }) => {
 
   return (
     <Modal
-      title="Upload PDF files"
+      title="Upload source files"
       open={visible}
       onCancel={handleCancel}
       footer={[
@@ -165,10 +175,10 @@ const UploadModal = ({ visible, onCancel, onSuccess }) => {
           <InboxOutlined style={{ color: '#7c3aed', fontSize: '48px' }} />
         </p>
         <p className="ant-upload-text" style={{ fontSize: '18px', color: '#666' }}>
-          Click or drag multiple PDF files here
+          Click or drag PDF or image files here
         </p>
         <p className="ant-upload-hint" style={{ color: '#999', marginTop: '8px' }}>
-          Supports uploading multiple PDF files. After selecting files, click the confirm button below.
+          Supports PDF and image files. After selecting files, click the confirm button below.
         </p>
       </Dragger>
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Any, Sequence
 
 from llama_index.core.schema import NodeWithScore
 
@@ -20,6 +20,7 @@ async def synthesize_markdown_answer(
     covered_concepts: Sequence[str] = (),
     missing_concepts: Sequence[str] = (),
     intent_type: str = "single",
+    image_inputs: Sequence[dict[str, Any]] = (),
     generate_text_completion_func,
 ) -> str:
     if not draft_answer.strip():
@@ -42,6 +43,7 @@ async def synthesize_markdown_answer(
             "Return English Markdown only, with inline bracket citations that match the provided source numbers."
         ),
         temperature=0.0,
+        image_inputs=image_inputs,
     )
     return normalize_markdown_answer(answer)
 
@@ -55,6 +57,7 @@ async def synthesize_markdown_answer_or_draft(
     covered: Sequence[str],
     missing: Sequence[str],
     intent_type: str,
+    image_inputs: Sequence[dict[str, Any]] = (),
     generate_text_completion_func,
 ) -> str:
     try:
@@ -66,6 +69,7 @@ async def synthesize_markdown_answer_or_draft(
             covered_concepts=covered,
             missing_concepts=missing,
             intent_type=intent_type,
+            image_inputs=image_inputs,
             generate_text_completion_func=generate_text_completion_func,
         )
     except Exception as err:

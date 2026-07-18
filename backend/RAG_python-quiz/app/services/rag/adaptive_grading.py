@@ -188,7 +188,12 @@ async def grade_documents_node(
 ) -> AdaptiveRetrievalState:
     question = state["question"]
     candidate_documents = state.get("candidate_documents", [])
-    query_intent = state.get("query_intent") or retrieval_intent.analyze_query_intent(question)
+    query_intent = state.get("query_intent")
+    if not query_intent:
+        query_intent = await retrieval_intent.classify_query_intent(
+            question,
+            generate_structured_json_func=generate_structured_json_func,
+        )
     required_concepts = normalize_concepts(query_intent.get("required_concepts", []), normalizer=_clean_concept_fragment)
     intent_type = query_intent.get("intent_type", "single")
     logger.info(

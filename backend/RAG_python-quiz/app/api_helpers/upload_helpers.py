@@ -96,6 +96,7 @@ async def process_upload_file(
     upload_file,
     index: int,
     class_id: str | None,
+    user_id: str,
     ingest_document_func: Callable[..., Awaitable[dict[str, Any]]],
     logger,
 ) -> dict[str, Any]:
@@ -108,6 +109,7 @@ async def process_upload_file(
             size=upload_file.size or len(data),
             mimetype=upload_file.content_type or "application/octet-stream",
             class_id=class_id,
+            user_id=user_id,
         )
         return build_success_result(filename, payload)
     except Exception as error:

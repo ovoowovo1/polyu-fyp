@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 """Vector retrieval and embedding backfill helpers."""
 
+import base64
 from typing import Any, Dict, List, Optional
 
 from app.services.pg.pg_shared import _get_embedding_column, _to_pgvector
 
 
 def map_context_row(row: Dict[str, Any]) -> Dict[str, Any]:
-    return {
+    result = {
         "text": row["text"],
         "score": float(row["score"]) if row["score"] is not None else None,
         "source": row["source"],
@@ -16,6 +17,16 @@ def map_context_row(row: Dict[str, Any]) -> Dict[str, Any]:
         "chunkId": str(row["chunkid"]),
         "mentionedEntities": [],
     }
+    image_data = row.get("image_data")
+    if image_data:
+        if isinstance(image_data, memoryview):
+            image_data = image_data.tobytes()
+        if isinstance(image_data, bytes):
+            image_data = base64.b64encode(image_data).decode("ascii")
+        mimetype = row.get("image_mimetype") or "image/png"
+        result["image_data"] = f"data:{mimetype};base64,{image_data}"
+        result["image_mimetype"] = mimetype
+    return result
 
 
 def retrieve_graph_context(
@@ -40,9 +51,12 @@ def retrieve_graph_context(
       c.page_end,
       c.chunk_index,
       c.id   AS chunkId,
+      media.data AS image_data,
+      media.mimetype AS image_mimetype,
       (c.{target_embedding_column} <=> %s::vector) AS score
     FROM chunks c
     JOIN documents d ON d.id = c.document_id
+    LEFT JOIN chunk_media media ON media.chunk_id = c.id
     WHERE (
 {null_filter}      (%s::uuid[] IS NULL OR d.id = ANY(%s::uuid[]))
     )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
+from typing import Any, Optional, Sequence
 
 from app.utils.api_key_manager import (
     get_default_llm_model_name,
@@ -9,6 +9,11 @@ from app.utils.api_key_manager import (
     with_llm_retry_async,
 )
 from app.utils.openai_response import extract_chat_completion_text
+from app.services.ai.llm.multimodal import build_multimodal_content
+from app.logger import get_logger
+
+
+logger = get_logger(__name__)
 
 
 async def generate_text_completion(
@@ -17,6 +22,7 @@ async def generate_text_completion(
     operation_name: str,
     system_prompt: Optional[str] = None,
     temperature: float = 0.0,
+    image_inputs: Optional[Sequence[dict[str, Any]]] = None,
 ) -> str:
     async def _generate(api_key: str) -> str:
         client = get_llm_client(api_key)
@@ -24,14 +30,32 @@ async def generate_text_completion(
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
+        messages.append({
+            "role": "user",
+            "content": build_multimodal_content(prompt, image_inputs or ()),
+        })
 
-        response = await asyncio.to_thread(
-            client.chat.completions.create,
-            model=model_name,
-            messages=messages,
-            temperature=temperature,
-        )
+        try:
+            response = await asyncio.to_thread(
+                client.chat.completions.create,
+                model=model_name,
+                messages=messages,
+                temperature=temperature,
+            )
+        except Exception as error:
+            if image_inputs:
+                logger.warning("[%s] Vision input failed; retrying text-only: %s", operation_name, error)
+                response = await asyncio.to_thread(
+                    client.chat.completions.create,
+                    model=model_name,
+                    messages=[
+                        *messages[:-1],
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=temperature,
+                )
+            else:
+                raise
         text = extract_chat_completion_text(response, operation_name)
         if not text:
             raise RuntimeError(f"{operation_name} returned empty content")

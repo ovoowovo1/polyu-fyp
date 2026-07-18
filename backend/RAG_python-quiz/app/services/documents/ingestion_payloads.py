@@ -17,6 +17,9 @@ def assemble_chunks_for_db(
             "metadata": chunk["metadata"],
             "embedding": primary_vectors[index],
         }
+        if chunk.get("imageData") is not None:
+            payload["image_data"] = chunk["imageData"]
+            payload["image_mimetype"] = chunk.get("imageMimetype") or "image/png"
         if fallback_column != "embedding":
             payload[fallback_column] = fallback_vectors[index] if fallback_vectors is not None else None
         rows.append(payload)

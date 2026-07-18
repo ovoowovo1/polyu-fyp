@@ -10,6 +10,7 @@ class AdaptiveRetrievalState(TypedDict, total=False):
     original_question: str
     selected_file_ids: List[str]
     current_query: str
+    classified_query: str
     rewrite_count: int
     candidate_documents: List[Dict[str, Any]]
     filtered_documents: List[Dict[str, Any]]

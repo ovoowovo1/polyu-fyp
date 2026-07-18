@@ -351,6 +351,36 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(captured["model"], "test-model")
         self.assertEqual(captured["messages"], [{"role": "user", "content": "Prompt text"}])
 
+    def test_custom_llm_retries_text_only_when_vision_input_fails(self):
+        llm = service.OpenAICompatibleCustomLLM(
+            model_name="test-model",
+            api_key="abc",
+            image_inputs=[{"image_data": "data:image/png;base64,aW1n"}],
+        )
+        fake_client = make_chat_client()
+        fake_client.chat.completions.create.side_effect = [RuntimeError("vision unsupported"), object()]
+
+        with patch("app.services.rag.citation_evidence_service.get_llm_client", return_value=fake_client), patch(
+            "app.services.rag.citation_evidence_service.extract_chat_completion_text",
+            return_value="Completed answer",
+        ):
+            completion = llm.complete("Prompt text")
+
+        self.assertEqual(completion.text, "Completed answer")
+        first_message = fake_client.chat.completions.create.call_args_list[0].kwargs["messages"][0]
+        second_message = fake_client.chat.completions.create.call_args_list[1].kwargs["messages"][0]
+        self.assertIsInstance(first_message["content"], list)
+        self.assertEqual(second_message["content"], "Prompt text")
+
+    def test_custom_llm_reraises_provider_error_without_images(self):
+        llm = service.OpenAICompatibleCustomLLM(model_name="test-model", api_key="abc")
+        fake_client = make_chat_client()
+        fake_client.chat.completions.create.side_effect = RuntimeError("provider down")
+
+        with patch("app.services.rag.citation_evidence_service.get_llm_client", return_value=fake_client):
+            with self.assertRaises(RuntimeError):
+                llm.complete("Prompt text")
+
     def test_run_citation_query_builds_engine_with_static_retriever(self):
         fake_response = Response(response="Answer [1]", source_nodes=[_source_node("chunk-1")])
         captured = {}
@@ -369,12 +399,20 @@ class CitationEvidenceServiceTests(unittest.IsolatedAsyncioTestCase):
         ):
             result = service._run_citation_query(
                 "What is CAP theorem?",
-                [{"content": "Chunk text", "source": "doc.pdf", "pageNumber": 1, "chunkId": "chunk-1"}],
+                [{
+                    "content": "Chunk text",
+                    "source": "doc.pdf",
+                    "pageNumber": 1,
+                    "chunkId": "chunk-1",
+                    "image_data": "data:image/png;base64,aW1n",
+                    "image_mimetype": "image/png",
+                }],
             )
 
         self.assertIs(result, fake_response)
         self.assertIsInstance(captured["retriever"], service.StaticNodeRetriever)
         self.assertIsInstance(captured["llm"], service.OpenAICompatibleCustomLLM)
+        self.assertEqual(captured["llm"].image_inputs[0]["image_mimetype"], "image/png")
         self.assertEqual(captured["citation_chunk_size"], service.DEFAULT_CITATION_CHUNK_SIZE)
         self.assertEqual(captured["citation_chunk_overlap"], 0)
         self.assertEqual(captured["question"], "What is CAP theorem?")

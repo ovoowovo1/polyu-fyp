@@ -62,6 +62,6 @@ def get_eval_embedding_credentials() -> OpenAICompatibleCredentials:
     model = (
         settings.eval_embedding_model.strip()
         or settings.embedding_model.strip()
-        or "google/gemini-embedding-001"
+        or "google/gemini-embedding-2-preview"
     )
     return OpenAICompatibleCredentials(api_key=api_key, base_url=base_url, model=model)

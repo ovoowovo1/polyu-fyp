@@ -25,7 +25,7 @@ class StaticNodeRetriever(BaseRetriever):
 def build_llamaindex_nodes(documents: Sequence[Dict[str, Any]]) -> List[NodeWithScore]:
     normalized_docs = build_raw_sources(documents)
     nodes: List[NodeWithScore] = []
-    for index, doc in enumerate(normalized_docs, start=1):
+    for index, (doc, original) in enumerate(zip(normalized_docs, documents), start=1):
         node = TextNode(
             text=doc.get("content") or "",
             id_=doc.get("chunkId") or f"citation-node-{index}",
@@ -34,6 +34,8 @@ def build_llamaindex_nodes(documents: Sequence[Dict[str, Any]]) -> List[NodeWith
                 "chunk_id": doc.get("chunkId"),
                 "source": doc.get("source"),
                 "page": doc.get("pageNumber"),
+                "image_data": original.get("image_data"),
+                "image_mimetype": original.get("image_mimetype"),
             },
         )
         nodes.append(NodeWithScore(node=node, score=doc.get("score")))

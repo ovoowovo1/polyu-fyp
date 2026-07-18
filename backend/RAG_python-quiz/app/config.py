@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
     embedding_api_key: str = ""
     embedding_base_url: str = "https://openrouter.ai/api/v1"
-    embedding_model: str = "google/gemini-embedding-001"
+    embedding_model: str = "google/gemini-embedding-2-preview"
     embedding_active_column: EmbeddingColumn = "embedding"
     embedding_fallback_model: str = "google/gemini-embedding-2-preview"
     embedding_fallback_column: EmbeddingColumn = "embedding_v2"

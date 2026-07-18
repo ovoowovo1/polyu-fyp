@@ -71,13 +71,16 @@ def merge_retrieval_candidates(
     )
 
 
-def analyze_state_query_intent(state: AdaptiveRetrievalState) -> QueryIntent:
-    previous_intent = state.get("query_intent", {})
-    return retrieval_intent.analyze_query_intent(
-        state["current_query"],
-        fallback_required_concepts=previous_intent.get("required_concepts", []),
-        fallback_intent_type=previous_intent.get("intent_type"),
-    )
+async def analyze_state_query_intent(
+    state: AdaptiveRetrievalState,
+    *,
+    classify_query_intent_func,
+) -> QueryIntent:
+    current_query = state["current_query"]
+    previous_intent = state.get("query_intent")
+    if previous_intent and state.get("classified_query") in {None, current_query}:
+        return previous_intent
+    return await classify_query_intent_func(current_query)
 
 
 async def collect_search_results(
@@ -141,11 +144,16 @@ async def retrieve_documents_node(
     retrieve_vector_context_func,
     retrieve_context_by_keywords_func,
     is_retryable_embedding_error_func,
+    classify_query_intent_func,
 ) -> AdaptiveRetrievalState:
     current_query = state["current_query"]
     selected_file_ids = state["selected_file_ids"]
-    query_intent = analyze_state_query_intent(state)
+    query_intent = await analyze_state_query_intent(
+        state,
+        classify_query_intent_func=classify_query_intent_func,
+    )
     state["query_intent"] = query_intent
+    state["classified_query"] = current_query
     logger.info(
         "[%s] retrieve_documents start query=%r rewrite_count=%s selected_files=%s mode=%s intent_type=%s required_concepts=%s",
         log_prefix,

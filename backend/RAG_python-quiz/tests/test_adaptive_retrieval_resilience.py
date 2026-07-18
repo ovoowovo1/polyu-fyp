@@ -63,6 +63,49 @@ class AdaptiveRetrievalResilienceTests(unittest.IsolatedAsyncioTestCase):
             "app.services.rag.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
             side_effect=fulltext_side_effect,
         ), patch(
+            "app.services.rag.adaptive_retrieval_service.classify_query_intent",
+            AsyncMock(
+                return_value={
+                    "mode": "multi",
+                    "intent_type": "definition_multi",
+                    "required_concepts": ["SQL", "NoSQL"],
+                    "subqueries": [
+                        {
+                            "label": "SQL",
+                            "query": "definition of SQL",
+                            "concept": "SQL",
+                            "query_kind": "concept_definition",
+                        },
+                        {
+                            "label": "NoSQL",
+                            "query": "definition of NoSQL",
+                            "concept": "NoSQL",
+                            "query_kind": "concept_definition",
+                        },
+                    ],
+                    "search_queries": [
+                        {
+                            "label": "SQL",
+                            "query": "definition of SQL",
+                            "concept": "SQL",
+                            "query_kind": "concept_definition",
+                        },
+                        {
+                            "label": "NoSQL",
+                            "query": "definition of NoSQL",
+                            "concept": "NoSQL",
+                            "query_kind": "concept_definition",
+                        },
+                        {
+                            "label": "combined definition",
+                            "query": "what is SQL and NoSQL",
+                            "concept": None,
+                            "query_kind": "combined_definition",
+                        },
+                    ],
+                }
+            ),
+        ), patch(
             "app.services.rag.adaptive_retrieval_service.generate_structured_json",
             AsyncMock(side_effect=RuntimeError("grader unavailable")),
         ):

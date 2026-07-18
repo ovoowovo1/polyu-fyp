@@ -139,9 +139,9 @@ async def embed_chunks_for_storage(
     get_settings,
     logger,
 ) -> tuple[List[List[float]], Optional[List[List[float]]]]:
-    texts = [chunk["pageContent"] for chunk in chunks]
+    embedding_inputs = [chunk.get("embeddingInput", chunk["pageContent"]) for chunk in chunks]
     primary_model = create_embedding_model()
-    primary_vectors = await embed_texts(texts, embeddings_model=primary_model)
+    primary_vectors = await embed_texts(embedding_inputs, embeddings_model=primary_model)
 
     settings = get_settings()
     fallback_model_name = settings.embedding_fallback_model
@@ -154,7 +154,7 @@ async def embed_chunks_for_storage(
             model_name=fallback_model_name,
             base_url=settings.embedding_base_url,
         )
-        fallback_vectors = await embed_texts(texts, embeddings_model=fallback_model)
+        fallback_vectors = await embed_texts(embedding_inputs, embeddings_model=fallback_model)
         return primary_vectors, fallback_vectors
     except Exception as err:
         logger.warning(

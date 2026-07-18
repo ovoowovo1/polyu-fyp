@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from app.logger import get_logger
-from app.services.rag import retrieval_intent
 from app.services.rag.adaptive_types import AdaptiveRetrievalState, EventCallback
 from app.services.rag.rag_shared import safe_emit
 
@@ -15,10 +14,13 @@ async def rewrite_query_node(
     max_rewrite_attempts: int,
     log_prefix: str,
     generate_structured_json_func,
+    classify_query_intent_func,
 ) -> AdaptiveRetrievalState:
     rewrite_count = state.get("rewrite_count", 0) + 1
     state["rewrite_count"] = rewrite_count
-    query_intent = state.get("query_intent") or retrieval_intent.analyze_query_intent(state.get("original_question", ""))
+    query_intent = state.get("query_intent")
+    if not query_intent:
+        query_intent = await classify_query_intent_func(state.get("original_question", ""))
     logger.info(
         "[%s] rewrite_query start attempt=%s original_question=%r current_query=%r intent_type=%s required_concepts=%s",
         log_prefix,
@@ -74,11 +76,8 @@ Required concepts:
         rewritten_query = ""
 
     state["current_query"] = rewritten_query or state["original_question"]
-    state["query_intent"] = retrieval_intent.analyze_query_intent(
-        state["current_query"],
-        fallback_required_concepts=query_intent.get("required_concepts", []),
-        fallback_intent_type=query_intent.get("intent_type"),
-    )
+    state["query_intent"] = await classify_query_intent_func(state["current_query"])
+    state["classified_query"] = state["current_query"]
     logger.info(
         "[%s] rewrite_query completed attempt=%s rewritten_query=%r preserved_intent_type=%s preserved_required_concepts=%s",
         log_prefix,

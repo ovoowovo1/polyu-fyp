@@ -4,7 +4,6 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Sequence
 
-from app.services.rag import retrieval_intent
 from app.services.rag.rag_shared import build_raw_sources
 
 EventCallback = Callable[[str, Any, str], Awaitable[None]]
@@ -42,18 +41,23 @@ def build_result_payload(
     }
 
 
-def initial_rag_state(question: str, selected_file_ids: Sequence[str]) -> Dict[str, Any]:
+def initial_rag_state(
+    question: str,
+    selected_file_ids: Sequence[str],
+    query_intent: Dict[str, Any],
+) -> Dict[str, Any]:
     stripped_question = question.strip()
     return {
         "question": stripped_question,
         "original_question": stripped_question,
         "selected_file_ids": list(selected_file_ids),
         "current_query": stripped_question,
+        "classified_query": stripped_question,
         "rewrite_count": 0,
         "generation_retry_count": 0,
         "candidate_documents": [],
         "filtered_documents": [],
-        "query_intent": retrieval_intent.analyze_query_intent(stripped_question),
+        "query_intent": query_intent,
         "covered_concepts": [],
         "missing_concepts": [],
         "answer": "",

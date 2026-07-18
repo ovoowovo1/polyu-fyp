@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS public.class_students (
 
 CREATE TABLE IF NOT EXISTS public.documents (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    hash text UNIQUE,
+    hash text,
     class_id uuid REFERENCES public.classes(id) ON DELETE SET NULL,
     name text NOT NULL,
     size_bytes bigint DEFAULT 0,
@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS public.documents (
     created_at timestamptz NOT NULL DEFAULT now()
 );
 
-ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS hash text UNIQUE;
+ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS hash text;
 
 CREATE TABLE IF NOT EXISTS public.chunks (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -80,6 +80,13 @@ ALTER TABLE public.chunks ADD COLUMN IF NOT EXISTS embedding_v2 vector(3072);
 ALTER TABLE public.chunks ADD COLUMN IF NOT EXISTS entities_json jsonb NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE public.chunks ADD COLUMN IF NOT EXISTS tsv tsvector
     GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, coalesce(text, ''))) STORED;
+
+CREATE TABLE IF NOT EXISTS public.chunk_media (
+    chunk_id uuid PRIMARY KEY REFERENCES public.chunks(id) ON DELETE CASCADE,
+    mimetype text NOT NULL,
+    data bytea NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
 
 CREATE TABLE IF NOT EXISTS public.quizzes (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -192,7 +199,7 @@ CREATE TABLE IF NOT EXISTS public.auth_refresh_tokens (
 );
 
 CREATE INDEX IF NOT EXISTS idx_classes_teacher_id ON public.classes(teacher_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_hash ON public.documents(hash);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_class_hash ON public.documents(class_id, hash);
 CREATE INDEX IF NOT EXISTS idx_documents_class_id ON public.documents(class_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON public.chunks(document_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_tsv ON public.chunks USING gin(tsv);
@@ -400,6 +407,36 @@ AS $$
         FROM public.documents d
         WHERE d.id = target_document_id
           AND app_security.can_manage_document_class(d.class_id)
+    )
+$$;
+
+CREATE OR REPLACE FUNCTION app_security.can_access_chunk_media(target_chunk_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, app_security
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM public.chunks c
+        WHERE c.id = target_chunk_id
+          AND app_security.can_access_document(c.document_id)
+    )
+$$;
+
+CREATE OR REPLACE FUNCTION app_security.can_manage_chunk_media(target_chunk_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, app_security
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM public.chunks c
+        WHERE c.id = target_chunk_id
+          AND app_security.can_manage_document(c.document_id)
     )
 $$;
 
@@ -722,6 +759,7 @@ ALTER TABLE public.classes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.class_students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chunks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chunk_media ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.quizzes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.quiz_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.quiz_submissions ENABLE ROW LEVEL SECURITY;
@@ -796,7 +834,10 @@ FOR DELETE USING (app_security.owns_class(class_id));
 
 DROP POLICY IF EXISTS documents_select_allowed ON public.documents;
 CREATE POLICY documents_select_allowed ON public.documents
-FOR SELECT USING (app_security.can_access_document(id));
+FOR SELECT USING (
+    app_security.can_access_document(id)
+    OR app_security.can_manage_document_class(class_id)
+);
 
 DROP POLICY IF EXISTS documents_insert_teacher ON public.documents;
 CREATE POLICY documents_insert_teacher ON public.documents
@@ -827,6 +868,18 @@ WITH CHECK (app_security.can_manage_document(document_id));
 DROP POLICY IF EXISTS chunks_delete_teacher ON public.chunks;
 CREATE POLICY chunks_delete_teacher ON public.chunks
 FOR DELETE USING (app_security.can_manage_document(document_id));
+
+DROP POLICY IF EXISTS chunk_media_select_allowed ON public.chunk_media;
+CREATE POLICY chunk_media_select_allowed ON public.chunk_media
+FOR SELECT USING (app_security.can_access_chunk_media(chunk_id));
+
+DROP POLICY IF EXISTS chunk_media_insert_teacher ON public.chunk_media;
+CREATE POLICY chunk_media_insert_teacher ON public.chunk_media
+FOR INSERT WITH CHECK (app_security.can_manage_chunk_media(chunk_id));
+
+DROP POLICY IF EXISTS chunk_media_delete_teacher ON public.chunk_media;
+CREATE POLICY chunk_media_delete_teacher ON public.chunk_media
+FOR DELETE USING (app_security.can_manage_chunk_media(chunk_id));
 
 DROP POLICY IF EXISTS quizzes_select_allowed ON public.quizzes;
 CREATE POLICY quizzes_select_allowed ON public.quizzes

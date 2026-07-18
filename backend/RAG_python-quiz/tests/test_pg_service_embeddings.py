@@ -2,12 +2,43 @@ from unittest.mock import patch
 import unittest
 
 from app.services.pg import pg_retrieval_service as pg_service
+from app.services.pg import pg_retrieval_vectors
 from tests.support import FakeConnection, FakeCursor, capture_execute_values, make_embedding_settings
 
 EMBEDDING_SETTINGS = make_embedding_settings()
 
 
 class PgServiceEmbeddingColumnTests(unittest.TestCase):
+    def test_map_context_row_exposes_image_as_internal_data_url(self):
+        row = pg_retrieval_vectors.map_context_row(
+            {
+                "text": "Image source",
+                "score": 0.1,
+                "source": "slides.pdf",
+                "page_start": 2,
+                "fileid": "file-1",
+                "chunkid": "chunk-1",
+                "image_data": b"image-bytes",
+                "image_mimetype": "image/png",
+            }
+        )
+
+        self.assertEqual(row["image_mimetype"], "image/png")
+        self.assertEqual(row["image_data"], "data:image/png;base64,aW1hZ2UtYnl0ZXM=")
+        memory_row = pg_retrieval_vectors.map_context_row(
+            {
+                "text": "Image source",
+                "score": 0.1,
+                "source": "slides.pdf",
+                "page_start": 2,
+                "fileid": "file-1",
+                "chunkid": "chunk-1",
+                "image_data": memoryview(b"memory-image"),
+                "image_mimetype": None,
+            }
+        )
+        self.assertTrue(memory_row["image_data"].startswith("data:image/png;base64,"))
+
     def test_create_graph_from_document_uses_active_embedding_column(self):
         cursor = FakeCursor(fetchone_results=[{"id": "doc-1"}])
         conn = FakeConnection(cursor)
@@ -22,7 +53,7 @@ class PgServiceEmbeddingColumnTests(unittest.TestCase):
                 [{"text": "chunk text", "metadata": {"pageNumber": 2}, "embedding": [0.1, 0.2]}],
             )
 
-        self.assertEqual(result, {"fileId": "doc-1"})
+        self.assertEqual(result, {"fileId": "doc-1", "isNew": True})
         self.assertIn("embedding_v2", captured["sql"])
         self.assertEqual(captured["template"], "(%s,%s,%s,%s,%s,%s::vector)")
         self.assertTrue(conn.committed)

@@ -141,8 +141,8 @@ export async function uploadMultiple(
   files.forEach((file, index) => {
     formData.append('files', {
       uri: file.uri,
-      name: file.name || `document-${index + 1}.pdf`,
-      type: file.mimeType || 'application/pdf',
+      name: file.name || `source-${index + 1}`,
+      type: file.mimeType || 'application/octet-stream',
     } as unknown as Blob);
   });
 

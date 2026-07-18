@@ -10,7 +10,9 @@ from app.logger import get_logger
 from app.api_helpers import upload_helpers
 from app.api_helpers.service_helpers import error_detail, run_async_service
 from app.services.cache import redis_cache, studio_cache
+from app.services.core.exceptions import PermissionDeniedError
 from app.services.documents.document_service import ingest_document, ingest_website
+from app.services.pg.pg_access_control import require_class_teacher
 from app.services.realtime.progress_bus import publish_progress
 from app.utils.jwt_utils import get_current_user
 
@@ -22,6 +24,24 @@ router = APIRouter(prefix="", tags=["upload"])
 _http_status_for_batch = upload_helpers.http_status_for_batch
 _progress_payload = upload_helpers.progress_payload
 _upload_batch_payload = upload_helpers.upload_batch_payload
+
+UPLOAD_FORBIDDEN_MESSAGE = "Only the teacher who owns this class can upload source documents."
+
+
+def _require_upload_permission(user: dict, class_id: str | None) -> None:
+    if not class_id:
+        raise HTTPException(
+            status_code=400,
+            detail=error_detail("class_id is required for document uploads."),
+        )
+
+    try:
+        require_class_teacher(user["user_id"], class_id)
+    except PermissionDeniedError as error:
+        raise HTTPException(
+            status_code=403,
+            detail=error_detail(UPLOAD_FORBIDDEN_MESSAGE, code="UPLOAD_FORBIDDEN"),
+        ) from error
 
 
 def _invalidate_uploaded_file_caches(file_ids) -> None:
@@ -55,11 +75,17 @@ def _successful_file_ids(results: list[dict[str, Any]]) -> list[str]:
     ]
 
 
-async def _process_upload_file(upload_file: UploadFile, index: int, class_id: str | None) -> dict[str, Any]:
+async def _process_upload_file(
+    upload_file: UploadFile,
+    index: int,
+    class_id: str | None,
+    user_id: str,
+) -> dict[str, Any]:
     return await upload_helpers.process_upload_file(
         upload_file=upload_file,
         index=index,
         class_id=class_id,
+        user_id=user_id,
         ingest_document_func=ingest_document,
         logger=logger,
     )
@@ -78,6 +104,8 @@ async def upload_multiple(
             content=error_detail("Please provide at least one file."),
         )
 
+    _require_upload_permission(user, class_id)
+
     results: list[dict[str, Any]] = []
     total_files = len(files)
     await publish_progress(
@@ -86,7 +114,7 @@ async def upload_multiple(
     )
 
     for index, upload_file in enumerate(files, start=1):
-        result = await _process_upload_file(upload_file, index, class_id)
+        result = await _process_upload_file(upload_file, index, class_id, user["user_id"])
         results.append(result)
         await publish_progress(
             clientId,
@@ -137,12 +165,15 @@ async def upload_link(
             content=error_detail("url is required"),
         )
 
+    _require_upload_permission(user, class_id)
+
     try:
         result = await run_async_service(
             ingest_website,
             url=body.url.strip(),
             client_id=clientId,
             class_id=class_id,
+            user_id=user["user_id"],
             logger=logger,
             log_message="Upload link error: %s",
             fallback_detail=lambda error: error_detail(

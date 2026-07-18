@@ -68,7 +68,10 @@ jobs:
         working-directory: backend/RAG_python-quiz
         run: |
           psql "$PG_DSN" -v ON_ERROR_STOP=1 -f tests/integration/schema.sql
+          psql "$PG_DSN" -v ON_ERROR_STOP=1 -f migrations/scope_document_hash_by_class.sql
+          psql "$PG_DSN" -v ON_ERROR_STOP=1 -f migrations/add_chunk_media.sql
           psql "$PG_DSN" -v ON_ERROR_STOP=1 -f migrations/enable_rls_policies.sql
+          psql "$PG_DSN" -v ON_ERROR_STOP=1 -f tests/integration/rls_chunk_media.sql
           psql "$PG_DSN" -v ON_ERROR_STOP=1 -f migrations/add_auth_refresh_tokens.sql
 
       - name: Start backend

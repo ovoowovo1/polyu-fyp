@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, patch
 from app.services.rag import adaptive_grading
 from app.services.rag import adaptive_retrieval_service
 from app.services.rag import retrieval_fusion
-from app.services.rag import retrieval_intent
 from tests.support import EventRecorder
 from tests.support import make_embedding_error as make_retryable_error
 from tests.support import make_retrieval_doc as make_doc
@@ -14,15 +13,60 @@ from tests.support import make_retrieval_doc as make_doc
 async def collect_result(question="hello", selected_file_ids=None, **kwargs):
     if selected_file_ids is None:
         selected_file_ids = ["file-1"]
-    return await adaptive_retrieval_service.run_adaptive_retrieval(
-        question,
-        selected_file_ids,
-        **kwargs,
-    )
+    query_intent = kwargs.pop("query_intent", None) or {
+        "mode": "single",
+        "intent_type": "single",
+        "required_concepts": [],
+        "subqueries": [],
+        "search_queries": [
+            {
+                "label": "original question",
+                "query": question,
+                "concept": None,
+                "query_kind": "original",
+            }
+        ],
+    }
+    with patch(
+        "app.services.rag.adaptive_retrieval_service.classify_query_intent",
+        AsyncMock(return_value=query_intent),
+    ):
+        return await adaptive_retrieval_service.run_adaptive_retrieval(
+            question,
+            selected_file_ids,
+            **kwargs,
+        )
 
 
 class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
-    def test_analyze_query_intent_detects_definition_and_comparison_queries(self):
+    async def test_classify_query_intent_delegates_to_llm_planner(self):
+        expected = {
+            "mode": "single",
+            "intent_type": "single",
+            "required_concepts": [],
+            "subqueries": [],
+            "search_queries": [
+                {
+                    "label": "original question",
+                    "query": "question",
+                    "concept": None,
+                    "query_kind": "original",
+                }
+            ],
+        }
+        with patch(
+            "app.services.rag.adaptive_retrieval_service.retrieval_intent.classify_query_intent",
+            AsyncMock(return_value=expected),
+        ) as classifier:
+            result = await adaptive_retrieval_service.classify_query_intent("question")
+
+        self.assertEqual(result, expected)
+        classifier.assert_awaited_once_with(
+            "question",
+            generate_structured_json_func=adaptive_retrieval_service.generate_structured_json,
+        )
+
+    def test_normalize_retrieval_documents_preserves_language_neutral_concept_cleanup(self):
         normalized = adaptive_retrieval_service._normalize_doc(
             {
                 "text": "chunk",
@@ -32,51 +76,6 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(normalized["retrieved_for_concepts"], ["SQL", "NoSQL"])
         self.assertEqual(normalized["covered_concepts"], ["sql"])
-        self.assertEqual(retrieval_intent.analyze_query_intent("What is CAP theorem?")["mode"], "single")
-
-        single = retrieval_intent.analyze_query_intent("What is CAP theorem?")
-        self.assertEqual(single["mode"], "single")
-        self.assertEqual(single["intent_type"], "single")
-        self.assertEqual(single["required_concepts"], [])
-        self.assertEqual(single["search_queries"][0]["query"], "What is CAP theorem?")
-
-        multi = retrieval_intent.analyze_query_intent("what is SQL and Nosql")
-        self.assertEqual(multi["mode"], "multi")
-        self.assertEqual(multi["intent_type"], "definition_multi")
-        self.assertEqual(multi["required_concepts"], ["SQL", "Nosql"])
-        self.assertEqual(
-            [query["query"] for query in multi["subqueries"]],
-            ["definition of SQL", "definition of Nosql"],
-        )
-
-        comparison = retrieval_intent.analyze_query_intent("what is the different in SQL and NOsql")
-        self.assertEqual(comparison["mode"], "multi")
-        self.assertEqual(comparison["intent_type"], "comparison")
-        self.assertEqual(comparison["required_concepts"], ["SQL", "NOsql"])
-        self.assertEqual(comparison["search_queries"][0]["query"], "difference between SQL and NOsql databases")
-
-        versus = retrieval_intent.analyze_query_intent("SQL vs NoSQL")
-        self.assertEqual(versus["intent_type"], "comparison")
-        self.assertEqual(versus["required_concepts"], ["SQL", "NoSQL"])
-
-        fallback = retrieval_intent.analyze_query_intent(
-            "better query",
-            fallback_required_concepts=["SQL", "NoSQL"],
-            fallback_intent_type="comparison",
-        )
-        self.assertEqual(fallback["intent_type"], "comparison")
-        self.assertEqual(fallback["required_concepts"], ["SQL", "NoSQL"])
-        self.assertEqual(retrieval_intent._canonicalize_known_concept("newsql"), "newsql")
-        self.assertEqual(retrieval_intent._definition_query_for_concept("MongoDB"), "definition of MongoDB")
-        self.assertEqual(
-            retrieval_intent._comparison_query_for_concepts(["SQL", "NoSQL", "NewSQL"]),
-            "comparison between SQL and NoSQL and NewSQL",
-        )
-        self.assertEqual(retrieval_intent._extract_comparison_tail("compare SQL and NoSQL"), "SQL and NoSQL")
-        self.assertEqual(retrieval_intent._extract_comparison_tail("plain question"), "")
-        fallback_without_intent = retrieval_intent.analyze_query_intent("better query", fallback_required_concepts=["SQL"])
-        self.assertEqual(fallback_without_intent["mode"], "single")
-        self.assertEqual(fallback_without_intent["search_queries"][0]["query"], "better query")
 
     async def test_rrf_helper_normalizes_documents(self):
         fused = adaptive_retrieval_service._reciprocal_rank_fusion(
@@ -241,6 +240,24 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
         ), patch(
             "app.services.rag.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
             side_effect=RuntimeError("fts failed"),
+        ), patch(
+            "app.services.rag.adaptive_retrieval_service.classify_query_intent",
+            AsyncMock(
+                return_value={
+                    "mode": "single",
+                    "intent_type": "single",
+                    "required_concepts": [],
+                    "subqueries": [],
+                    "search_queries": [
+                        {
+                            "label": "original question",
+                            "query": "hello",
+                            "concept": None,
+                            "query_kind": "original",
+                        }
+                    ],
+                }
+            ),
         ):
             updated = await adaptive_retrieval_service.retrieve_documents_node(state, recorder.emit)
 
@@ -270,13 +287,37 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
         with patch(
             "app.services.rag.adaptive_retrieval_service.generate_structured_json",
             AsyncMock(side_effect=RuntimeError("rewrite down")),
+        ), patch(
+            "app.services.rag.adaptive_retrieval_service.classify_query_intent",
+            AsyncMock(
+                return_value={
+                    "mode": "multi",
+                    "intent_type": "comparison",
+                    "required_concepts": ["SQL", "NoSQL"],
+                    "subqueries": [],
+                    "search_queries": [
+                        {
+                            "label": "comparison",
+                            "query": "SQL 與 NoSQL 比較",
+                            "concept": None,
+                            "query_kind": "comparison",
+                        }
+                    ],
+                }
+            ),
         ):
             rewritten = await adaptive_retrieval_service.rewrite_query_node(
                 {
                     "question": "what is the different in SQL and NOsql",
                     "original_question": "what is the different in SQL and NOsql",
                     "current_query": "what is the different in SQL and NOsql",
-                    "query_intent": retrieval_intent.analyze_query_intent("what is the different in SQL and NOsql"),
+                    "query_intent": {
+                        "mode": "multi",
+                        "intent_type": "comparison",
+                        "required_concepts": ["SQL", "NoSQL"],
+                        "subqueries": [],
+                        "search_queries": [],
+                    },
                 },
                 recorder.emit,
                 max_rewrite_attempts=2,
@@ -285,6 +326,86 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rewritten["rewrite_count"], 1)
         self.assertEqual(rewritten["query_intent"]["intent_type"], "comparison")
         self.assertTrue(recorder.events)
+
+    async def test_rewrite_classifies_missing_intent_before_and_after_rewrite(self):
+        recorder = EventRecorder()
+        intent = {
+            "mode": "single",
+            "intent_type": "single",
+            "required_concepts": [],
+            "subqueries": [],
+            "search_queries": [
+                {
+                    "label": "original question",
+                    "query": "original question",
+                    "concept": None,
+                    "query_kind": "original",
+                }
+            ],
+        }
+        with patch(
+            "app.services.rag.adaptive_retrieval_service.generate_structured_json",
+            AsyncMock(return_value={}),
+        ), patch(
+            "app.services.rag.adaptive_retrieval_service.classify_query_intent",
+            AsyncMock(return_value=intent),
+        ) as classifier:
+            rewritten = await adaptive_retrieval_service.rewrite_query_node(
+                {
+                    "original_question": "original question",
+                    "current_query": "original question",
+                    "rewrite_count": 0,
+                },
+                recorder.emit,
+            )
+
+        self.assertEqual(rewritten["current_query"], "original question")
+        self.assertEqual(rewritten["query_intent"], intent)
+        self.assertEqual(classifier.await_count, 2)
+
+    async def test_rewrite_reclassifies_changed_query_and_updates_state(self):
+        recorder = EventRecorder()
+        rewritten_intent = {
+            "mode": "multi",
+            "intent_type": "comparison",
+            "required_concepts": ["SQL", "NoSQL"],
+            "subqueries": [],
+            "search_queries": [
+                {
+                    "label": "comparison",
+                    "query": "better query",
+                    "concept": None,
+                    "query_kind": "comparison",
+                }
+            ],
+        }
+        with patch(
+            "app.services.rag.adaptive_retrieval_service.generate_structured_json",
+            AsyncMock(return_value={"rewritten_query": "better query"}),
+        ), patch(
+            "app.services.rag.adaptive_retrieval_service.classify_query_intent",
+            AsyncMock(return_value=rewritten_intent),
+        ) as classifier:
+            rewritten = await adaptive_retrieval_service.rewrite_query_node(
+                {
+                    "original_question": "original question",
+                    "current_query": "original question",
+                    "rewrite_count": 0,
+                    "query_intent": {
+                        "mode": "single",
+                        "intent_type": "single",
+                        "required_concepts": [],
+                        "subqueries": [],
+                        "search_queries": [],
+                    },
+                },
+                recorder.emit,
+            )
+
+        self.assertEqual(rewritten["current_query"], "better query")
+        self.assertEqual(rewritten["query_intent"], rewritten_intent)
+        self.assertEqual(rewritten["classified_query"], "better query")
+        classifier.assert_awaited_once_with("better query")
 
     async def test_grade_documents_tracks_covered_and_missing_concepts(self):
         recorder = EventRecorder()
@@ -515,7 +636,48 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
             "app.services.rag.adaptive_retrieval_service.generate_structured_json",
             AsyncMock(side_effect=structured_side_effect),
         ):
-            result = await collect_result(question="what is SQL and NoSQL")
+            result = await collect_result(
+                question="what is SQL and NoSQL",
+                query_intent={
+                    "mode": "multi",
+                    "intent_type": "definition_multi",
+                    "required_concepts": ["SQL", "NoSQL"],
+                    "subqueries": [
+                        {
+                            "label": "SQL",
+                            "query": "definition of SQL",
+                            "concept": "SQL",
+                            "query_kind": "concept_definition",
+                        },
+                        {
+                            "label": "NoSQL",
+                            "query": "definition of NoSQL",
+                            "concept": "NoSQL",
+                            "query_kind": "concept_definition",
+                        },
+                    ],
+                    "search_queries": [
+                        {
+                            "label": "SQL",
+                            "query": "definition of SQL",
+                            "concept": "SQL",
+                            "query_kind": "concept_definition",
+                        },
+                        {
+                            "label": "NoSQL",
+                            "query": "definition of NoSQL",
+                            "concept": "NoSQL",
+                            "query_kind": "concept_definition",
+                        },
+                        {
+                            "label": "combined definition",
+                            "query": "what is SQL and NoSQL",
+                            "concept": None,
+                            "query_kind": "combined_definition",
+                        },
+                    ],
+                },
+            )
 
         self.assertEqual(result["query_intent"]["mode"], "multi")
         self.assertEqual(result["query_intent"]["intent_type"], "definition_multi")
@@ -524,3 +686,64 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([doc["chunkId"] for doc in result["documents"]], ["sql-1", "nosql-1"])
         self.assertEqual(result["documents"][0]["covered_concepts"], ["SQL"])
         self.assertEqual(result["documents"][1]["covered_concepts"], ["NoSQL"])
+
+    async def test_open_scenario_query_kinds_flow_through_hybrid_retrieval_metadata(self):
+        scenario_doc = make_doc("Load balancing distributes traffic", chunk_id="scenario-1", score=0.4)
+        scenario_intent = {
+            "mode": "single",
+            "intent_type": "scenario",
+            "required_concepts": ["Load balancing"],
+            "subqueries": [
+                {
+                    "label": "scenario context",
+                    "query": "10,000 users need low-latency traffic distribution",
+                    "concept": None,
+                    "query_kind": "scenario_context",
+                },
+                {
+                    "label": "concept support",
+                    "query": "load balancing strategies",
+                    "concept": "Load balancing",
+                    "query_kind": "scenario_support",
+                },
+            ],
+            "search_queries": [
+                {
+                    "label": "scenario context",
+                    "query": "10,000 users need low-latency traffic distribution",
+                    "concept": None,
+                    "query_kind": "scenario_context",
+                },
+                {
+                    "label": "concept support",
+                    "query": "load balancing strategies",
+                    "concept": "Load balancing",
+                    "query_kind": "scenario_support",
+                },
+            ],
+        }
+        with patch(
+            "app.services.rag.adaptive_retrieval_service.retrieve_vector_context",
+            AsyncMock(return_value=([scenario_doc], "primary")),
+        ), patch(
+            "app.services.rag.adaptive_retrieval_service.pg_service.retrieve_context_by_keywords",
+            return_value=[scenario_doc],
+        ), patch(
+            "app.services.rag.adaptive_retrieval_service.generate_structured_json",
+            AsyncMock(return_value={
+                "relevant": "yes",
+                "covered_concepts": ["Load balancing"],
+                "reason": "scenario support",
+            }),
+        ):
+            result = await collect_result(
+                question="10,000 users need low-latency traffic distribution",
+                query_intent=scenario_intent,
+            )
+
+        self.assertEqual(result["query_intent"]["intent_type"], "scenario")
+        self.assertEqual(
+            [item["query_kind"] for item in result["retrieval_mode_summary"]["subquery_summaries"]],
+            ["scenario_context", "scenario_support"],
+        )
+        self.assertEqual(result["documents"][0]["chunkId"], "scenario-1")

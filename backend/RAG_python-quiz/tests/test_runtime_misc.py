@@ -103,6 +103,25 @@ class RuntimeMiscTests(unittest.TestCase):
             [("SELECT set_config('app.user_id', %s, true)", ("user-1",))],
         )
 
+    def test_pg_db_get_conn_prefers_explicit_rls_user(self):
+        settings = make_settings(pg_dsn="postgres://example")
+        cursor = FakeCursor()
+        conn = FakeConnection(cursor)
+        try:
+            rls_context.set_current_rls_user("context-user")
+            with patch("app.services.pg.pg_db.get_settings", return_value=settings), patch(
+                "app.services.pg.pg_db.psycopg2.connect",
+                return_value=conn,
+            ):
+                self.assertIs(pg_db._get_conn("request-user"), conn)
+        finally:
+            rls_context.clear_current_rls_user()
+
+        self.assertEqual(
+            cursor.executed,
+            [("SELECT set_config('app.user_id', %s, true)", ("request-user",))],
+        )
+
     def test_pg_db_fetch_helpers_execute_and_return_rows(self):
         cursor = FakeCursor(
             fetchone_results=[{"id": "one"}],
@@ -204,6 +223,46 @@ class RuntimeMiscTests(unittest.TestCase):
             pages = asyncio.run(pdf_utils.extract_text_by_page(buffer.getvalue()))
 
         self.assertEqual(pages, ["page text", ""])
+
+    def test_pdf_utils_extract_pdf_content_by_page_reads_embedded_images(self):
+        image_file = SimpleNamespace(
+            data=b"png-bytes",
+            image=SimpleNamespace(format="PNG"),
+            name="/Im0.png",
+        )
+        pages = [
+            SimpleNamespace(
+                extract_text=lambda: "page text",
+                images=[image_file],
+            ),
+            SimpleNamespace(extract_text=lambda: None, images=[]),
+        ]
+        with patch("app.utils.pdf_utils.PdfReader") as reader_cls:
+            reader_cls.return_value.pages = pages
+            content = asyncio.run(pdf_utils.extract_pdf_content_by_page(b"pdf"))
+
+        self.assertEqual(content[0]["pageNumber"], 1)
+        self.assertEqual(content[0]["text"], "page text")
+        self.assertEqual(content[0]["images"][0]["data"], b"png-bytes")
+        self.assertEqual(content[0]["images"][0]["mimetype"], "image/png")
+        self.assertEqual(content[0]["images"][0]["imageIndex"], 1)
+
+    def test_pdf_utils_normalizes_unknown_image_format_and_rejects_empty_image(self):
+        class FakeImage:
+            format = None
+
+            def save(self, output, format):
+                self.saved_format = format
+                output.write(b"normalized-png")
+
+        data, mimetype = pdf_utils._extract_image_payload(
+            SimpleNamespace(data=b"", image=FakeImage(), name="/Im0.bin")
+        )
+        self.assertEqual(data, b"normalized-png")
+        self.assertEqual(mimetype, "image/png")
+
+        with self.assertRaises(ValueError):
+            pdf_utils._extract_image_payload(SimpleNamespace(data=b"", image=None, name="/Im0.bin"))
 
 
 class ProgressBusTests(unittest.IsolatedAsyncioTestCase):

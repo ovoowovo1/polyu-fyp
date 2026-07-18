@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Modal, Button, Input, message, Progress } from 'antd';
+import { useSelector } from 'react-redux';
 import { uploadLink } from '../api/upload.js';
 import useUploadProgress from '../hooks/useUploadProgress.jsx';
 
 const LinkUploadModal = ({ visible, onCancel, onSuccess }) => {
   const [link, setLink] = useState('');
   const [uploading, setUploading] = useState(false);
+  const currentClassId = useSelector((state) => state.documents.currentClassId);
   const { progress, progressStatus, showProgress, startTracking, stopTracking, abortTracking, genClientId } = useUploadProgress();
 
   const handleOk = async () => {
@@ -17,7 +19,7 @@ const LinkUploadModal = ({ visible, onCancel, onSuccess }) => {
     try {
       setUploading(true);
       const cid = startTracking(genClientId());
-      await uploadLink(url, cid);
+      await uploadLink(url, cid, currentClassId);
       message.success('連結已提交處理');
       onSuccess && onSuccess();
       onCancel();

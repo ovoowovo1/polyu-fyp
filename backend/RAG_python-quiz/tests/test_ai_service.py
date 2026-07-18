@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from app.services.ai import exam_ai_grading_service, exam_grading_prompts, exam_grading_runtime, quiz_feedback_service
-from app.services.ai.llm import structured_json, text_completion
+from app.services.ai.llm import multimodal, structured_json, text_completion
 from tests.support import fake_llm_retry, make_chat_client, make_completion_response
 
 
@@ -90,6 +90,64 @@ class LlmServiceTests(unittest.IsolatedAsyncioTestCase):
                     "prompt",
                     operation_name="text",
                 )
+
+    async def test_generate_text_completion_sends_images_and_falls_back_to_text(self):
+        response = make_completion_response()
+        client = make_chat_client()
+        client.chat.completions.create.side_effect = [RuntimeError("vision unsupported"), response]
+
+        with patch("app.services.ai.llm.text_completion.get_llm_client", return_value=client), patch(
+            "app.services.ai.llm.text_completion.get_default_llm_model_name",
+            return_value="model",
+        ), patch(
+            "app.services.ai.llm.text_completion.extract_chat_completion_text",
+            return_value="answer",
+        ), patch(
+            "app.services.ai.llm.text_completion.with_llm_retry_async",
+            side_effect=fake_llm_retry,
+        ):
+            result = await text_completion.generate_text_completion(
+                "describe the figure",
+                operation_name="multimodal",
+                image_inputs=[{"image_data": "data:image/png;base64,aW1n"}],
+            )
+
+        self.assertEqual(result, "answer")
+        first_messages = client.chat.completions.create.call_args_list[0].kwargs["messages"]
+        second_messages = client.chat.completions.create.call_args_list[1].kwargs["messages"]
+        self.assertIsInstance(first_messages[-1]["content"], list)
+        self.assertEqual(first_messages[-1]["content"][-1]["type"], "image_url")
+        self.assertEqual(second_messages[-1], {"role": "user", "content": "describe the figure"})
+
+    async def test_generate_text_completion_reraises_text_only_provider_error(self):
+        client = make_chat_client()
+        client.chat.completions.create.side_effect = RuntimeError("provider down")
+
+        with patch("app.services.ai.llm.text_completion.get_llm_client", return_value=client), patch(
+            "app.services.ai.llm.text_completion.get_default_llm_model_name",
+            return_value="model",
+        ), patch(
+            "app.services.ai.llm.text_completion.with_llm_retry_async",
+            side_effect=fake_llm_retry,
+        ):
+            with self.assertRaises(RuntimeError):
+                await text_completion.generate_text_completion("prompt", operation_name="text")
+
+    def test_build_multimodal_content_deduplicates_and_caps_images(self):
+        self.assertEqual(multimodal.build_multimodal_content("text", []), "text")
+        images = [
+            {"image_data": "data:image/png;base64,0"},
+            {"image_data": "data:image/png;base64,0"},
+            {},
+            {"data_url": "data:image/png;base64,1"},
+            *({"image_data": f"data:image/png;base64,{index}"} for index in range(2, 8)),
+        ]
+
+        content = multimodal.build_multimodal_content("text", images)
+
+        self.assertEqual(len(content), 7)
+        self.assertEqual(content[0], {"type": "text", "text": "text"})
+        self.assertEqual(content[-1]["image_url"]["url"], "data:image/png;base64,5")
 
 
 class QuizFeedbackServiceTests(unittest.IsolatedAsyncioTestCase):

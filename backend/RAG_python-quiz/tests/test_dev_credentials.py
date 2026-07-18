@@ -44,7 +44,7 @@ class DevCredentialsTests(unittest.TestCase):
             ),
             (
                 make_settings(llm_api_key="shared-key", llm_base_url="https://shared.example"),
-                ("shared-key", "https://shared.example", "google/gemini-embedding-001"),
+                ("shared-key", "https://shared.example", "google/gemini-embedding-2-preview"),
             ),
         )
         for settings, expected in cases:

@@ -53,6 +53,7 @@ def build_initial_state(
         "original_question": stripped_question,
         "selected_file_ids": list(selected_file_ids),
         "current_query": stripped_question,
+        "classified_query": stripped_question,
         "rewrite_count": 0,
         "candidate_documents": [],
         "filtered_documents": [],
