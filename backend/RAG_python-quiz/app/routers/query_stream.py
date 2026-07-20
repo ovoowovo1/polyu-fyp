@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.api_helpers.service_helpers import error_detail
 from app.services.pg.rls_context import clear_current_rls_user, set_current_rls_user
-from app.services.rag import adaptive_rag_service
+from app.services.rag.index import run_adaptive_rag_stream
 from app.utils.jwt_utils import get_current_user
 
 router = APIRouter(prefix="", tags=["query"])
@@ -32,7 +32,7 @@ async def sse_event_stream(
 ):
     set_current_rls_user(user_id)
     try:
-        async for event in adaptive_rag_service.run_adaptive_rag_stream(question, selected_file_ids):
+        async for event in run_adaptive_rag_stream(question, selected_file_ids):
             yield _encode_sse_event(event)
     finally:
         clear_current_rls_user()

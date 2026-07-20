@@ -100,7 +100,8 @@ class ClassesApiTests(unittest.TestCase):
 
     def test_class_mutations_invalidate_user_cache_namespaces(self):
         with patch("app.routers.classes.pg_service.create_class_for_teacher", return_value={"id": "class-1"}), patch(
-            "app.routers.classes.redis_cache.invalidate_namespaces"
+            "app.routers.classes.redis_cache.invalidate_namespaces",
+            new_callable=AsyncMock,
         ) as invalidate:
             self.client.post("/classes/", json={"name": "DB"})
         invalidate.assert_called_with("classes:user:teacher-1")
@@ -108,7 +109,9 @@ class ClassesApiTests(unittest.TestCase):
         with patch(
             "app.routers.classes.pg_service.invite_student_to_class",
             return_value={"student": {"id": "student-1"}},
-        ), patch("app.routers.classes.redis_cache.invalidate_namespaces") as invite_invalidate:
+        ), patch(
+            "app.routers.classes.redis_cache.invalidate_namespaces", new_callable=AsyncMock
+        ) as invite_invalidate:
             self.client.post("/classes/class-1/invite", json={"email": "student@example.com"})
         invite_invalidate.assert_called_with("classes:user:teacher-1", "classes:user:student-1")
 

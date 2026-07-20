@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Sequence
 
-import requests
+import httpx
 from fastapi import Response
 
 from app.config import get_settings
@@ -14,7 +14,7 @@ from app.logger import get_logger
 
 logger = get_logger(__name__)
 
-CACHE_SCHEMA_VERSION = "v1"
+CACHE_SCHEMA_VERSION = "v2"
 CACHE_KEY_PREFIX = "polyu"
 REQUEST_TIMEOUT_SECONDS = 2
 HEADER_CACHE_STATUS = "X-Redis-Cache"
@@ -23,6 +23,8 @@ CACHE_HIT = "HIT"
 CACHE_MISS = "MISS"
 CACHE_BYPASS = "BYPASS"
 CACHE_ERROR = "ERROR"
+
+_client: httpx.AsyncClient | None = None
 
 
 @dataclass(frozen=True)
@@ -62,9 +64,15 @@ async def get_or_set_json_with_status(
     if not _is_enabled(settings):
         return await load_without_cache(scope, loader, reason="disabled")
 
-    versions = {namespace: get_version(namespace) for namespace in version_namespaces}
+    versions = {
+        namespace: version
+        for namespace, version in zip(
+            version_namespaces,
+            await _get_versions(version_namespaces),
+        )
+    }
     key = build_cache_key(scope, params, versions=versions)
-    cached, get_error = get_json_with_error(key)
+    cached, get_error = await get_json_with_error(key)
     if get_error:
         _log_cache(CACHE_ERROR, scope, reason=get_error)
         return CacheResult(await loader(), CACHE_ERROR, scope)
@@ -74,7 +82,7 @@ async def get_or_set_json_with_status(
 
     value = await loader()
     ttl = ttl_seconds if ttl_seconds is not None else settings.redis_cache_ttl_seconds
-    if set_json(key, value, ttl_seconds=ttl):
+    if await set_json(key, value, ttl_seconds=ttl):
         _log_cache(CACHE_MISS, scope)
         _log_cache("SET", scope)
         return CacheResult(value, CACHE_MISS, scope)
@@ -98,27 +106,27 @@ def set_response_cache_headers(response: Response, result: CacheResult) -> None:
     response.headers[HEADER_CACHE_SCOPE] = result.scope
 
 
-def invalidate_namespaces(*namespaces: str) -> None:
+async def invalidate_namespaces(*namespaces: str) -> None:
     for namespace in sorted({namespace for namespace in namespaces if namespace}):
-        _execute(["INCR", _version_key(namespace)])
+        await _execute(["INCR", _version_key(namespace)])
 
 
 def is_enabled() -> bool:
     return _is_enabled(get_settings())
 
 
-def get_version(namespace: str) -> str:
-    result = _execute(["GET", _version_key(namespace)])
+async def get_version(namespace: str) -> str:
+    result = await _execute(["GET", _version_key(namespace)])
     return str(result or "0")
 
 
-def get_json(key: str) -> dict[str, Any] | None:
-    value, _error = get_json_with_error(key)
+async def get_json(key: str) -> dict[str, Any] | None:
+    value, _error = await get_json_with_error(key)
     return value
 
 
-def get_json_with_error(key: str) -> tuple[dict[str, Any] | None, str | None]:
-    command_result = _execute_command(["GET", key])
+async def get_json_with_error(key: str) -> tuple[dict[str, Any] | None, str | None]:
+    command_result = await _execute_command(["GET", key])
     if not command_result.ok:
         return None, command_result.error or "get_failed"
 
@@ -138,9 +146,9 @@ def get_json_with_error(key: str) -> tuple[dict[str, Any] | None, str | None]:
     return value, None
 
 
-def set_json(key: str, value: dict[str, Any], *, ttl_seconds: int) -> bool:
+async def set_json(key: str, value: dict[str, Any], *, ttl_seconds: int) -> bool:
     payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return _execute_command(["SET", key, payload, "EX", max(1, int(ttl_seconds))]).ok
+    return (await _execute_command(["SET", key, payload, "EX", max(1, int(ttl_seconds))])).ok
 
 
 def build_cache_key(
@@ -163,8 +171,8 @@ def _version_key(namespace: str) -> str:
     return f"{CACHE_KEY_PREFIX}:{CACHE_SCHEMA_VERSION}:version:{namespace}"
 
 
-def _execute(command: list[Any]) -> Any:
-    result = _execute_command(command)
+async def _execute(command: list[Any]) -> Any:
+    result = await _execute_command(command)
     return result.result if result.ok else None
 
 
@@ -175,20 +183,51 @@ class _RedisCommandResult:
     error: str | None = None
 
 
-def _execute_command(command: list[Any]) -> _RedisCommandResult:
+async def initialize_client(settings=None) -> None:
+    global _client
+
+    settings = settings or get_settings()
+    if not _is_enabled(settings):
+        return
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS)
+
+
+async def close_client() -> None:
+    global _client
+
+    client = _client
+    _client = None
+    if client is not None and not client.is_closed:
+        await client.aclose()
+
+
+async def _get_client() -> httpx.AsyncClient | None:
+    await initialize_client()
+    return _client
+
+
+async def _get_versions(namespaces: Sequence[str]) -> list[str]:
+    return [await get_version(namespace) for namespace in namespaces]
+
+
+async def _execute_command(command: list[Any]) -> _RedisCommandResult:
     settings = get_settings()
     if not _is_enabled(settings):
         return _RedisCommandResult(ok=False, error="disabled")
 
+    client = await _get_client()
+    if client is None:
+        return _RedisCommandResult(ok=False, error="disabled")
+
     try:
-        response = requests.post(
+        response = await client.post(
             settings.upstash_redis_rest_url.rstrip("/"),
             headers={
                 "Authorization": f"Bearer {settings.upstash_redis_rest_token}",
                 "Content-Type": "application/json",
             },
-            data=json.dumps(command, ensure_ascii=False),
-            timeout=REQUEST_TIMEOUT_SECONDS,
+            json=command,
         )
         if response.status_code != 200:
             logger.warning("Redis cache command failed status=%s body=%s", response.status_code, response.text)

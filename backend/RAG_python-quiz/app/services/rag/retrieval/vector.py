@@ -33,6 +33,13 @@ async def _retrieve_graph_context(
     )
 
 
+async def _rehydrate_graph_context(cached_rows: list[dict]) -> list[dict]:
+    return await asyncio.to_thread(
+        pg_service.retrieve_context_by_chunk_ids,
+        cached_rows,
+    )
+
+
 async def retrieve_vector_context(
     question: str,
     selected_file_ids: Sequence[str],
@@ -110,6 +117,7 @@ async def retrieve_vector_context(
             mode="fallback",
             settings=settings,
             loader=load_fallback_results,
+            rehydrate=_rehydrate_graph_context,
         )
         logger.info(
             "[%s] fallback succeeded with model=%s column=%s results=%s",
@@ -138,6 +146,7 @@ async def retrieve_vector_context(
         mode="primary",
         settings=settings,
         loader=load_primary_results,
+        rehydrate=_rehydrate_graph_context,
     )
     logger.info(
         "[%s] primary succeeded with model=%s column=%s results=%s",

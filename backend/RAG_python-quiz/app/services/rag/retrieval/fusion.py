@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Sequence
 
-from app.services.rag.rag_shared import normalize_concepts
-from app.services.rag.retrieval_intent import _clean_concept_fragment
+from app.services.rag.shared.helpers import normalize_concepts
+from app.services.rag.retrieval.intent import _clean_concept_fragment
 
 NormalizeDoc = Callable[[Dict[str, Any]], Dict[str, Any]]
 RankFusion = Callable[..., List[Dict[str, Any]]]

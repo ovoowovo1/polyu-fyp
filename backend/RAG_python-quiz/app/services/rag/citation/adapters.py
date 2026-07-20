@@ -7,7 +7,7 @@ from llama_index.core.query_engine import CitationQueryEngine
 from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import MetadataMode, NodeWithScore, QueryBundle, TextNode
 
-from app.services.rag.rag_shared import build_raw_sources
+from app.services.rag.shared.helpers import build_raw_sources
 
 DEFAULT_CITATION_CHUNK_SIZE = 8192
 

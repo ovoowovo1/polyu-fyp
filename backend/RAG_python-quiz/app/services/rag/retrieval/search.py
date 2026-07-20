@@ -1,19 +1,21 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Dict, List, Sequence
 
 from app.logger import get_logger
-from app.services.rag import retrieval_intent
-from app.services.rag.adaptive_types import AdaptiveRetrievalState, EventCallback
-from app.services.rag.rag_shared import normalize_doc, safe_emit
-from app.services.rag.retrieval_fusion import merge_candidate_documents, reciprocal_rank_fusion
-from app.services.rag.retrieval_hybrid import run_hybrid_search_for_query
-from app.services.rag.retrieval_intent import QueryIntent, QuerySearchSpec, _clean_concept_fragment
+from app.services.rag.retrieval import intent as retrieval_intent
+from app.services.rag.retrieval.types import AdaptiveRetrievalState, EventCallback
+from app.services.rag.shared.helpers import normalize_doc, safe_emit
+from app.services.rag.retrieval.fusion import merge_candidate_documents, reciprocal_rank_fusion
+from app.services.rag.retrieval.hybrid import run_hybrid_search_for_query
+from app.services.rag.retrieval.intent import QueryIntent, QuerySearchSpec, _clean_concept_fragment
 
 logger = get_logger(__name__)
 
 RRF_K = 60
 RESERVED_CANDIDATES_PER_SUBQUERY = 2
+SUBQUERY_RETRIEVAL_CONCURRENCY = 8
 
 
 def normalize_retrieval_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
@@ -38,22 +40,29 @@ async def run_search_for_query(
     retrieve_vector_context_func,
     retrieve_context_by_keywords_func,
     is_retryable_embedding_error_func,
+    semaphore: asyncio.Semaphore | None = None,
 ) -> Dict[str, Any]:
-    return await run_hybrid_search_for_query(
-        query_spec,
-        selected_file_ids,
-        emit,
-        retrieval_k=retrieval_k,
-        log_prefix=log_prefix,
-        logger=logger,
-        safe_emit=safe_emit,
-        normalize_doc=normalize_retrieval_doc,
-        retrieve_vector_context=retrieve_vector_context_func,
-        retrieve_context_by_keywords=retrieve_context_by_keywords_func,
-        reciprocal_rank_fusion_func=fuse_ranked_results,
-        is_retryable_embedding_error=is_retryable_embedding_error_func,
-        rrf_k=RRF_K,
-    )
+    async def run() -> Dict[str, Any]:
+        return await run_hybrid_search_for_query(
+            query_spec,
+            selected_file_ids,
+            emit,
+            retrieval_k=retrieval_k,
+            log_prefix=log_prefix,
+            logger=logger,
+            safe_emit=safe_emit,
+            normalize_doc=normalize_retrieval_doc,
+            retrieve_vector_context=retrieve_vector_context_func,
+            retrieve_context_by_keywords=retrieve_context_by_keywords_func,
+            reciprocal_rank_fusion_func=fuse_ranked_results,
+            is_retryable_embedding_error=is_retryable_embedding_error_func,
+            rrf_k=RRF_K,
+        )
+
+    if semaphore is None:
+        return await run()
+    async with semaphore:
+        return await run()
 
 
 def merge_retrieval_candidates(
@@ -93,11 +102,14 @@ async def collect_search_results(
     retrieve_vector_context_func,
     retrieve_context_by_keywords_func,
     is_retryable_embedding_error_func,
+    concurrency: int = SUBQUERY_RETRIEVAL_CONCURRENCY,
 ) -> List[Dict[str, Any]]:
-    search_results = []
-    for query_spec in query_intent["search_queries"]:
-        search_results.append(
-            await run_search_for_query(
+    query_specs = list(query_intent["search_queries"])
+    semaphore = asyncio.Semaphore(max(1, concurrency))
+
+    async def collect_one(query_spec: QuerySearchSpec) -> Dict[str, Any]:
+        try:
+            return await run_search_for_query(
                 query_spec,
                 selected_file_ids,
                 emit,
@@ -106,9 +118,71 @@ async def collect_search_results(
                 retrieve_vector_context_func=retrieve_vector_context_func,
                 retrieve_context_by_keywords_func=retrieve_context_by_keywords_func,
                 is_retryable_embedding_error_func=is_retryable_embedding_error_func,
+                semaphore=semaphore,
             )
+        except Exception as err:
+            logger.warning(
+                "[%s] subquery retrieval failed label=%r query=%r: %s",
+                log_prefix,
+                query_spec["label"],
+                query_spec["query"][:160],
+                err,
+            )
+            await safe_emit(
+                emit,
+                f"[retrieval] subquery failed for {query_spec['label']}: {err}",
+                0,
+                "retrieval",
+            )
+            return {
+                "query_spec": query_spec,
+                "vector_results": [],
+                "fulltext_results": [],
+                "fused": [],
+                "vector_failed": True,
+                "fulltext_failed": True,
+                "vector_retrieval_degraded": False,
+                "retrieval_mode": "failed",
+            }
+
+    return list(await asyncio.gather(*(collect_one(query_spec) for query_spec in query_specs)))
+
+
+def build_targeted_retry_query_specs(
+    query_intent: QueryIntent,
+    current_query: str,
+    missing_concepts: Sequence[str],
+) -> List[QuerySearchSpec]:
+    required_by_key = {concept.casefold(): concept for concept in query_intent["required_concepts"]}
+    specs: List[QuerySearchSpec] = []
+    for missing_concept in missing_concepts:
+        canonical = required_by_key.get(missing_concept.casefold())
+        if not canonical:
+            continue
+        specs.append(
+            {
+                "label": f"targeted support: {canonical}",
+                "query": " ".join([canonical, current_query]).strip(),
+                "concept": canonical,
+                "query_kind": "targeted_concept_retry",
+            }
         )
-    return search_results
+    return specs
+
+
+def merge_retrieval_mode_summaries(
+    previous: Dict[str, Any],
+    current: Dict[str, Any],
+) -> Dict[str, Any]:
+    return {
+        "vector_hits": previous.get("vector_hits", 0) + current.get("vector_hits", 0),
+        "fulltext_hits": previous.get("fulltext_hits", 0) + current.get("fulltext_hits", 0),
+        "vector_failed": previous.get("vector_failed", False) or current.get("vector_failed", False),
+        "fulltext_failed": previous.get("fulltext_failed", False) or current.get("fulltext_failed", False),
+        "vector_retrieval_degraded": previous.get("vector_retrieval_degraded", False)
+        or current.get("vector_retrieval_degraded", False),
+        "subquery_summaries": previous.get("subquery_summaries", []) + current.get("subquery_summaries", []),
+    }
 
 
 def build_retrieval_mode_summary(search_results: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
@@ -205,6 +279,65 @@ async def retrieve_documents_node(
         emit,
         f"[retrieval] merged results produced {len(candidate_documents)} candidate chunks.",
         len(candidate_documents),
+        "retrieval",
+    )
+    return state
+
+
+async def retry_missing_concepts_node(
+    state: AdaptiveRetrievalState,
+    emit: EventCallback,
+    *,
+    retrieval_k: int,
+    max_docs_to_grade: int,
+    log_prefix: str,
+    retrieve_vector_context_func,
+    retrieve_context_by_keywords_func,
+    is_retryable_embedding_error_func,
+) -> AdaptiveRetrievalState:
+    query_intent = state.get("query_intent")
+    if not query_intent:
+        state["candidate_documents"] = []
+        return state
+
+    query_specs = build_targeted_retry_query_specs(
+        query_intent,
+        state.get("current_query", state.get("question", "")),
+        state.get("missing_concepts", []),
+    )
+    if not query_specs:
+        state["candidate_documents"] = []
+        return state
+
+    retry_intent = {**query_intent, "search_queries": query_specs}
+    search_results = await collect_search_results(
+        retry_intent,
+        state["selected_file_ids"],
+        emit,
+        retrieval_k=retrieval_k,
+        log_prefix=f"{log_prefix}:targeted_retry",
+        retrieve_vector_context_func=retrieve_vector_context_func,
+        retrieve_context_by_keywords_func=retrieve_context_by_keywords_func,
+        is_retryable_embedding_error_func=is_retryable_embedding_error_func,
+    )
+    candidates = merge_retrieval_candidates(
+        search_results,
+        max_docs_to_grade=max_docs_to_grade,
+    )
+    existing_ids = {doc.get("chunkId") for doc in state.get("filtered_documents", [])}
+    state["candidate_documents"] = [doc for doc in candidates if doc.get("chunkId") not in existing_ids]
+    retry_summary = build_retrieval_mode_summary(search_results)
+    state["retrieval_mode_summary"] = merge_retrieval_mode_summaries(
+        state.get("retrieval_mode_summary", {}),
+        retry_summary,
+    )
+    state["vector_retrieval_degraded"] = state.get("vector_retrieval_degraded", False) or retry_summary[
+        "vector_retrieval_degraded"
+    ]
+    await safe_emit(
+        emit,
+        f"[retrieval] targeted retry produced {len(state['candidate_documents'])} candidate chunks.",
+        len(state["candidate_documents"]),
         "retrieval",
     )
     return state

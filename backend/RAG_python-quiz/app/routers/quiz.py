@@ -153,7 +153,7 @@ async def create_quiz(
         class_id,
         action="Create quiz",
     )
-    redis_cache.invalidate_namespaces(
+    await redis_cache.invalidate_namespaces(
         studio_cache.quiz_list_namespace(),
         studio_cache.quiz_detail_namespace(str(saved.get("quiz_id") or "")),
     )
@@ -179,7 +179,7 @@ async def update_quiz(
         payload.get("file_ids") if "file_ids" in payload else None,
         action="Update quiz",
     )
-    redis_cache.invalidate_namespaces(studio_cache.quiz_list_namespace(), studio_cache.quiz_detail_namespace(quiz_id))
+    await redis_cache.invalidate_namespaces(studio_cache.quiz_list_namespace(), studio_cache.quiz_detail_namespace(quiz_id))
     return {"message": "Quiz updated", "quiz": updated}
 
 
@@ -196,7 +196,7 @@ async def delete_quiz(
         user["user_id"],
         action="Delete quiz",
     )
-    redis_cache.invalidate_namespaces(studio_cache.quiz_list_namespace(), studio_cache.quiz_detail_namespace(quiz_id))
+    await redis_cache.invalidate_namespaces(studio_cache.quiz_list_namespace(), studio_cache.quiz_detail_namespace(quiz_id))
     return result
 
 

@@ -110,7 +110,7 @@ async def generate_exam(request: ExamGenerationRequest = Body(...), user: dict =
     _require_teacher(user, "Only teachers can generate exams")
     _require_document_access(user, request.file_ids)
     result = await exam_workflow_service.generate_exam_with_pdf(request)
-    redis_cache.invalidate_namespaces(
+    await redis_cache.invalidate_namespaces(
         studio_cache.exam_list_namespace(),
         studio_cache.exam_detail_namespace(studio_cache.id_from_result(result, "exam_id", "id")),
     )
@@ -123,7 +123,7 @@ async def generate_questions_only(request: ExamGenerationRequest = Body(...), us
     _require_teacher(user, "Only teachers can generate exams")
     _require_document_access(user, request.file_ids)
     result = await exam_workflow_service.generate_questions_only(request)
-    redis_cache.invalidate_namespaces(
+    await redis_cache.invalidate_namespaces(
         studio_cache.exam_list_namespace(),
         studio_cache.exam_detail_namespace(studio_cache.id_from_result(result, "exam_id", "id")),
     )
@@ -135,7 +135,7 @@ async def regenerate_pdf(exam_id: str, questions: list = Body(..., embed=True), 
     _require_teacher_exam_access(user, exam_id, "Only teachers can regenerate exam PDFs")
     logger.info("[ExamAPI] regenerate pdf exam_id=%s", exam_id)
     result = await exam_workflow_service.regenerate_exam_pdf(exam_id, questions, exam_name)
-    redis_cache.invalidate_namespaces(studio_cache.exam_detail_namespace(exam_id))
+    await redis_cache.invalidate_namespaces(studio_cache.exam_detail_namespace(exam_id))
     return result
 
 
@@ -270,7 +270,7 @@ async def update_exam(exam_id: str, request: ExamUpdateRequest = Body(...), user
         request.end_at,
         action="Update exam",
     )
-    redis_cache.invalidate_namespaces(studio_cache.exam_list_namespace(), studio_cache.exam_detail_namespace(exam_id))
+    await redis_cache.invalidate_namespaces(studio_cache.exam_list_namespace(), studio_cache.exam_detail_namespace(exam_id))
     return {"message": "Exam updated", "exam": result}
 
 
@@ -283,7 +283,7 @@ async def delete_exam(exam_id: str, user: dict = Depends(get_current_user)):
         user["user_id"],
         action="Delete exam",
     )
-    redis_cache.invalidate_namespaces(studio_cache.exam_list_namespace(), studio_cache.exam_detail_namespace(exam_id))
+    await redis_cache.invalidate_namespaces(studio_cache.exam_list_namespace(), studio_cache.exam_detail_namespace(exam_id))
     return result
 
 
@@ -297,7 +297,7 @@ async def publish_exam(exam_id: str, is_published: bool = Body(True, embed=True)
         is_published,
         action="Publish exam",
     )
-    redis_cache.invalidate_namespaces(studio_cache.exam_list_namespace(), studio_cache.exam_detail_namespace(exam_id))
+    await redis_cache.invalidate_namespaces(studio_cache.exam_list_namespace(), studio_cache.exam_detail_namespace(exam_id))
     action = "published" if is_published else "unpublished"
     return {"message": f"Exam {action}", "exam": result}
 

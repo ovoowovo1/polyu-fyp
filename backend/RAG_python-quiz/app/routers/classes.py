@@ -34,7 +34,7 @@ async def create_class(
         ],
         fallback_detail=lambda error: error_detail("Failed to create class", details=str(error)),
     )
-    redis_cache.invalidate_namespaces(studio_cache.classes_user_namespace(current_user["user_id"]))
+    await redis_cache.invalidate_namespaces(studio_cache.classes_user_namespace(current_user["user_id"]))
     return {"message": "Class created", "class": created}
 
 
@@ -116,7 +116,7 @@ async def invite_student(
         fallback_detail=lambda error: error_detail("Failed to invite student", details=str(error)),
     )
     student_id = result.get("student_id") or (result.get("student") or {}).get("id")
-    redis_cache.invalidate_namespaces(
+    await redis_cache.invalidate_namespaces(
         studio_cache.classes_user_namespace(current_user["user_id"]),
         studio_cache.classes_user_namespace(str(student_id)) if student_id else "",
     )

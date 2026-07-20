@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from app.logger import get_logger
-from app.services.rag.adaptive_types import AdaptiveRetrievalState, EventCallback
-from app.services.rag.rag_shared import safe_emit
+from app.services.rag.retrieval.types import AdaptiveRetrievalState, EventCallback
+from app.services.rag.shared.helpers import safe_emit
 
 logger = get_logger(__name__)
 
@@ -76,7 +76,14 @@ Required concepts:
         rewritten_query = ""
 
     state["current_query"] = rewritten_query or state["original_question"]
-    state["query_intent"] = await classify_query_intent_func(state["current_query"])
+    if state.get("query_intent") and state.get("classified_query") == state["current_query"]:
+        logger.info(
+            "[%s] rewrite_query reused cached intent for unchanged query=%r",
+            log_prefix,
+            state["current_query"][:160],
+        )
+    else:
+        state["query_intent"] = await classify_query_intent_func(state["current_query"])
     state["classified_query"] = state["current_query"]
     logger.info(
         "[%s] rewrite_query completed attempt=%s rewritten_query=%r preserved_intent_type=%s preserved_required_concepts=%s",

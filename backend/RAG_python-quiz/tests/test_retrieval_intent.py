@@ -3,7 +3,7 @@ import sys
 import types
 from unittest.mock import AsyncMock, patch
 
-from app.services.rag import retrieval_intent
+from app.services.rag.retrieval import intent as retrieval_intent
 
 
 def query_spec(label, query, concept, query_kind):

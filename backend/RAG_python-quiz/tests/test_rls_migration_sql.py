@@ -160,18 +160,6 @@ FOR SELECT USING (
         self.assertIn("mimetype text NOT NULL", sql)
         self.assertIn("data bytea NOT NULL", sql)
 
-    def test_chunk_media_rls_smoke_uses_psql_safe_variable_assertions(self):
-        smoke_path = Path(__file__).resolve().parent / "integration" / "rls_chunk_media.sql"
-        sql = smoke_path.read_text(encoding="utf-8")
-
-        self.assertNotIn("DO $$", sql)
-        self.assertIn(") AS teacher_can_read_chunk_media \\gset", sql)
-        self.assertIn("\\if :teacher_can_read_chunk_media", sql)
-        self.assertIn(") AS student_can_read_chunk_media \\gset", sql)
-        self.assertIn("\\if :student_can_read_chunk_media", sql)
-        self.assertEqual(sql.count("WHERE chunk_id = :'chunk_id'::uuid"), 2)
-        self.assertLess(sql.index("DROP OWNED BY app_backend;"), sql.index("DROP ROLE app_backend;"))
-
     def test_integration_workflow_runs_refresh_token_migration(self):
         workflow_path = Path(__file__).resolve().parents[3] / ".github" / "workflows" / "integration-tests.yml"
         workflow = workflow_path.read_text(encoding="utf-8")

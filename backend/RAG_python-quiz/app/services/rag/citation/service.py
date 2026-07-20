@@ -12,14 +12,17 @@ from pydantic import Field
 from app.logger import get_logger
 from app.services.ai.llm.text_completion import generate_text_completion
 from app.services.ai.llm.multimodal import build_multimodal_content
-from app.services.rag import citation_adapters, citation_markdown, citation_prompts, citation_synthesis
-from app.services.rag.citation_types import (
+from app.services.rag.citation import adapters as citation_adapters
+from app.services.rag.citation import markdown as citation_markdown
+from app.services.rag.citation import prompts as citation_prompts
+from app.services.rag.citation import synthesis as citation_synthesis
+from app.services.rag.citation.types import (
     CitationEvidenceResult,
     EvidenceCitation,
     EvidenceNode,
     EvidenceSource,
 )
-from app.services.rag.rag_shared import (
+from app.services.rag.shared.helpers import (
     build_retrieval_evidence as shared_build_retrieval_evidence,
 )
 from app.utils.api_key_manager import get_default_llm_model_name, get_llm_client

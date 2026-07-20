@@ -1,5 +1,6 @@
 ﻿import os
 import time
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, Request
@@ -20,6 +21,8 @@ from app.routers.upload import router as upload_router
 from fastapi.responses import JSONResponse
 from app.services.core.exceptions import ServiceError
 from app.services.auth.tokens import validate_jwt_secret_config
+from app.services.cache import redis_cache
+from app.services.pg import pg_db
 from app.services.pg.rls_context import clear_current_rls_user
 from app.utils.jwt_utils import verify_token
 
@@ -33,6 +36,19 @@ def _default_static_dir() -> str:
 
 def _validate_startup_settings(settings) -> None:
     validate_jwt_secret_config(settings)
+
+
+@asynccontextmanager
+async def _app_lifespan(app: FastAPI):
+    settings = app.state.settings
+    _validate_startup_settings(settings)
+    pg_db.initialize_pool(settings)
+    try:
+        await redis_cache.initialize_client(settings)
+        yield
+    finally:
+        await redis_cache.close_client()
+        pg_db.close_pool()
 
 
 def _request_user_from_authorization(authorization: str | None) -> dict[str, str]:
@@ -121,7 +137,8 @@ def _add_request_logging_middleware(app: FastAPI) -> None:
 def create_app(*, settings=None, static_dir: str | None = None) -> FastAPI:
     settings = settings or get_settings()
 
-    app = FastAPI(title="RAG FastAPI", version="0.1.0")
+    app = FastAPI(title="RAG FastAPI", version="0.1.0", lifespan=_app_lifespan)
+    app.state.settings = settings
     _add_request_logging_middleware(app)
     app.add_middleware(
         CORSMiddleware,
@@ -145,7 +162,6 @@ def create_app(*, settings=None, static_dir: str | None = None) -> FastAPI:
     os.makedirs(os.path.join(resolved_static_dir, "pdfs"), exist_ok=True)
     os.makedirs(os.path.join(resolved_static_dir, "images"), exist_ok=True)
     app.mount("/static", StaticFiles(directory=resolved_static_dir), name="static")
-    app.add_event_handler("startup", lambda: _validate_startup_settings(settings))
     return app
 
 

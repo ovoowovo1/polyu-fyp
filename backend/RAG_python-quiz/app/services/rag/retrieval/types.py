@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Awaitable, Callable, Dict, List, TypedDict
 
-from app.services.rag.retrieval_intent import QueryIntent
+from app.services.rag.retrieval.intent import QueryIntent
 
 
 class AdaptiveRetrievalState(TypedDict, total=False):
@@ -11,7 +11,11 @@ class AdaptiveRetrievalState(TypedDict, total=False):
     selected_file_ids: List[str]
     current_query: str
     classified_query: str
+    planner_result: Dict[str, Any]
+    route_reason: str
     rewrite_count: int
+    missing_concept_retry_count: int
+    grading_failed: bool
     candidate_documents: List[Dict[str, Any]]
     filtered_documents: List[Dict[str, Any]]
     retrieval_mode_summary: Dict[str, Any]

@@ -1,11 +1,17 @@
 from contextlib import contextmanager
+from threading import Lock
 from typing import Any, Callable
 
 import psycopg2
 import psycopg2.extras
+import psycopg2.pool
 
 from app.config import get_settings
 from app.services.pg.rls_context import get_current_rls_user
+
+
+_pool = None
+_pool_lock = Lock()
 
 
 def set_rls_user(cur, user_id: str | None) -> None:
@@ -14,19 +20,75 @@ def set_rls_user(cur, user_id: str | None) -> None:
         cur.execute("SELECT set_config('app.user_id', %s, true)", (str(user_id),))
 
 
+def initialize_pool(settings=None):
+    """Create the process-wide thread-safe PostgreSQL connection pool."""
+    global _pool
+
+    settings = settings or get_settings()
+    min_size = int(getattr(settings, "pg_pool_min_size", 1))
+    max_size = int(getattr(settings, "pg_pool_max_size", 10))
+    if min_size < 1 or max_size < min_size:
+        raise ValueError("pg_pool_min_size must be >= 1 and <= pg_pool_max_size")
+
+    with _pool_lock:
+        if _pool is None:
+            _pool = psycopg2.pool.ThreadedConnectionPool(
+                min_size,
+                max_size,
+                settings.pg_dsn,
+                cursor_factory=psycopg2.extras.RealDictCursor,
+                application_name="pg_service",
+                keepalives=1,
+                keepalives_idle=30,
+                keepalives_interval=10,
+                keepalives_count=5,
+            )
+        return _pool
+
+
+def close_pool() -> None:
+    """Close all pooled connections and make the pool available for reinitialization."""
+    global _pool
+
+    with _pool_lock:
+        pool = _pool
+        _pool = None
+    if pool is not None:
+        pool.closeall()
+
+
+def _get_pool():
+    with _pool_lock:
+        pool = _pool
+    return pool or initialize_pool()
+
+
+@contextmanager
 def _get_conn(user_id: str | None = None):
-    settings = get_settings()
-    conn = psycopg2.connect(
-        settings.pg_dsn,
-        cursor_factory=psycopg2.extras.RealDictCursor,
-        application_name="pg_service",
-        keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=5,
-    )
-    rls_user_id = str(user_id) if user_id else get_current_rls_user()
-    if rls_user_id:
-        with conn.cursor() as cur:
-            set_rls_user(cur, rls_user_id)
-    return conn
+    """Borrow one connection, bind RLS for the transaction, then return it safely."""
+    pool = _get_pool()
+    conn = pool.getconn()
+    reusable = True
+    try:
+        # A previous user must never leak an open transaction into this request.
+        conn.rollback()
+        rls_user_id = str(user_id) if user_id else get_current_rls_user()
+        if rls_user_id:
+            with conn.cursor() as cur:
+                set_rls_user(cur, rls_user_id)
+
+        yield conn
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            reusable = False
+        raise
+    finally:
+        if getattr(conn, "closed", 0):
+            reusable = False
+        pool.putconn(conn, close=not reusable)
 
 
 @contextmanager

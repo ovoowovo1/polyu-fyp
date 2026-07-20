@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from llama_index.core.schema import NodeWithScore
 
-from app.services.rag.citation_types import EvidenceCitation
+from app.services.rag.citation.types import EvidenceCitation
 
 INLINE_CITATION_PATTERN = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 BLOCK_SEPARATOR_PATTERN = re.compile(r"\n\s*\n+")

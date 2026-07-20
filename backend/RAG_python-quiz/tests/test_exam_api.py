@@ -261,19 +261,22 @@ class ExamApiTests(unittest.TestCase):
 
     def test_exam_mutations_invalidate_cache_namespaces(self):
         with patch("app.services.assessment.exam_workflow_service.run_exam_generation_with_pdf", AsyncMock(return_value=make_exam_response())), patch(
-            "app.routers.exam.redis_cache.invalidate_namespaces"
+            "app.routers.exam.redis_cache.invalidate_namespaces",
+            new_callable=AsyncMock,
         ) as generate_invalidate:
             self.client.post("/exam/generate", json={"file_ids": ["file-1"]})
         generate_invalidate.assert_called_with("exam:list", "exam:detail:exam-1")
 
         with patch("app.services.assessment.exam_workflow_service.run_exam_generation", AsyncMock(return_value={"exam_id": "exam-2"})), patch(
-            "app.routers.exam.redis_cache.invalidate_namespaces"
+            "app.routers.exam.redis_cache.invalidate_namespaces",
+            new_callable=AsyncMock,
         ) as questions_invalidate:
             self.client.post("/exam/generate-questions-only", json={"file_ids": ["file-1"]})
         questions_invalidate.assert_called_with("exam:list", "exam:detail:exam-2")
 
         with patch("app.services.assessment.exam_workflow_service.generate_exam_pdf", AsyncMock(return_value="/tmp/exam-1.pdf")), patch(
-            "app.routers.exam.redis_cache.invalidate_namespaces"
+            "app.routers.exam.redis_cache.invalidate_namespaces",
+            new_callable=AsyncMock,
         ) as pdf_invalidate:
             self.client.post(
                 "/exam/exam-1/regenerate-pdf",
@@ -282,19 +285,22 @@ class ExamApiTests(unittest.TestCase):
         pdf_invalidate.assert_called_with("exam:detail:exam-1")
 
         with patch("app.routers.exam.update_exam_record", return_value={"id": "exam-1"}), patch(
-            "app.routers.exam.redis_cache.invalidate_namespaces"
+            "app.routers.exam.redis_cache.invalidate_namespaces",
+            new_callable=AsyncMock,
         ) as update_invalidate:
             self.client.put("/exam/exam-1", json={"title": "Updated"})
         update_invalidate.assert_called_with("exam:list", "exam:detail:exam-1")
 
         with patch("app.routers.exam.delete_exam_record", return_value={"message": "deleted"}), patch(
-            "app.routers.exam.redis_cache.invalidate_namespaces"
+            "app.routers.exam.redis_cache.invalidate_namespaces",
+            new_callable=AsyncMock,
         ) as delete_invalidate:
             self.client.delete("/exam/exam-1")
         delete_invalidate.assert_called_with("exam:list", "exam:detail:exam-1")
 
         with patch("app.routers.exam.publish_exam_record", return_value={"id": "exam-1", "is_published": True}), patch(
-            "app.routers.exam.redis_cache.invalidate_namespaces"
+            "app.routers.exam.redis_cache.invalidate_namespaces",
+            new_callable=AsyncMock,
         ) as publish_invalidate:
             self.client.post("/exam/exam-1/publish", json={"is_published": True})
         publish_invalidate.assert_called_with("exam:list", "exam:detail:exam-1")

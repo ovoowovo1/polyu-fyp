@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Awaitable, Callable, Dict, List, Sequence
 
-from app.services.rag.retrieval_intent import QuerySearchSpec
+from app.services.rag.retrieval.intent import QuerySearchSpec
 
 EventCallback = Callable[[str, Any, str], Awaitable[None]]
 EmitFunc = Callable[[EventCallback, str, Any, str], Awaitable[None]]

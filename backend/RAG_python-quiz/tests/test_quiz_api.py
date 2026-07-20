@@ -460,17 +460,17 @@ class QuizApiTests(unittest.TestCase):
     def test_quiz_mutations_invalidate_cache_namespaces(self):
         payload = {"questions": [make_question().model_dump()], "class_id": "class-1"}
         self.save_quiz.return_value = {"quiz_id": "quiz-1"}
-        with patch("app.routers.quiz.redis_cache.invalidate_namespaces") as invalidate:
+        with patch("app.routers.quiz.redis_cache.invalidate_namespaces", new_callable=AsyncMock) as invalidate:
             self.client.post("/quiz/", json=payload)
         invalidate.assert_called_with("quiz:list", "quiz:detail:quiz-1")
 
         self.update_quiz.return_value = {"quiz_id": "quiz-1"}
-        with patch("app.routers.quiz.redis_cache.invalidate_namespaces") as update_invalidate:
+        with patch("app.routers.quiz.redis_cache.invalidate_namespaces", new_callable=AsyncMock) as update_invalidate:
             self.client.put("/quiz/quiz-1", json={"questions": [make_question().model_dump()]})
         update_invalidate.assert_called_with("quiz:list", "quiz:detail:quiz-1")
 
         self.delete_quiz.return_value = {"message": "deleted"}
-        with patch("app.routers.quiz.redis_cache.invalidate_namespaces") as delete_invalidate:
+        with patch("app.routers.quiz.redis_cache.invalidate_namespaces", new_callable=AsyncMock) as delete_invalidate:
             self.client.delete("/quiz/quiz-1")
         delete_invalidate.assert_called_with("quiz:list", "quiz:detail:quiz-1")
 

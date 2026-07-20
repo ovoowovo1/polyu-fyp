@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     user_agent: str = "RAG-FastAPI"
 
     pg_dsn: str = "postgresql://postgres:password@localhost:5432/postgres"
+    pg_pool_min_size: int = 1
+    pg_pool_max_size: int = 10
 
     jwt_secret_key: str = ""
     auth_cookie_secure: bool = True
@@ -54,7 +56,7 @@ class Settings(BaseSettings):
     redis_cache_enabled: bool = False
     redis_cache_ttl_seconds: int = 300
     rag_embedding_cache_enabled: bool = True
-    rag_retrieval_cache_enabled: bool = True
+    rag_retrieval_cache_enabled: bool = False
     rag_embedding_cache_ttl_seconds: int = 3600
     rag_retrieval_cache_ttl_seconds: int = 300
 

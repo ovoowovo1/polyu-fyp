@@ -5,8 +5,8 @@ from typing import Any, Sequence
 from llama_index.core.schema import NodeWithScore
 
 from app.logger import get_logger
-from app.services.rag.citation_markdown import normalize_markdown_answer, strip_inline_citations
-from app.services.rag.citation_prompts import build_markdown_synthesis_prompt
+from app.services.rag.citation.markdown import normalize_markdown_answer, strip_inline_citations
+from app.services.rag.citation.prompts import build_markdown_synthesis_prompt
 
 logger = get_logger(__name__)
 

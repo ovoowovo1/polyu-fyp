@@ -72,7 +72,9 @@ class FilesPgApiTests(unittest.TestCase):
         with patch(
             "app.routers.files_pg.delete_file_record",
             return_value={"message": "Deleted", "deletedFile": {"id": "file-1"}},
-        ), patch("app.routers.files_pg.redis_cache.invalidate_namespaces") as invalidate:
+        ), patch(
+            "app.routers.files_pg.redis_cache.invalidate_namespaces", new_callable=AsyncMock
+        ) as invalidate:
             response = self.client.delete("/files/file-1")
 
         self.assertEqual(response.status_code, 200)
@@ -136,7 +138,9 @@ class FilesPgApiTests(unittest.TestCase):
         with patch(
             "app.routers.files_pg.rename_file_record",
             return_value={"message": "Renamed", "renamedFile": {"id": "file-1", "name": "new.pdf"}},
-        ), patch("app.routers.files_pg.redis_cache.invalidate_namespaces") as invalidate:
+        ), patch(
+            "app.routers.files_pg.redis_cache.invalidate_namespaces", new_callable=AsyncMock
+        ) as invalidate:
             response = self.client.put("/files/file-1", params={"new_name": "new.pdf"})
 
         self.assertEqual(response.status_code, 200)

@@ -25,6 +25,7 @@ class EmbeddingBackfillServiceTests(unittest.IsolatedAsyncioTestCase):
             AsyncMock(return_value=[[1.0], [2.0]]),
         ) as embed_texts, patch(
             "app.services.documents.embedding_backfill_service.pg_service.update_chunk_embeddings",
+            new_callable=AsyncMock,
             return_value=2,
         ) as update_embeddings:
             summary = await embedding_backfill_service.backfill_embedding_column(batch_size=2)
@@ -54,6 +55,7 @@ class EmbeddingBackfillServiceTests(unittest.IsolatedAsyncioTestCase):
             AsyncMock(return_value=[[1.0]]),
         ), patch(
             "app.services.documents.embedding_backfill_service.pg_service.update_chunk_embeddings",
+            new_callable=AsyncMock,
             return_value=1,
         ):
             summary = await embedding_backfill_service.backfill_embedding_column(batch_size=5, limit=1)

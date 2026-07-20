@@ -55,7 +55,7 @@ async def backfill_embedding_column(
             for index, chunk in enumerate(pending_chunks)
         ]
 
-        updated += pg_service.update_chunk_embeddings(
+        updated += await pg_service.update_chunk_embeddings(
             payload,
             embedding_column=embedding_column,
         )

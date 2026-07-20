@@ -4,7 +4,7 @@ import logging
 import re
 from typing import Any, Awaitable, Callable, Dict, List, Optional, TypedDict
 
-from app.services.rag.rag_shared import normalize_concepts
+from app.services.rag.shared.helpers import normalize_concepts
 
 logger = logging.getLogger(__name__)
 
@@ -68,35 +68,74 @@ def build_query_intent_schema() -> Dict[str, Any]:
     }
 
 
+
 def build_query_intent_prompt(question: str) -> str:
     return f"""
-You are the multilingual intent classifier and retrieval planner for a course-document RAG system.
+You are a multilingual intent classifier and retrieval planner for a course-document RAG system.
 
-Understand Traditional Chinese, natural Cantonese-style wording, English, and mixed Chinese-English technical questions.
-Classify the user's retrieval intent and produce a complete search plan. Do not answer the question.
+You understand Traditional Chinese, natural Cantonese-style wording, English,
+and mixed Chinese-English technical questions.
 
-Intent rules:
-- single: the question asks about one topic or does not require separate concept searches.
-- definition_multi: the question asks to explain or define two or more separate concepts.
-- comparison: the question compares two or more concepts, including natural forms such as:
-  - "SQL \u540c NoSQL \u6709\u5481\u5206\u5225\uff1f"
-  - "SQL \u548c NoSQL \u54ea\u500b\u6bd4\u8f03\u9069\u5408\uff1f"
-  - "\u8acb\u6bd4\u8f03 SQL \u8207 NoSQL"
-  - "What are the trade-offs between SQL and NoSQL?"
+Your task is to classify the user's question and produce a retrieval plan.
+Do not answer the user's question.
 
-Planning rules:
-- Treat intent_type and query_kind as short, extensible semantic labels. Use a useful label for the question instead of following a fixed enum.
-- Examples include comparison, definition_multi, scenario, quantitative, scenario_context, data_context, and formula_support; these are examples, not an exhaustive list.
-- Extract the actual technical concepts as required_concepts; preserve their original names where possible.
-- Do not split a single concept merely because it contains spaces, punctuation, or an English conjunction.
-- Create subqueries for concept-specific support and search_queries for every retrieval query needed.
-- For comparison questions, include comparison context and concept-specific support when useful.
-- For definition questions, include one definition query per concept and a combined definition query when useful.
-- For scenario questions, preserve the case facts, constraints, assumptions, and domain context in the search queries.
-- For quantitative questions, preserve all numbers, units, time ranges, data references, and relevant formulas; use query kinds such as data_context or formula_support when useful.
-- A single retrieval mode may contain multiple search_queries when the question needs different kinds of supporting evidence.
-- Query text may remain in the user's language; preserve important Chinese and English technical terms.
-- Return only JSON matching the supplied schema.
+Classification fields:
+
+1. intent_type
+Identify the primary information need using a short semantic label.
+
+Common labels include:
+- definition
+- comparison
+- explanation
+- application
+- scenario_analysis
+- quantitative
+- procedure
+- troubleshooting
+
+You may use another concise label when none of these accurately describe the question.
+
+2. concept_scope
+- single: the question mainly concerns one technical concept.
+- multiple: the question requires separate evidence about two or more technical concepts.
+
+3. required_concepts
+Extract the actual technical concepts mentioned or implied by the question.
+Preserve their original technical names where possible.
+
+Do not split one concept merely because its name contains spaces,
+punctuation, slashes, hyphens, or conjunctions.
+
+Retrieval planning rules:
+
+- Create subqueries for independently retrievable concepts or evidence needs.
+- Include every retrieval query in search_queries.
+- Each search query must have a concise query_kind describing its purpose.
+- Use clear query_kind labels such as scenario_context or formula_support when
+  the question requires case facts or quantitative/formula evidence.
+- Preserve important terminology from the user's original language.
+- Do not introduce concepts that are not needed to answer the question.
+
+For comparison questions:
+- retrieve concept-specific evidence for each compared concept;
+- retrieve direct comparison, differences, trade-offs, or selection criteria;
+- do not rely only on documents that mention both terms without comparing them.
+
+For multi-concept definition questions:
+- retrieve definition evidence for each concept separately;
+- add a combined query only when their relationship is relevant.
+
+For scenario or application questions:
+- preserve relevant case facts, constraints, assumptions, goals,
+  and domain context in the search queries.
+
+For quantitative questions:
+- preserve all numbers, units, time ranges, variables, and referenced data;
+- retrieve formula, method, and data context separately when necessary.
+
+Return only valid JSON matching the supplied schema.
+Do not include Markdown, explanations, or an answer to the question.
 
 User question:
 <question>

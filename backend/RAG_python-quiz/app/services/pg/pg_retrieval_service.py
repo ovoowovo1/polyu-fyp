@@ -71,6 +71,13 @@ def retrieve_graph_context(
     )
 
 
+def retrieve_context_by_chunk_ids(cached_rows: list[dict]) -> list[dict]:
+    return pg_retrieval_vectors.retrieve_context_by_chunk_ids(
+        get_conn=_get_conn,
+        cached_rows=cached_rows,
+    )
+
+
 def get_chunks_missing_embeddings(
     *,
     embedding_column: str = "embedding_v2",
@@ -83,7 +90,7 @@ def get_chunks_missing_embeddings(
     )
 
 
-def update_chunk_embeddings(
+async def update_chunk_embeddings(
     chunk_vectors: List[Dict[str, Any]],
     *,
     embedding_column: str = "embedding_v2",
@@ -95,7 +102,7 @@ def update_chunk_embeddings(
         embedding_column=embedding_column,
     )
     if updated:
-        redis_cache.invalidate_namespaces(studio_cache.rag_retrieval_namespace())
+        await redis_cache.invalidate_namespaces(studio_cache.rag_retrieval_namespace())
     return updated
 
 

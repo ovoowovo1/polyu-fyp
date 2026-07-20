@@ -57,12 +57,17 @@ class FakeCursor:
 class FakeConnection:
     cursor_obj: FakeCursor
     committed: bool = False
+    rolled_back: bool = False
+    closed: int = 0
 
     def cursor(self, *args, **kwargs):
         return self.cursor_obj
 
     def commit(self):
         self.committed = True
+
+    def rollback(self):
+        self.rolled_back = True
 
     def __enter__(self):
         return self
@@ -224,12 +229,14 @@ def make_settings(**overrides):
         "redis_cache_enabled": False,
         "redis_cache_ttl_seconds": 300,
         "rag_embedding_cache_enabled": True,
-        "rag_retrieval_cache_enabled": True,
+        "rag_retrieval_cache_enabled": False,
         "rag_embedding_cache_ttl_seconds": 3600,
         "rag_retrieval_cache_ttl_seconds": 300,
         "cors_origins": ["*"],
         "port": 3000,
         "pg_dsn": "",
+        "pg_pool_min_size": 1,
+        "pg_pool_max_size": 10,
     }
     settings.update(overrides)
     return SimpleNamespace(**settings)

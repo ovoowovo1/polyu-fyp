@@ -43,8 +43,8 @@ VALUES (:'chunk_id', 'image/png', decode('aW1hZ2U=', 'base64'));
 
 SELECT EXISTS (
     SELECT 1 FROM public.chunk_media WHERE chunk_id = :'chunk_id'::uuid
-) AS teacher_can_read_chunk_media \gset
-
+) AS teacher_can_read_chunk_media
+\gset
 \if :teacher_can_read_chunk_media
 \else
     \echo 'teacher could not read inserted chunk media'
@@ -54,8 +54,8 @@ SELECT EXISTS (
 SET LOCAL app.user_id = '00000000-0000-0000-0000-000000000082';
 SELECT EXISTS (
     SELECT 1 FROM public.chunk_media WHERE chunk_id = :'chunk_id'::uuid
-) AS student_can_read_chunk_media \gset
-
+) AS student_can_read_chunk_media
+\gset
 \if :student_can_read_chunk_media
     \echo 'student could read teacher chunk media'
     \quit 1

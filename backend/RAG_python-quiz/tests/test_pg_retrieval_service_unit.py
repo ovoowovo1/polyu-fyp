@@ -1,8 +1,10 @@
-from unittest.mock import patch
+import asyncio
+from unittest.mock import AsyncMock, patch
 from types import SimpleNamespace
 
 from app.services.pg import pg_retrieval_service as pg_service
 from app.services.pg import pg_retrieval_documents
+from app.services.pg import pg_retrieval_keywords
 from app.services.pg import pg_shared
 from tests.pg_service_test_support import PgServiceBase
 from tests.support import FakeConnection, FakeCursor, make_settings
@@ -297,17 +299,23 @@ class PgRetrievalServiceTests(PgServiceBase):
             result = pg_service.get_chunks_missing_embeddings(limit=2)
         self.assertEqual(result, [{"id": "chunk-1", "text": "A"}])
 
-        with patch("app.services.pg.pg_retrieval_service.redis_cache.invalidate_namespaces") as invalidate:
-            self.assertEqual(pg_service.update_chunk_embeddings([]), 0)
+        with patch(
+            "app.services.pg.pg_retrieval_service.redis_cache.invalidate_namespaces",
+            new_callable=AsyncMock,
+        ) as invalidate:
+            self.assertEqual(asyncio.run(pg_service.update_chunk_embeddings([])), 0)
         invalidate.assert_not_called()
 
         cursor = FakeCursor()
         with self.patch_conn(cursor), patch(
             "app.services.pg.pg_retrieval_service.psycopg2.extras.execute_values"
         ) as execute_values, patch(
-            "app.services.pg.pg_retrieval_service.redis_cache.invalidate_namespaces"
+            "app.services.pg.pg_retrieval_service.redis_cache.invalidate_namespaces",
+            new_callable=AsyncMock,
         ) as invalidate:
-            updated = pg_service.update_chunk_embeddings([{"id": "chunk-1", "embedding": [0.9]}])
+            updated = asyncio.run(
+                pg_service.update_chunk_embeddings([{"id": "chunk-1", "embedding": [0.9]}])
+            )
         self.assertEqual(updated, 1)
         self.assertEqual(execute_values.call_args.args[2], [("chunk-1", "[0.90000000]")])
         invalidate.assert_called_once_with("rag:retrieval")
@@ -331,6 +339,47 @@ class PgRetrievalServiceTests(PgServiceBase):
         self.assertIn("ANY", cursor.executed[1][0])
         self.assertIn("JOIN public.documents AS d ON d.id = c.document_id", cursor.executed[0][0])
         self.assertNotIn("NULL::text AS source", cursor.executed[0][0])
+
+    def test_pg_search_sanitizes_source_code_and_preserves_search_terms(self):
+        raw_query = 'app.get("/admin/report", async (req, res) => { SQL Injection project-level access control }'
+
+        sanitized = pg_retrieval_keywords.sanitize_query_for_bm25(raw_query)
+
+        self.assertEqual(
+            sanitized,
+            "app get admin report async req res SQL Injection project level access control",
+        )
+        self.assertNotRegex(sanitized, r'[(){}"/:>-]')
+        self.assertIn("SQL", sanitized)
+        self.assertIn("Injection", sanitized)
+        self.assertIn("project", sanitized)
+        self.assertIn("access", sanitized)
+
+        _, params = pg_retrieval_keywords.build_keyword_query("pg_search", raw_query)
+        self.assertEqual(params, [sanitized])
+
+    def test_pg_search_uses_safe_fallback_for_empty_query(self):
+        _, params = pg_retrieval_keywords.build_keyword_query("pg_search", "(){}[]:;")
+        self.assertEqual(params, ["query"])
+
+    def test_pg_search_retrieval_passes_sanitized_query_to_database(self):
+        cursor = FakeCursor(
+            fetchall_results=[
+                [{"text": "chunk", "score": 0.5, "source": "lesson.pdf", "page_start": 1, "fileid": "file-1", "chunkid": "chunk-1"}],
+            ]
+        )
+        raw_query = 'text:(app.get("/admin/report"))'
+
+        with self.patch_conn(cursor):
+            result = pg_service.retrieve_context_by_keywords(raw_query, selected_file_ids=["file-1"], k=3)
+
+        self.assertEqual(result[0]["chunkId"], "chunk-1")
+        self.assertEqual(cursor.executed[0][1], ["text app get admin report", ["file-1"], 3])
+
+    def test_evaluation_reuses_production_bm25_sanitizer(self):
+        from evaluation.retrieval_compare import sanitize_query_for_bm25
+
+        self.assertIs(sanitize_query_for_bm25, pg_retrieval_keywords.sanitize_query_for_bm25)
 
     def test_retrieve_context_by_keywords_can_use_postgres_fulltext_backend(self):
         cursor = FakeCursor(

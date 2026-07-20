@@ -1,8 +1,9 @@
+import asyncio
 import runpy
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -46,6 +47,30 @@ class MainAppTests(unittest.TestCase):
     def test_validate_startup_settings_rejects_placeholder_jwt_secret(self):
         with self.assertRaisesRegex(RuntimeError, "JWT_SECRET_KEY must be configured"):
             main._validate_startup_settings(make_settings(jwt_secret_key="123456789"))
+
+    def test_app_lifespan_initializes_and_closes_runtime_clients(self):
+        app = FastAPI()
+        settings = make_settings()
+        app.state.settings = settings
+
+        with patch("main._validate_startup_settings") as validate, patch(
+            "main.pg_db.initialize_pool"
+        ) as initialize_pool, patch("main.pg_db.close_pool") as close_pool, patch(
+            "main.redis_cache.initialize_client", new_callable=AsyncMock
+        ) as initialize_redis, patch(
+            "main.redis_cache.close_client", new_callable=AsyncMock
+        ) as close_redis:
+            async def run_lifespan():
+                async with main._app_lifespan(app):
+                    pass
+
+            asyncio.run(run_lifespan())
+
+        validate.assert_called_once_with(settings)
+        initialize_pool.assert_called_once_with(settings)
+        initialize_redis.assert_awaited_once_with(settings)
+        close_redis.assert_awaited_once()
+        close_pool.assert_called_once()
 
     def test_create_app_mounts_static_and_registers_routes(self):
         settings = make_settings(cors_origins=["http://localhost:5173"])

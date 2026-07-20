@@ -8,7 +8,6 @@ environment. Live provider keys must not be committed to source files.
 
 import asyncio
 import os
-import re
 import sys
 from typing import Any, Dict, List
 
@@ -17,7 +16,8 @@ from openai import OpenAI
 # Keep the evaluation script runnable when executed directly from this folder.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.services import pg_service
+from app.services.pg import pg_retrieval_service as pg_service
+from app.services.pg.pg_retrieval_keywords import sanitize_query_for_bm25
 from app.utils.dev_credentials import get_eval_embedding_credentials
 
 
@@ -55,15 +55,6 @@ async def vector_only_search(
         k,
         selected_file_ids,
     )
-
-
-def sanitize_query_for_bm25(query: str) -> str:
-    """Remove BM25 syntax characters that can break ParadeDB parsing."""
-
-    special_chars = r'[`~!@#$%^&*()+=\[\]{}|\\:;"\'<>,?/]'
-    cleaned = re.sub(special_chars, " ", query)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    return cleaned or "query"
 
 
 async def fulltext_only_search(

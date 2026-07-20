@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from app.services.rag import adaptive_rag_service
+from app.services.rag.orchestration import routing as adaptive_rag_routing
+from app.services.rag import index as adaptive_rag_service
 from tests.support import EventRecorder
 
 
@@ -24,8 +25,17 @@ def single_query_intent(question="question"):
 
 async def collect_stream(question, selected_file_ids):
     with patch(
-        "app.services.rag.adaptive_rag_service.classify_query_intent",
+        "app.services.rag.index.classify_query_intent",
         AsyncMock(return_value=single_query_intent(question)),
+    ), patch(
+        "app.services.rag.index.plan_question",
+        AsyncMock(
+            return_value={
+                "decision": "retrieve",
+                "reason": "test planner",
+                "query_intent": single_query_intent(question),
+            }
+        ),
     ):
         return [
             event
@@ -37,7 +47,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_classify_query_intent_delegates_to_llm_planner(self):
         expected = single_query_intent("question")
         with patch(
-            "app.services.rag.adaptive_rag_service.retrieval_intent.classify_query_intent",
+            "app.services.rag.index.retrieval_intent.classify_query_intent",
             AsyncMock(return_value=expected),
         ) as classifier:
             result = await adaptive_rag_service.classify_query_intent("question")
@@ -48,17 +58,44 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             generate_structured_json_func=adaptive_rag_service.generate_structured_json,
         )
 
+    async def test_plan_question_delegates_to_combined_planner(self):
+        expected = {
+            "decision": "retrieve",
+            "reason": "course material",
+            "query_intent": single_query_intent("question"),
+        }
+        with patch(
+            "app.services.rag.index.orchestration_routing.plan_question",
+            AsyncMock(return_value=expected),
+        ) as planner:
+            result = await adaptive_rag_service.plan_question("question")
+
+        self.assertEqual(result, expected)
+        planner.assert_awaited_once_with(
+            "question",
+            generate_structured_json=adaptive_rag_service.generate_structured_json,
+            logger=adaptive_rag_service.logger,
+        )
+
+        fallback = await adaptive_rag_routing.plan_question(
+            "question",
+            generate_structured_json=AsyncMock(return_value="not an object"),
+            logger=adaptive_rag_service.logger,
+        )
+        self.assertEqual(fallback["decision"], "retrieve")
+        self.assertEqual(fallback["reason"], "planner fallback")
+
     async def test_helper_functions_and_node_delegates_work(self):
         recorder = EventRecorder()
 
         with patch(
-            "app.services.rag.adaptive_rag_service.adaptive_retrieval_service.retrieve_documents_node",
+            "app.services.rag.index.retrieval_service.retrieve_documents_node",
             AsyncMock(return_value={"step": "retrieve"}),
         ) as retrieve_documents_node, patch(
-            "app.services.rag.adaptive_rag_service.adaptive_retrieval_service.grade_documents_node",
+            "app.services.rag.index.retrieval_service.grade_documents_node",
             AsyncMock(return_value={"step": "grade"}),
         ) as grade_documents_node, patch(
-            "app.services.rag.adaptive_rag_service.adaptive_retrieval_service.rewrite_query_node",
+            "app.services.rag.index.retrieval_service.rewrite_query_node",
             AsyncMock(return_value={"step": "rewrite"}),
         ) as rewrite_query_node:
             self.assertEqual(
@@ -95,7 +132,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
         recorder = EventRecorder()
 
         with patch(
-            "app.services.rag.adaptive_rag_service.citation_evidence_service.generate_citation_evidence",
+            "app.services.rag.index.citation_service.generate_citation_evidence",
             AsyncMock(
                 return_value={
                     "answer_text": "## CAP Theorem\nCAP theorem is a trade-off [1].",
@@ -194,19 +231,41 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
         recorder = EventRecorder()
 
         with patch(
-            "app.services.rag.adaptive_rag_service.generate_structured_json",
-            AsyncMock(return_value={"decision": "reject", "reason": "out of scope"}),
-        ):
+            "app.services.rag.index.generate_structured_json",
+            AsyncMock(
+                return_value={
+                    "decision": "reject",
+                    "reason": "out of scope",
+                    "query_intent": {
+                        "mode": "single",
+                        "intent_type": "single",
+                        "required_concepts": [],
+                        "subqueries": [],
+                        "search_queries": [
+                            {
+                                "label": "original question",
+                                "query": "weather today",
+                                "concept": None,
+                                "query_kind": "original",
+                            }
+                        ],
+                    },
+                }
+            ),
+        ) as planner:
             routed = await adaptive_rag_service.route_question_node(
                 {"question": "weather today", "selected_file_ids": ["file-1"]},
                 recorder.emit,
             )
 
         self.assertEqual(routed["route_decision"], "reject")
+        self.assertEqual(routed["route_reason"], "out of scope")
+        self.assertEqual(routed["query_intent"]["intent_type"], "single")
+        planner.assert_awaited_once()
         self.assertEqual(recorder.events[0][2], "router")
 
         with patch(
-            "app.services.rag.adaptive_rag_service.generate_structured_json",
+            "app.services.rag.index.generate_structured_json",
             AsyncMock(side_effect=RuntimeError("boom")),
         ):
             fallback_route = await adaptive_rag_service.route_question_node(
@@ -216,6 +275,81 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(fallback_route["route_decision"], "retrieve")
 
+        self.assertEqual(adaptive_rag_routing.build_route_schema()["properties"]["decision"]["enum"], ["retrieve", "reject"])
+        self.assertIn("course documents", adaptive_rag_routing.build_route_prompt("course documents"))
+
+        malformed_intent = single_query_intent("weather today")
+        for malformed_plan in (
+            {"decision": "invalid", "reason": "bad", "query_intent": malformed_intent},
+            {"decision": "retrieve", "reason": "", "query_intent": malformed_intent},
+        ):
+            with patch(
+                "app.services.rag.index.generate_structured_json",
+                AsyncMock(return_value=malformed_plan),
+            ):
+                malformed_route = await adaptive_rag_service.route_question_node(
+                    {"question": "course notes", "selected_file_ids": ["file-1"]},
+                    recorder.emit,
+                )
+            self.assertEqual(malformed_route["route_decision"], "retrieve")
+            self.assertEqual(malformed_route["route_reason"], "planner fallback")
+
+        existing_plan = {
+            "decision": "retrieve",
+            "reason": "already planned",
+            "query_intent": single_query_intent("course notes"),
+        }
+        with patch(
+            "app.services.rag.index.generate_structured_json",
+            AsyncMock(side_effect=AssertionError("route must not call planner twice")),
+        ) as unexpected_planner:
+            existing_plan_route = await adaptive_rag_service.route_question_node(
+                {
+                    "question": "course notes",
+                    "selected_file_ids": ["file-1"],
+                    "planner_result": existing_plan,
+                },
+                recorder.emit,
+            )
+        self.assertEqual(existing_plan_route["route_reason"], "already planned")
+        unexpected_planner.assert_not_awaited()
+
+        with patch(
+            "app.services.rag.index.generate_structured_json",
+            AsyncMock(return_value={"decision": "retrieve", "reason": "ok", "query_intent": single_query_intent()}),
+        ):
+            malformed_state_route = await adaptive_rag_service.route_question_node(
+                {
+                    "question": "course notes",
+                    "selected_file_ids": ["file-1"],
+                    "planner_result": {"decision": "invalid"},
+                },
+                recorder.emit,
+            )
+        self.assertEqual(malformed_state_route["route_reason"], "planner fallback")
+
+        for invalid_planner_state in (
+            {
+                "decision": "invalid",
+                "reason": "bad decision",
+                "query_intent": single_query_intent("course notes"),
+            },
+            {
+                "decision": "retrieve",
+                "reason": "",
+                "query_intent": single_query_intent("course notes"),
+            },
+        ):
+            invalid_route = await adaptive_rag_service.route_question_node(
+                {
+                    "question": "course notes",
+                    "selected_file_ids": ["file-1"],
+                    "planner_result": invalid_planner_state,
+                },
+                recorder.emit,
+            )
+            self.assertEqual(invalid_route["route_reason"], "planner fallback")
+
         missing_answer_state = await adaptive_rag_service.grade_generation_node(
             {"answer": "", "answer_with_citations": [], "filtered_documents": []},
             recorder.emit,
@@ -223,7 +357,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(missing_answer_state["result_reason"], adaptive_rag_service.UNRELIABLE_RESULT_REASON)
 
         with patch(
-            "app.services.rag.adaptive_rag_service.generate_structured_json",
+            "app.services.rag.index.generate_structured_json",
             AsyncMock(return_value={"grounded": "yes", "coverage_status": "full", "reason": "ok"}),
         ):
             citation_only_state = await adaptive_rag_service.grade_generation_node(
@@ -251,7 +385,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             "missing_concepts": [],
         }
         with patch(
-            "app.services.rag.adaptive_rag_service.generate_structured_json",
+            "app.services.rag.index.generate_structured_json",
             AsyncMock(return_value={"grounded": "yes", "coverage_status": "full", "reason": "ok"}),
         ):
             accepted = await adaptive_rag_service.grade_generation_node(accepted_state, recorder.emit)
@@ -267,7 +401,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             "missing_concepts": ["SQL"],
         }
         with patch(
-            "app.services.rag.adaptive_rag_service.generate_structured_json",
+            "app.services.rag.index.generate_structured_json",
             AsyncMock(return_value={"grounded": "yes", "coverage_status": "partial", "reason": "limited but honest"}),
         ):
             partial = await adaptive_rag_service.grade_generation_node(partial_state, recorder.emit)
@@ -283,14 +417,14 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             "missing_concepts": [],
         }
         with patch(
-            "app.services.rag.adaptive_rag_service.generate_structured_json",
+            "app.services.rag.index.generate_structured_json",
             AsyncMock(return_value={"grounded": "no", "coverage_status": "insufficient", "reason": "hallucinated"}),
         ):
             rejected = await adaptive_rag_service.grade_generation_node(rejected_state, recorder.emit)
         self.assertEqual(rejected["result_reason"], adaptive_rag_service.UNRELIABLE_RESULT_REASON)
 
         with patch(
-            "app.services.rag.adaptive_rag_service.generate_structured_json",
+            "app.services.rag.index.generate_structured_json",
             AsyncMock(side_effect=RuntimeError("grader unavailable")),
         ):
             accepted_on_error = await adaptive_rag_service.grade_generation_node(
@@ -364,17 +498,17 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             await emit("graded answer", 1, "grader")
             return state
 
-        with patch("app.services.rag.adaptive_rag_service.route_question_node", fake_route), patch(
-            "app.services.rag.adaptive_rag_service.retrieve_documents_node",
+        with patch("app.services.rag.index.route_question_node", fake_route), patch(
+            "app.services.rag.index.retrieve_documents_node",
             fake_retrieve,
         ), patch(
-            "app.services.rag.adaptive_rag_service.grade_documents_node",
+            "app.services.rag.index.grade_documents_node",
             fake_grade_docs,
         ), patch(
-            "app.services.rag.adaptive_rag_service.generate_answer_node",
+            "app.services.rag.index.generate_answer_node",
             fake_generate,
         ), patch(
-            "app.services.rag.adaptive_rag_service.grade_generation_node",
+            "app.services.rag.index.grade_generation_node",
             fake_grade_generation,
         ):
             events = await collect_stream("question", ["file-1"])
@@ -398,7 +532,7 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             state["route_decision"] = "reject"
             return state
 
-        with patch("app.services.rag.adaptive_rag_service.route_question_node", reject_route):
+        with patch("app.services.rag.index.route_question_node", reject_route):
             reject_events = await collect_stream("question", ["file-1"])
         self.assertEqual(reject_events[-1]["answer"], adaptive_rag_service.OUT_OF_SCOPE_ANSWER)
 
@@ -429,17 +563,17 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             state["generation_retry_count"] = adaptive_rag_service.MAX_GENERATION_RETRIES
             return state
 
-        with patch("app.services.rag.adaptive_rag_service.route_question_node", retry_route), patch(
-            "app.services.rag.adaptive_rag_service.retrieve_documents_node",
+        with patch("app.services.rag.index.route_question_node", retry_route), patch(
+            "app.services.rag.index.retrieve_documents_node",
             retry_retrieve,
         ), patch(
-            "app.services.rag.adaptive_rag_service.grade_documents_node",
+            "app.services.rag.index.grade_documents_node",
             retry_grade_docs,
         ), patch(
-            "app.services.rag.adaptive_rag_service.generate_answer_node",
+            "app.services.rag.index.generate_answer_node",
             retry_generate,
         ), patch(
-            "app.services.rag.adaptive_rag_service.grade_generation_node",
+            "app.services.rag.index.grade_generation_node",
             retry_grade_generation,
         ):
             retry_events = await collect_stream("question", ["file-1"])
@@ -451,11 +585,11 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             state["rewrite_count"] = adaptive_rag_service.MAX_REWRITE_ATTEMPTS
             return state
 
-        with patch("app.services.rag.adaptive_rag_service.route_question_node", retry_route), patch(
-            "app.services.rag.adaptive_rag_service.retrieve_documents_node",
+        with patch("app.services.rag.index.route_question_node", retry_route), patch(
+            "app.services.rag.index.retrieve_documents_node",
             rewrite_limit_retrieve,
         ), patch(
-            "app.services.rag.adaptive_rag_service.grade_documents_node",
+            "app.services.rag.index.grade_documents_node",
             retry_grade_docs,
         ):
             rewrite_events = await collect_stream("question", ["file-1"])
@@ -501,20 +635,20 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             state["current_query"] = "rewritten query"
             return state
 
-        with patch("app.services.rag.adaptive_rag_service.route_question_node", retry_route), patch(
-            "app.services.rag.adaptive_rag_service.retrieve_documents_node",
+        with patch("app.services.rag.index.route_question_node", retry_route), patch(
+            "app.services.rag.index.retrieve_documents_node",
             retrieve_after_retry,
         ), patch(
-            "app.services.rag.adaptive_rag_service.grade_documents_node",
+            "app.services.rag.index.grade_documents_node",
             passthrough,
         ), patch(
-            "app.services.rag.adaptive_rag_service.generate_answer_node",
+            "app.services.rag.index.generate_answer_node",
             retry_generate,
         ), patch(
-            "app.services.rag.adaptive_rag_service.grade_generation_node",
+            "app.services.rag.index.grade_generation_node",
             retry_grade_generation,
         ), patch(
-            "app.services.rag.adaptive_rag_service.rewrite_query_node",
+            "app.services.rag.index.rewrite_query_node",
             rewrite_query,
         ):
             events = await collect_stream("question", ["file-1"])
@@ -580,17 +714,17 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
             state["result_reason"] = adaptive_rag_service.PARTIAL_COVERAGE_RESULT_REASON
             return state
 
-        with patch("app.services.rag.adaptive_rag_service.route_question_node", route), patch(
-            "app.services.rag.adaptive_rag_service.retrieve_documents_node",
+        with patch("app.services.rag.index.route_question_node", route), patch(
+            "app.services.rag.index.retrieve_documents_node",
             retrieve,
         ), patch(
-            "app.services.rag.adaptive_rag_service.grade_documents_node",
+            "app.services.rag.index.grade_documents_node",
             grade_docs,
         ), patch(
-            "app.services.rag.adaptive_rag_service.generate_answer_node",
+            "app.services.rag.index.generate_answer_node",
             generate,
         ), patch(
-            "app.services.rag.adaptive_rag_service.grade_generation_node",
+            "app.services.rag.index.grade_generation_node",
             grade_generation,
         ):
             events = await collect_stream("what is SQL and NoSQL", ["file-1"])
@@ -598,3 +732,39 @@ class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(events[-1]["type"], "result")
         self.assertEqual(events[-1]["result_reason"], adaptive_rag_service.PARTIAL_COVERAGE_RESULT_REASON)
         self.assertIn("do not provide enough reliable information about SQL", events[-1]["answer"])
+
+    async def test_run_adaptive_rag_stream_stops_after_failed_targeted_retry(self):
+        async def route(state, emit):
+            del emit
+            state["route_decision"] = "retrieve"
+            state["query_intent"] = {
+                "required_concepts": ["SQL"],
+                "intent_type": "comparison",
+            }
+            return state
+
+        async def retrieve(state, emit):
+            del emit
+            state["filtered_documents"] = []
+            state["missing_concepts"] = ["SQL"]
+            return state
+
+        async def grade(state, emit):
+            await emit("batch grading complete", event_type="grader")
+            return state
+
+        async def retry(state, emit):
+            await emit("targeted retry complete", event_type="retrieval")
+            return state
+
+        with patch("app.services.rag.index.route_question_node", route), patch(
+            "app.services.rag.index.retrieve_documents_node", retrieve
+        ), patch(
+            "app.services.rag.index.grade_documents_node", grade
+        ), patch(
+            "app.services.rag.index.retry_missing_concepts_node", retry
+        ):
+            events = await collect_stream("what is SQL", ["file-1"])
+
+        self.assertEqual(events[-1]["result_reason"], adaptive_rag_service.NO_DOCUMENTS_RESULT_REASON)
+        self.assertIn("targeted retry complete", [event.get("message") for event in events])

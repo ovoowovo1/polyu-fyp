@@ -1,9 +1,25 @@
 # -*- coding: utf-8 -*-
 """Keyword retrieval SQL helpers."""
 
+import re
+
 import psycopg2.extras
 
 from app.services.pg.pg_retrieval_vectors import map_context_row
+
+
+def sanitize_query_for_bm25(query: str) -> str:
+    """Remove BM25 syntax while preserving searchable terms.
+
+    ParadeDB's ``@@@`` operator parses the parameter as a query expression,
+    so raw source code and punctuation such as ``text:(...`` can make the
+    entire full-text lookup fail. Keep word characters (including Unicode
+    technical terms), whitespace, and underscores, then normalize spacing.
+    """
+
+    cleaned = re.sub(r"[^\w\s]", " ", query or "", flags=re.UNICODE)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned or "query"
 
 
 def build_keyword_query(backend: str, keywords: str):
@@ -50,7 +66,7 @@ def build_keyword_query(backend: str, keywords: str):
                 JOIN public.documents AS d ON d.id = c.document_id
                 WHERE c.text @@@ %s
             """,
-        [keywords],
+        [sanitize_query_for_bm25(keywords)],
     )
 
 

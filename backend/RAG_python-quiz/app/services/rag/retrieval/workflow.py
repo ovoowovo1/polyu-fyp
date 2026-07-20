@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Awaitable, Callable, Dict, List
 
-from app.services.rag.adaptive_types import AdaptiveRetrievalResult, AdaptiveRetrievalState
+from app.services.rag.retrieval.types import AdaptiveRetrievalResult, AdaptiveRetrievalState
 
 EmitCallback = Callable[[str, Any, str], Awaitable[None]]
 NodeFunc = Callable[..., Awaitable[AdaptiveRetrievalState]]
@@ -63,6 +63,9 @@ def build_initial_state(
         "missing_concepts": [],
         "retrieval_mode_summary": empty_retrieval_mode_summary(),
         "vector_retrieval_degraded": False,
+        "route_reason": "",
+        "missing_concept_retry_count": 0,
+        "grading_failed": False,
     }
 
 
@@ -101,6 +104,8 @@ async def run_retrieval_loop(
     logger,
     retrieve_documents_node: NodeFunc,
     grade_documents_node: NodeFunc,
+    retry_missing_concepts_node: NodeFunc,
+    max_missing_concept_retries: int,
     rewrite_query_node: NodeFunc,
 ) -> AdaptiveRetrievalResult:
     while True:
@@ -117,6 +122,22 @@ async def run_retrieval_loop(
             log_prefix=log_prefix,
         )
 
+        if (
+            state.get("missing_concepts")
+            and state.get("missing_concept_retry_count", 0) < max_missing_concept_retries
+        ):
+            state["missing_concept_retry_count"] = state.get("missing_concept_retry_count", 0) + 1
+            state = await retry_missing_concepts_node(
+                state,
+                emit_callback,
+                log_prefix=log_prefix,
+            )
+            state = await grade_documents_node(
+                state,
+                emit_callback,
+                log_prefix=log_prefix,
+            )
+
         if state.get("filtered_documents"):
             logger.info(
                 "[%s] run_end success kept_chunks=%s rewrite_count=%s covered_concepts=%s missing_concepts=%s",
@@ -127,6 +148,23 @@ async def run_retrieval_loop(
                 state.get("missing_concepts", []),
             )
             return result_from_state(state, question, initial_intent, fallback_reason=None)
+
+        if (
+            not state.get("filtered_documents")
+            and state.get("missing_concepts")
+            and state.get("missing_concept_retry_count", 0) >= max_missing_concept_retries
+        ):
+            logger.warning(
+                "[%s] run_end targeted_retry_exhausted missing_concepts=%s",
+                log_prefix,
+                state.get("missing_concepts", []),
+            )
+            return result_from_state(
+                state,
+                question,
+                initial_intent,
+                fallback_reason=no_relevant_documents_fallback_reason,
+            )
 
         if state.get("rewrite_count", 0) >= max_rewrite_attempts:
             logger.warning(

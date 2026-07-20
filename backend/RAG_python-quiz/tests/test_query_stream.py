@@ -40,7 +40,7 @@ class QueryStreamRouteTests(unittest.TestCase):
             yield {"type": "result", "question": question, "answer": "ok", "timestamp": "2026-01-01T00:00:01Z"}
 
         with patch(
-            "app.routers.query_stream.adaptive_rag_service.run_adaptive_rag_stream",
+            "app.routers.query_stream.run_adaptive_rag_stream",
             fake_stream,
         ):
             response = self.post_query_stream({"question": "hello", "selectedFileIds": ["file-1"]})

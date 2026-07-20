@@ -5,10 +5,13 @@ from typing import Any, Dict, List
 from app.logger import get_logger
 from app.services.ai.llm.structured_json import generate_structured_json
 from app.services.pg import pg_retrieval_service as pg_service
-from app.services.rag import adaptive_grading, adaptive_rewrite, adaptive_search, retrieval_intent
-from app.services.rag import adaptive_retrieval_workflow
-from app.services.rag.adaptive_types import AdaptiveRetrievalResult, AdaptiveRetrievalState, EventCallback
-from app.services.rag.vector_query_service import is_retryable_embedding_error, retrieve_vector_context
+from app.services.rag.retrieval import grading as adaptive_grading
+from app.services.rag.retrieval import intent as retrieval_intent
+from app.services.rag.retrieval import rewrite as adaptive_rewrite
+from app.services.rag.retrieval import search as adaptive_search
+from app.services.rag.retrieval import workflow as adaptive_retrieval_workflow
+from app.services.rag.retrieval.types import AdaptiveRetrievalResult, AdaptiveRetrievalState, EventCallback
+from app.services.rag.retrieval.vector import is_retryable_embedding_error, retrieve_vector_context
 
 logger = get_logger(__name__)
 
@@ -22,6 +25,7 @@ EMPTY_SELECTION_FALLBACK_REASON = "empty_selection"
 RRF_K = adaptive_search.RRF_K
 MAX_DOC_PREVIEW_CHARS = adaptive_grading.MAX_DOC_PREVIEW_CHARS
 DOCUMENT_GRADING_CONCURRENCY = adaptive_grading.DOCUMENT_GRADING_CONCURRENCY
+SUBQUERY_RETRIEVAL_CONCURRENCY = adaptive_search.SUBQUERY_RETRIEVAL_CONCURRENCY
 RESERVED_CANDIDATES_PER_SUBQUERY = adaptive_search.RESERVED_CANDIDATES_PER_SUBQUERY
 _normalize_doc = adaptive_search.normalize_retrieval_doc
 _reciprocal_rank_fusion = adaptive_search.fuse_ranked_results
@@ -91,6 +95,24 @@ async def rewrite_query_node(
     )
 
 
+async def retry_missing_concepts_node(
+    state: AdaptiveRetrievalState,
+    emit: EventCallback,
+    *,
+    log_prefix: str = "AdaptiveRetrieval",
+) -> AdaptiveRetrievalState:
+    return await adaptive_search.retry_missing_concepts_node(
+        state,
+        emit,
+        retrieval_k=RETRIEVAL_K,
+        max_docs_to_grade=MAX_DOCS_TO_GRADE,
+        log_prefix=log_prefix,
+        retrieve_vector_context_func=retrieve_vector_context,
+        retrieve_context_by_keywords_func=pg_service.retrieve_context_by_keywords,
+        is_retryable_embedding_error_func=is_retryable_embedding_error,
+    )
+
+
 async def run_adaptive_retrieval(
     question: str,
     selected_file_ids: List[str],
@@ -135,6 +157,8 @@ async def run_adaptive_retrieval(
         logger=logger,
         retrieve_documents_node=retrieve_documents_node,
         grade_documents_node=grade_documents_node,
+        retry_missing_concepts_node=retry_missing_concepts_node,
+        max_missing_concept_retries=1,
         rewrite_query_node=rewrite_query_node,
     )
 

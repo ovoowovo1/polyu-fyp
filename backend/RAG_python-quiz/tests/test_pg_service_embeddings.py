@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import patch
 import unittest
 
@@ -97,6 +98,55 @@ class PgServiceEmbeddingColumnTests(unittest.TestCase):
         self.assertNotIn("IS NOT NULL", sql)
         self.assertIn("ORDER BY c.embedding <=> %s::vector", sql)
 
+    def test_retrieve_context_by_chunk_ids_preserves_cached_order_and_score(self):
+        cursor = FakeCursor(
+            fetchall_results=[
+                [
+                    {
+                        "text": "second",
+                        "source": "doc.pdf",
+                        "page_start": 2,
+                        "fileid": "file-1",
+                        "chunkid": "chunk-2",
+                        "image_data": None,
+                        "image_mimetype": None,
+                    },
+                    {
+                        "text": "first",
+                        "source": "doc.pdf",
+                        "page_start": 1,
+                        "fileid": "file-1",
+                        "chunkid": "chunk-1",
+                        "image_data": None,
+                        "image_mimetype": None,
+                    },
+                ]
+            ]
+        )
+        conn = FakeConnection(cursor)
+
+        with patch("app.services.pg.pg_retrieval_service._get_conn", return_value=conn):
+            rows = pg_service.retrieve_context_by_chunk_ids(
+                [
+                    {"chunkId": "chunk-1", "score": 0.91},
+                    {"chunkId": "chunk-2", "score": 0.82},
+                    {"chunkId": "missing", "score": 0.1},
+                ]
+            )
+
+        self.assertEqual([row["chunkId"] for row in rows], ["chunk-1", "chunk-2"])
+        self.assertEqual([row["score"] for row in rows], [0.91, 0.82])
+        self.assertIn("ANY(%s::uuid[])", cursor.executed[0][0])
+
+    def test_retrieve_context_by_chunk_ids_handles_empty_cache(self):
+        self.assertEqual(
+            pg_retrieval_vectors.retrieve_context_by_chunk_ids(
+                get_conn=lambda: self.fail("database should not be opened"),
+                cached_rows=[],
+            ),
+            [],
+        )
+
     def test_create_graph_from_document_can_insert_primary_and_standby_embeddings(self):
         cursor = FakeCursor(fetchone_results=[{"id": "doc-1"}])
         conn = FakeConnection(cursor)
@@ -131,10 +181,10 @@ class PgServiceEmbeddingColumnTests(unittest.TestCase):
             "app.services.pg.pg_retrieval_service.psycopg2.extras.execute_values",
             side_effect=fake_execute_values,
         ):
-            updated = pg_service.update_chunk_embeddings(
+            updated = asyncio.run(pg_service.update_chunk_embeddings(
                 [{"id": "00000000-0000-0000-0000-000000000001", "embedding": [0.5, 0.6]}],
                 embedding_column="embedding_v2",
-            )
+            ))
 
         self.assertEqual(updated, 1)
         self.assertIn("SET embedding_v2 = payload.embedding::vector", captured["sql"])

@@ -6,7 +6,7 @@ from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from pypdf import PdfWriter
 
@@ -74,15 +74,19 @@ class RuntimeMiscTests(unittest.TestCase):
     def test_pg_db_get_conn_uses_real_dict_cursor_and_settings(self):
         rls_context.clear_current_rls_user()
         settings = make_settings(pg_dsn="postgres://example")
+        conn = FakeConnection(FakeCursor())
+        pool = Mock()
+        pool.getconn.return_value = conn
+        pg_db.close_pool()
         with patch("app.services.pg.pg_db.get_settings", return_value=settings), patch(
-            "app.services.pg.pg_db.psycopg2.connect",
-            return_value="connection",
-        ) as connect:
-            conn = pg_db._get_conn()
+            "app.services.pg.pg_db.psycopg2.pool.ThreadedConnectionPool", return_value=pool
+        ) as pool_cls:
+            with pg_db._get_conn() as borrowed:
+                self.assertIs(borrowed, conn)
 
-        self.assertEqual(conn, "connection")
-        self.assertEqual(connect.call_args.args[0], "postgres://example")
-        self.assertEqual(connect.call_args.kwargs["application_name"], "pg_service")
+        self.assertEqual(pool_cls.call_args.args[:3], (1, 10, "postgres://example"))
+        self.assertEqual(pool_cls.call_args.kwargs["application_name"], "pg_service")
+        pool.putconn.assert_called_once_with(conn, close=False)
 
     def test_pg_db_get_conn_sets_transaction_local_rls_user_when_present(self):
         settings = make_settings(pg_dsn="postgres://example")
@@ -90,11 +94,14 @@ class RuntimeMiscTests(unittest.TestCase):
         conn = FakeConnection(cursor)
         try:
             rls_context.set_current_rls_user("user-1")
+            pg_db.close_pool()
+            pool = Mock()
+            pool.getconn.return_value = conn
             with patch("app.services.pg.pg_db.get_settings", return_value=settings), patch(
-                "app.services.pg.pg_db.psycopg2.connect",
-                return_value=conn,
+                "app.services.pg.pg_db.psycopg2.pool.ThreadedConnectionPool", return_value=pool
             ):
-                self.assertIs(pg_db._get_conn(), conn)
+                with pg_db._get_conn() as borrowed:
+                    self.assertIs(borrowed, conn)
         finally:
             rls_context.clear_current_rls_user()
 
@@ -109,11 +116,14 @@ class RuntimeMiscTests(unittest.TestCase):
         conn = FakeConnection(cursor)
         try:
             rls_context.set_current_rls_user("context-user")
+            pg_db.close_pool()
+            pool = Mock()
+            pool.getconn.return_value = conn
             with patch("app.services.pg.pg_db.get_settings", return_value=settings), patch(
-                "app.services.pg.pg_db.psycopg2.connect",
-                return_value=conn,
+                "app.services.pg.pg_db.psycopg2.pool.ThreadedConnectionPool", return_value=pool
             ):
-                self.assertIs(pg_db._get_conn("request-user"), conn)
+                with pg_db._get_conn("request-user") as borrowed:
+                    self.assertIs(borrowed, conn)
         finally:
             rls_context.clear_current_rls_user()
 
@@ -121,6 +131,73 @@ class RuntimeMiscTests(unittest.TestCase):
             cursor.executed,
             [("SELECT set_config('app.user_id', %s, true)", ("request-user",))],
         )
+
+    def test_pg_db_pool_reuses_initialized_pool_and_closes_it(self):
+        settings = make_settings(pg_dsn="postgres://example")
+        pool = Mock()
+        with patch(
+            "app.services.pg.pg_db.psycopg2.pool.ThreadedConnectionPool", return_value=pool
+        ) as pool_cls:
+            pg_db.close_pool()
+            self.assertIs(pg_db.initialize_pool(settings), pool)
+            self.assertIs(pg_db.initialize_pool(settings), pool)
+            pg_db.close_pool()
+
+        pool_cls.assert_called_once()
+        pool.closeall.assert_called_once()
+
+    def test_pg_db_rejects_invalid_pool_sizes(self):
+        pg_db.close_pool()
+        with self.assertRaises(ValueError):
+            pg_db.initialize_pool(make_settings(pg_pool_min_size=0))
+        with self.assertRaises(ValueError):
+            pg_db.initialize_pool(make_settings(pg_pool_min_size=3, pg_pool_max_size=2))
+
+    def test_pg_db_rolls_back_and_discards_broken_connections(self):
+        settings = make_settings(pg_dsn="postgres://example")
+
+        failed_commit = Mock()
+        failed_commit.closed = 0
+        failed_commit.commit.side_effect = RuntimeError("commit failed")
+        pool = Mock()
+        pool.getconn.return_value = failed_commit
+        with patch("app.services.pg.pg_db.get_settings", return_value=settings), patch(
+            "app.services.pg.pg_db.psycopg2.pool.ThreadedConnectionPool", return_value=pool
+        ):
+            pg_db.close_pool()
+            with self.assertRaisesRegex(RuntimeError, "commit failed"):
+                with pg_db._get_conn():
+                    pass
+        pool.putconn.assert_called_once_with(failed_commit, close=False)
+        self.assertEqual(failed_commit.rollback.call_count, 2)
+
+        failed_rollback = Mock()
+        failed_rollback.closed = 0
+        failed_rollback.rollback.side_effect = RuntimeError("rollback failed")
+        pool = Mock()
+        pool.getconn.return_value = failed_rollback
+        with patch("app.services.pg.pg_db.get_settings", return_value=settings), patch(
+            "app.services.pg.pg_db.psycopg2.pool.ThreadedConnectionPool", return_value=pool
+        ):
+            pg_db.close_pool()
+            with self.assertRaisesRegex(RuntimeError, "rollback failed"):
+                with pg_db._get_conn():
+                    pass
+        pool.putconn.assert_called_once_with(failed_rollback, close=True)
+
+    def test_pg_db_discards_connection_marked_closed(self):
+        settings = make_settings(pg_dsn="postgres://example")
+        conn = Mock()
+        conn.closed = 1
+        pool = Mock()
+        pool.getconn.return_value = conn
+        with patch("app.services.pg.pg_db.get_settings", return_value=settings), patch(
+            "app.services.pg.pg_db.psycopg2.pool.ThreadedConnectionPool", return_value=pool
+        ):
+            pg_db.close_pool()
+            with pg_db._get_conn():
+                pass
+        pool.putconn.assert_called_once_with(conn, close=True)
 
     def test_pg_db_fetch_helpers_execute_and_return_rows(self):
         cursor = FakeCursor(

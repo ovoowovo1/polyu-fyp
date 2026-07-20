@@ -49,7 +49,7 @@ class UploadApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_upload_multiple_returns_200_for_all_success_including_duplicates(self):
-        with patch("app.routers.upload.redis_cache.invalidate_namespaces") as invalidate:
+        with patch("app.routers.upload.redis_cache.invalidate_namespaces", new_callable=AsyncMock) as invalidate:
             response, payload, finished_event = self.upload_multiple(
                 [
                     make_success("file-1", is_new=True, chunks=4),
@@ -74,7 +74,9 @@ class UploadApiTests(unittest.TestCase):
             AsyncMock(),
         ), patch(
             "app.routers.upload.require_class_teacher",
-        ) as require_class_teacher, patch("app.routers.upload.redis_cache.invalidate_namespaces"):
+        ) as require_class_teacher, patch(
+            "app.routers.upload.redis_cache.invalidate_namespaces", new_callable=AsyncMock
+        ):
             response = self.client.post("/upload-multiple?class_id=class-1", files=files)
 
         self.assertEqual(response.status_code, 200)
@@ -85,7 +87,7 @@ class UploadApiTests(unittest.TestCase):
         self.assertEqual(mock_ingest.await_args.kwargs["user_id"], "user-1")
 
     def test_upload_multiple_returns_207_for_partial_success(self):
-        with patch("app.routers.upload.redis_cache.invalidate_namespaces") as invalidate:
+        with patch("app.routers.upload.redis_cache.invalidate_namespaces", new_callable=AsyncMock) as invalidate:
             response, payload, finished_event = self.upload_multiple([make_success("file-1"), make_embedding_error()])
 
         self.assertEqual(response.status_code, 207)
@@ -96,7 +98,7 @@ class UploadApiTests(unittest.TestCase):
         invalidate.assert_called_with("files:list", "rag:retrieval", "files:detail:file-1")
 
     def test_upload_multiple_returns_502_when_all_files_fail(self):
-        with patch("app.routers.upload.redis_cache.invalidate_namespaces") as invalidate:
+        with patch("app.routers.upload.redis_cache.invalidate_namespaces", new_callable=AsyncMock) as invalidate:
             response, payload, finished_event = self.upload_multiple(
                 [
                     make_embedding_error(),
@@ -165,7 +167,8 @@ class UploadApiTests(unittest.TestCase):
         with patch("app.routers.upload.ingest_website", AsyncMock(return_value={"fileId": "site-1"})), patch(
             "app.routers.upload.require_class_teacher",
         ), patch(
-            "app.routers.upload.redis_cache.invalidate_namespaces"
+            "app.routers.upload.redis_cache.invalidate_namespaces",
+            new_callable=AsyncMock,
         ) as invalidate:
             response = self.client.post("/upload-link?class_id=class-1", json={"url": " https://example.com "})
         self.assertEqual(response.status_code, 200)

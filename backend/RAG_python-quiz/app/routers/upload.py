@@ -44,13 +44,13 @@ def _require_upload_permission(user: dict, class_id: str | None) -> None:
         ) from error
 
 
-def _invalidate_uploaded_file_caches(file_ids) -> None:
+async def _invalidate_uploaded_file_caches(file_ids) -> None:
     namespaces = [studio_cache.files_list_namespace(), studio_cache.rag_retrieval_namespace()]
     namespaces.extend(
         studio_cache.file_detail_namespace(file_id)
         for file_id in _unique_string_ids(file_ids)
     )
-    redis_cache.invalidate_namespaces(*namespaces)
+    await redis_cache.invalidate_namespaces(*namespaces)
 
 
 def _unique_string_ids(file_ids) -> list[str]:
@@ -128,7 +128,7 @@ async def upload_multiple(
         )
 
     payload = _upload_batch_payload(results)
-    _invalidate_uploaded_file_caches(_successful_file_ids(payload["results"]))
+    await _invalidate_uploaded_file_caches(_successful_file_ids(payload["results"]))
     await publish_progress(
         clientId,
         _progress_payload(
@@ -184,5 +184,5 @@ async def upload_link(
     except HTTPException as error:
         return upload_helpers.http_exception_response(error)
 
-    _invalidate_uploaded_file_caches([result.get("fileId")])
+    await _invalidate_uploaded_file_caches([result.get("fileId")])
     return upload_helpers.upload_link_payload(result)

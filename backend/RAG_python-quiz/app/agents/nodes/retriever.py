@@ -9,8 +9,8 @@ from typing import Any, Dict, List
 
 from app.logger import get_logger
 from app.services.pg import pg_files_service as pg_service
-from app.services.rag import citation_evidence_service
-from app.services.rag.adaptive_retrieval_service import (
+from app.services.rag.citation import service as citation_evidence_service
+from app.services.rag.retrieval.service import (
     NO_RELEVANT_DOCUMENTS_FALLBACK_REASON,
     run_adaptive_retrieval,
 )

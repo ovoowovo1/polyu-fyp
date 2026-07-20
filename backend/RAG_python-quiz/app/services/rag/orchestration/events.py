@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Sequence
 
-from app.services.rag.rag_shared import build_raw_sources
+from app.services.rag.shared.helpers import build_raw_sources
 
 EventCallback = Callable[[str, Any, str], Awaitable[None]]
 
@@ -44,7 +44,7 @@ def build_result_payload(
 def initial_rag_state(
     question: str,
     selected_file_ids: Sequence[str],
-    query_intent: Dict[str, Any],
+    query_intent: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     stripped_question = question.strip()
     return {
@@ -57,9 +57,13 @@ def initial_rag_state(
         "generation_retry_count": 0,
         "candidate_documents": [],
         "filtered_documents": [],
-        "query_intent": query_intent,
+        "query_intent": query_intent or {},
+        "planner_result": {},
         "covered_concepts": [],
         "missing_concepts": [],
+        "missing_concept_retry_count": 0,
+        "grading_failed": False,
+        "route_reason": "",
         "answer": "",
         "citations": [],
         "answer_with_citations": [],

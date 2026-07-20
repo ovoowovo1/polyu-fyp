@@ -50,7 +50,7 @@ async def delete_file(file_id: str, user: dict = Depends(get_current_user)):
         user["user_id"],
         fallback_detail=lambda error: error_detail("Failed to delete file", details=str(error)),
     )
-    redis_cache.invalidate_namespaces(
+    await redis_cache.invalidate_namespaces(
         studio_cache.files_list_namespace(),
         studio_cache.file_detail_namespace(file_id),
         studio_cache.chunk_source_namespace(),
@@ -106,7 +106,7 @@ async def rename_file(file_id: str, new_name: str, user: dict = Depends(get_curr
         user["user_id"],
         fallback_detail=lambda error: error_detail("Failed to rename file", details=str(error)),
     )
-    redis_cache.invalidate_namespaces(
+    await redis_cache.invalidate_namespaces(
         studio_cache.files_list_namespace(),
         studio_cache.file_detail_namespace(file_id),
         studio_cache.chunk_source_namespace(),
