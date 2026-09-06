@@ -42,9 +42,9 @@ The system follows a decoupled full-stack architecture: React/Vite and Expo fron
 
 *Figure 3.2. Entity relationship design for users, classes, documents, and chunk-level storage used to support retrieval and source grounding.*
 
-![Figure 3.3: Retrieval-Augmented Generation (RAG) System Workflow](docs/images/readme/figure-3-3-rag-workflow.png)
+![Figure 3.3: Current Retrieval-Augmented Generation (RAG) Workflow](docs/images/readme/figure-3-3-rag-workflow.png)
 
-*Figure 3.3. RAG system pipeline demonstrating document ingestion, embedding generation, context retrieval, and AI model response generation.*
+*Figure 3.3. Current RAG workflow, separating offline document ingestion and indexing from query-time adaptive retrieval, context assembly, answer generation, citation verification, and bounded repair.*
 
 ![Figure 3.4: Multi-Agent State Graph for Automated Exam Generation](docs/images/readme/figure-3-4-multi-agent-state-graph.png)
 

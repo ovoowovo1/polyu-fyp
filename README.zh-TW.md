@@ -42,9 +42,9 @@
 
 *圖 3.2。users、classes、documents 與 chunk-level storage 的 entity relationship 設計，用於支援 retrieval 與 source grounding。*
 
-![圖 3.3：Retrieval-Augmented Generation（RAG）系統工作流程](docs/images/readme/figure-3-3-rag-workflow.png)
+![圖 3.3：目前的 Retrieval-Augmented Generation（RAG）工作流程](docs/images/readme/figure-3-3-rag-workflow.png)
 
-*圖 3.3。RAG 系統流程，展示文件 ingestion、embedding generation、context retrieval 與 AI model response generation。*
+*圖 3.3。目前的 RAG 流程，區分離線文件 ingestion／indexing 與查詢階段的 adaptive retrieval、context assembly、answer generation、citation verification 及 bounded repair。*
 
 ![圖 3.4：自動考試生成的多代理人狀態圖](docs/images/readme/figure-3-4-multi-agent-state-graph.png)
 
