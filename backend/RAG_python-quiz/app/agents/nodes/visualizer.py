@@ -1,3 +1,4 @@
+from app.utils.model_usage import chat_completion
 # -*- coding: utf-8 -*-
 """Visualizer node facade for generating chart and illustration assets."""
 
@@ -45,7 +46,7 @@ async def _classify_image_type(api_key: str, description: str) -> Literal["chart
     """Classify an image description as a chart or a non-chart illustration."""
     client = get_llm_client(api_key)
     response = await asyncio.to_thread(
-        client.chat.completions.create,
+        chat_completion, client, stage="visualizer",
         model=CLASSIFICATION_MODEL,
         messages=[{"role": "user", "content": build_classification_prompt(description)}],
         response_format={

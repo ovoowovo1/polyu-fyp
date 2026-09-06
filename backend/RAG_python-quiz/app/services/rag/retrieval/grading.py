@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import math
+import hashlib
+import json
 from typing import Any, Dict, List, Sequence
 
 from app.logger import get_logger
@@ -9,15 +11,13 @@ from app.services.rag.retrieval import intent as retrieval_intent
 from app.services.rag.retrieval.types import AdaptiveRetrievalState, EventCallback
 from app.services.rag.shared.helpers import normalize_concepts, safe_emit
 from app.services.rag.retrieval.intent import _clean_concept_fragment
+from app.services.rag.citation.service import image_inputs
 
 logger = get_logger(__name__)
 
-MAX_DOC_PREVIEW_CHARS = 1800
 DOCUMENT_RELEVANCE_THRESHOLD = 0.5
 MAX_GRADING_BATCH_SIZE = 8
-# Kept as a compatibility symbol for callers that imported the former
-# per-document semaphore setting. Batch grading no longer uses it.
-DOCUMENT_GRADING_CONCURRENCY = None
+DOCUMENT_GRADING_CONCURRENCY = 2
 
 
 def build_document_grading_schema(required_concepts: Sequence[str]) -> Dict[str, Any]:
@@ -72,7 +72,7 @@ Source: {doc.get('source')}
 Page: {doc.get('page')}
 Retrieved for concepts (hint only, not evidence): {retrieved_for}
 Content:
-{(doc.get('text') or '')[:MAX_DOC_PREVIEW_CHARS]}"""
+{doc.get('text') or ''}"""
         )
 
     return f"""
@@ -108,6 +108,7 @@ async def run_document_grader(
     semaphore: asyncio.Semaphore | None = None,
     *,
     generate_structured_json_func,
+    images: list | None = None,
 ) -> Dict[str, Any]:
     async def generate() -> Dict[str, Any]:
         return await generate_structured_json_func(
@@ -115,6 +116,7 @@ async def run_document_grader(
             schema,
             operation_name="Adaptive RAG grade document batch",
             temperature=0.0,
+            image_inputs=images or [],
         )
 
     if semaphore is None:
@@ -268,34 +270,44 @@ async def grade_documents_node(
         state["grading_failed"] = state.get("grading_failed", False)
         return state
 
-    schema = build_document_grading_schema(required_concepts)
-    prompt = build_document_grading_prompt(
-        question=question,
-        documents=candidate_documents,
-        required_concepts=required_concepts,
-        intent_type=intent_type,
-    )
+    semaphore = asyncio.Semaphore(DOCUMENT_GRADING_CONCURRENCY)
 
-    try:
-        result = await run_document_grader(
-            prompt,
-            schema,
-            generate_structured_json_func=generate_structured_json_func,
-        )
-        normalized_grades = _normalize_batch_grades(result, candidate_documents, required_concepts)
-    except Exception as err:
-        state["filtered_documents"] = existing_documents
-        state["covered_concepts"] = existing_covered
-        state["missing_concepts"] = [concept for concept in required_concepts if concept not in existing_covered]
-        state["grading_failed"] = True
-        logger.warning(
-            "[%s] document grading batch failed; dropping ungraded chunks and keeping accepted_chunks=%s: %s",
-            log_prefix,
-            len(existing_documents),
-            err,
-        )
-        await safe_emit(emit, "[grader] document grading failed; unverified chunks were discarded.", 0, "grader")
-        return state
+    async def grade_batch(batch):
+        schema = build_document_grading_schema(required_concepts)
+        schema["properties"]["grades"]["items"]["properties"]["chunk_id"]["enum"] = [d["chunkId"] for d in batch]
+        prompt = build_document_grading_prompt(question=question, documents=batch,
+            required_concepts=required_concepts, intent_type=intent_type)
+        result = await run_document_grader(prompt, schema, semaphore,
+            generate_structured_json_func=generate_structured_json_func, images=image_inputs(batch)[:6])
+        return _normalize_batch_grades(result, batch, required_concepts)
+
+    memo = state.setdefault("grading_cache", {})
+    def cache_key(doc):
+        prompt = build_document_grading_prompt(question=question, documents=[doc],
+            required_concepts=required_concepts, intent_type=intent_type)
+        payload = [prompt, doc.get("fileId"), image_inputs([doc])]
+        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+    keys = {doc["chunkId"]: cache_key(doc) for doc in candidate_documents}
+    normalized_grades = {doc["chunkId"]: memo[keys[doc["chunkId"]]] for doc in candidate_documents
+                         if keys[doc["chunkId"]] in memo}
+    pending = [doc for doc in candidate_documents if doc["chunkId"] not in normalized_grades]
+    batches = [pending[i:i + MAX_GRADING_BATCH_SIZE]
+               for i in range(0, len(pending), MAX_GRADING_BATCH_SIZE)]
+    results = await asyncio.gather(*(grade_batch(batch) for batch in batches), return_exceptions=True)
+    failed = False
+    for batch, result in zip(batches, results):
+        if isinstance(result, BaseException):
+            failed = True
+            logger.warning("[%s] grading failed for chunks=%s: %s", log_prefix,
+                           [d["chunkId"] for d in batch], result)
+        else:
+            normalized_grades.update(result)
+            for chunk_id, grade in result.items():
+                memo[keys[chunk_id]] = grade
+    state["grading_diagnostics"] = [{"chunk_id": d["chunkId"],
+        **normalized_grades.get(d["chunkId"], {"grading_reason": "grading service failed"})}
+        for d in candidate_documents]
+    candidate_documents = [d for d in candidate_documents if d["chunkId"] in normalized_grades]
 
     grading_results = [
         (
@@ -315,7 +327,7 @@ async def grade_documents_node(
     state["filtered_documents"] = filtered_documents
     state["covered_concepts"] = covered_concepts
     state["missing_concepts"] = missing_concepts
-    state["grading_failed"] = False
+    state["grading_failed"] = failed
     logger.info(
         "[%s] grade_documents batch_complete kept_chunks=%s covered_concepts=%s missing_concepts=%s score_threshold=%s",
         log_prefix,

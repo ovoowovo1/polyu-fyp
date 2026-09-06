@@ -6,6 +6,8 @@ import { createClass } from '../api/classes.js';
 import { getExamList } from '../api/exam.js';
 import { getAllQuizzes } from '../api/quiz.js';
 import { clearDedupeCache } from '../utils/requestDeduper.js';
+import { reingestPdf } from '../api/upload.js';
+import { API_BASE_URL } from '../config.js';
 
 const shouldRunIntegration = process.env.RUN_INTEGRATION_TESTS === '1';
 
@@ -41,6 +43,19 @@ test(
             assert.equal(examResponse.status, 200);
             assert.ok(Array.isArray(quizResponse.data.quizzes));
             assert.ok(Array.isArray(examResponse.data.exams));
+
+            // Unknown/out-of-scope documents must fail before any model request.
+            const inaccessibleId = '00000000-0000-0000-0000-000000000001';
+            const query = await fetch(`${API_BASE_URL}/api/query-stream`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: 'Explain atomicity', selectedFileIds: [inaccessibleId] }),
+            });
+            assert.equal(query.status, 403);
+            await assert.rejects(
+                reingestPdf(inaccessibleId, new Blob(['%PDF-fixture'], { type: 'application/pdf' }), `reingest-${suffix}`),
+                (error) => error.response?.status === 403,
+            );
         } finally {
             logout();
             storage.restore();

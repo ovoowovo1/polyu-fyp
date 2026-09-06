@@ -34,11 +34,13 @@ export default function SourceScreen() {
     clearSelection,
     uploadPdfFiles,
     uploadLinkUrl,
+    reingestDocument,
   } = useDocumentWorkspace();
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [uploadingLink, setUploadingLink] = useState(false);
   const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [reingesting, setReingesting] = useState(false);
   const supportedUploadTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/bmp'];
   const isTeacher = canUploadSources(user);
 
@@ -108,6 +110,19 @@ export default function SourceScreen() {
       Alert.alert(t('source.uploadFailed'), error instanceof Error ? error.message : t('common.unknownError'));
     } finally {
       setUploadingLink(false);
+    }
+  };
+
+  const reingest = async (id: string) => {
+    setReingesting(true);
+    try {
+      const selected = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', multiple: false, copyToCacheDirectory: true });
+      if (selected.canceled) return;
+      await reingestDocument(id, selected.assets[0]);
+    } catch (error) {
+      Alert.alert(t('source.uploadFailed'), error instanceof Error ? error.message : t('common.unknownError'));
+    } finally {
+      setReingesting(false);
     }
   };
 
@@ -250,6 +265,12 @@ export default function SourceScreen() {
                   </Text>
                 </Pressable>
               </View>
+              {isTeacher && /\.pdf$/i.test(item.original_name || item.filename || '') && (
+                <Pressable accessibilityRole="button" disabled={reingesting || uploadState.status === 'running'}
+                  style={commonStyles.secondaryButton} onPress={() => { void reingest(sourceId); }}>
+                  <Text style={commonStyles.secondaryButtonText}>{t('source.reingest')}</Text>
+                </Pressable>
+              )}
             </View>
           );
         }}

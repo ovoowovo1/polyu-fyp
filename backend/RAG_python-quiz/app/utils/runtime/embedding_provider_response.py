@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, List, Optional
 
+import math
+
 import requests
 
 from app.utils.runtime.retry import RETRYABLE_STATUS_CODES, is_retryable_provider_error
@@ -10,11 +12,25 @@ RaiseEmbeddingError = Callable[..., None]
 
 
 def build_embedding_request(api_key: str, model_name: str, input_value: Any) -> tuple[dict, dict]:
+    values = [input_value] if isinstance(input_value, str) else input_value
+    if not isinstance(values, list) or not values:
+        raise ValueError("Embedding input must be a non-empty batch")
+    text_batch = all(isinstance(value, str) and value.strip() for value in values)
+    image_batch = all(isinstance(value, dict) and isinstance(value.get("content"), list)
+                      and value["content"] for value in values)
+    if not text_batch and not image_batch:
+        raise ValueError("Embedding batches must contain only strings or only multimodal objects")
+    if image_batch:
+        for value in values:
+            for part in value["content"]:
+                if not isinstance(part, dict) or part.get("type") != "image_url" or not isinstance(part.get("image_url"), dict) or not isinstance(part["image_url"].get("url"), str) or not part["image_url"]["url"]:
+                    raise ValueError("Image embedding input must provide an image_url")
     return (
         {
             "model": model_name,
             "input": input_value,
             "encoding_format": "float",
+            "dimensions": 3072,
         },
         {
             "Authorization": f"Bearer {api_key}",
@@ -107,7 +123,7 @@ def validate_embedding_response_data(
         raise_error(
             code="EMBEDDING_RESPONSE_INVALID",
             message="Embedding provider returned a malformed JSON payload",
-            retryable=True,
+            retryable=False,
             http_status=response.status_code,
             raw_preview=raw_preview,
         )
@@ -117,7 +133,7 @@ def validate_embedding_response_data(
         raise_error(
             code="EMBEDDING_RESPONSE_INVALID",
             message="Embedding provider returned no embedding data",
-            retryable=True,
+            retryable=False,
             http_status=response.status_code,
             raw_preview=raw_preview,
         )
@@ -131,41 +147,17 @@ def collect_embeddings(
     raw_preview: str,
     raise_error: RaiseEmbeddingError,
 ) -> List[List[float]]:
-    sorted_data = sorted(
-        data,
-        key=lambda item: item.get("index", 0) if isinstance(item, dict) else 0,
-    )
-
-    embeddings: List[List[float]] = []
-    for item in sorted_data:
-        if not isinstance(item, dict):
-            raise_error(
-                code="EMBEDDING_RESPONSE_INVALID",
-                message="Embedding response item had an unexpected shape",
-                retryable=True,
-                http_status=response.status_code,
-                raw_preview=raw_preview,
-            )
-
-        embedding = item.get("embedding")
-        if not isinstance(embedding, list) or not embedding:
-            raise_error(
-                code="EMBEDDING_RESPONSE_INVALID",
-                message="Embedding response item did not include a valid vector",
-                retryable=True,
-                http_status=response.status_code,
-                raw_preview=raw_preview,
-            )
-
-        embeddings.append(embedding)
-
-    if len(embeddings) != expected_count:
-        raise_error(
-            code="EMBEDDING_RESPONSE_INVALID",
-            message=f"Embedding response count mismatch: expected {expected_count}, got {len(embeddings)}",
-            retryable=True,
-            http_status=response.status_code,
-            raw_preview=raw_preview,
-        )
-
+    indices = [item.get("index") if isinstance(item, dict) else None for item in data]
+    if (len(data) != expected_count or any(type(index) is not int for index in indices)
+            or set(indices) != set(range(expected_count))):
+        raise_error(code="EMBEDDING_RESPONSE_INVALID", message="Embedding response indices/count do not match the requested chunks",
+                    retryable=False, http_status=response.status_code, raw_preview=raw_preview)
+    embeddings = []
+    for item in sorted(data, key=lambda entry: entry["index"]):
+        vector = item.get("embedding")
+        if (not isinstance(vector, list) or len(vector) != 3072
+                or any(type(value) not in (int, float) or not math.isfinite(value) for value in vector)):
+            raise_error(code="EMBEDDING_RESPONSE_INVALID", message="Embedding response must contain 3072 finite numeric values per chunk",
+                        retryable=False, http_status=response.status_code, raw_preview=raw_preview)
+        embeddings.append(vector)
     return embeddings

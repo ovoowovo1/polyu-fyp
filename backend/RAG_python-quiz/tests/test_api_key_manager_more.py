@@ -126,8 +126,7 @@ class EmbeddingsTests(ApiKeyManagerBase):
         self.settings = make_settings(
             embedding_api_key="embed-key",
             embedding_base_url="https://embed.example.com/v1/",
-            embedding_model="embed-model",
-            embedding_fallback_model="fallback-model",
+            embedding_model="google/gemini-embedding-2",
             llm_model="flash-model",
             llm_api_key="",
             llm_api_keys="key-1,key-2",
@@ -142,7 +141,7 @@ class EmbeddingsTests(ApiKeyManagerBase):
 
         self.assertEqual(model.client, "openai-client")
         self.assertEqual(model.base_url, "https://embed.example.com/v1")
-        self.assertEqual(model.model_name, "embed-model")
+        self.assertEqual(model.model_name, "google/gemini-embedding-2")
         self.assertEqual(model._embedding_endpoint(), "https://embed.example.com/v1/embeddings")
 
         settings_without_key = make_settings()
@@ -165,27 +164,10 @@ class EmbeddingsTests(ApiKeyManagerBase):
         ):
             self.assertIsNone(api_key_manager.get_embedding_model())
 
-        with patch("app.utils.api_key_manager.get_settings", return_value=self.settings), patch(
-            "app.utils.api_key_manager.create_embedding_model",
-            return_value="fallback",
-        ) as create_model:
-            self.assertEqual(api_key_manager.get_fallback_embedding_model(), "fallback")
-        self.assertEqual(
-            create_model.call_args.kwargs,
-            {"model_name": "fallback-model", "base_url": "https://embed.example.com/v1/"},
-        )
-
-        with patch(
-            "app.utils.api_key_manager.get_settings",
-            return_value=make_settings(embedding_api_key="embed-key"),
-        ):
-            self.assertIsNone(api_key_manager.get_fallback_embedding_model())
-
     def test_embedding_model_falls_back_to_shared_llm_key(self):
         settings = make_settings(
             embedding_base_url="https://embed.example.com/v1/",
-            embedding_model="embed-model",
-            embedding_fallback_model="fallback-model",
+            embedding_model="google/gemini-embedding-2",
             llm_api_key="shared-key",
             llm_api_keys="",
             llm_model="flash-model",
@@ -208,14 +190,14 @@ class EmbeddingsTests(ApiKeyManagerBase):
         documents_response = FakeResponse(
             payload={
                 "data": [
-                    {"index": 1, "embedding": [3.0, 4.0]},
-                    {"index": 0, "embedding": [1.0, 2.0]},
+                    {"index": 1, "embedding": ([3.0, 4.0] + [0.0] * 3070)},
+                    {"index": 0, "embedding": ([1.0, 2.0] + [0.0] * 3070)},
                 ]
             },
             text='{"data": "..."}',
         )
         query_response = FakeResponse(
-            payload={"data": [{"index": 0, "embedding": [9.0, 8.0]}]},
+            payload={"data": [{"index": 0, "embedding": ([9.0, 8.0] + [0.0] * 3070)}]},
             text='{"data": "..."}',
         )
         with patch(
@@ -225,8 +207,8 @@ class EmbeddingsTests(ApiKeyManagerBase):
             documents = model.embed_documents(["a", "b"])
             query = model.embed_query("hello")
 
-        self.assertEqual(documents, [[1.0, 2.0], [3.0, 4.0]])
-        self.assertEqual(query, [9.0, 8.0])
+        self.assertEqual(documents, [([1.0, 2.0] + [0.0] * 3070), ([3.0, 4.0] + [0.0] * 3070)])
+        self.assertEqual(query, ([9.0, 8.0] + [0.0] * 3070))
         self.assertEqual(post.call_args.kwargs["headers"]["Authorization"], "Bearer embed-key")
 
         with patch.object(model, "embed_query", return_value=[9.0]), patch.object(

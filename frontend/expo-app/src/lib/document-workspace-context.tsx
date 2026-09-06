@@ -1,7 +1,7 @@
 import React, { createContext, PropsWithChildren, useCallback, useContext, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
 
-import { listDocuments, subscribeUploadProgress, uploadLink, uploadMultiple } from '@/lib/api';
+import { listDocuments, subscribeUploadProgress, uploadLink, uploadMultiple, reingestPdf } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
 import type { ClassSummary, DocumentSummary, UploadProgressState } from '@/lib/types';
 
@@ -19,6 +19,7 @@ type WorkspaceContextValue = {
   clearSelection: () => void;
   uploadPdfFiles: (files: { uri: string; name: string; mimeType?: string }[]) => Promise<void>;
   uploadLinkUrl: (url: string) => Promise<void>;
+  reingestDocument: (id: string, file: { uri: string; name: string; mimeType?: string }) => Promise<void>;
 };
 
 const emptyUploadState: UploadProgressState = {
@@ -188,6 +189,14 @@ export function DocumentWorkspaceProvider({ children }: PropsWithChildren) {
     });
   }, [currentClass?.id, runTrackedUpload]);
 
+  const reingestDocument = useCallback(async (id: string, file: { uri: string; name: string; mimeType?: string }) => {
+    await runTrackedUpload(async (clientId) => {
+      const result = await reingestPdf(id, file, clientId);
+      setUploadState({ status: 'success', visible: true, progress: 100, done: 4, total: 4,
+        message: t('source.reingestComplete', { count: result.chunksCount }) });
+    });
+  }, [runTrackedUpload, t]);
+
   const value = useMemo(() => ({
     currentClass,
     documents,
@@ -195,6 +204,7 @@ export function DocumentWorkspaceProvider({ children }: PropsWithChildren) {
     loading,
     refreshing,
     uploadState,
+    reingestDocument,
     setCurrentClass,
     loadDocuments,
     toggleSelection,
@@ -216,6 +226,7 @@ export function DocumentWorkspaceProvider({ children }: PropsWithChildren) {
     uploadLinkUrl,
     uploadPdfFiles,
     uploadState,
+    reingestDocument,
   ]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

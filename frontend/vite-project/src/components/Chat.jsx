@@ -4,7 +4,7 @@ import { useSelector } from 'react-redux';
 import { Card, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 
-import { handleProChatRequest, generateWelcomeMessage } from '../utils/proChatHelpers.js';
+import { generateWelcomeMessage } from '../utils/proChatHelpers.js';
 import { handleProChatRequestWithSse } from '../utils/proChatRequestWithSse.js';
 import extractMessageText from '../utils/extractMessageText';
 import ChatComposer from './Chat/ChatComposer.jsx';
@@ -86,14 +86,12 @@ function Chat({ widthSize = null }) {
             ]);
         };
 
-        const apiCall = enableProgress
-            ? handleProChatRequestWithSse(messagesForAPI, {
+        const apiCall = handleProChatRequestWithSse(messagesForAPI, {
                 ...requestOptions,
                 onProgress: (progressEvent) => {
-                    setProgressMessages(prev => appendProgressMessage(prev, progressEvent));
+                    if (enableProgress) setProgressMessages(prev => appendProgressMessage(prev, progressEvent));
                 },
-            })
-            : handleProChatRequest(messagesForAPI, requestOptions);
+            });
 
         apiCall.then(handleSuccess).catch(handleError).finally(() => {
             setIsLoading(false);

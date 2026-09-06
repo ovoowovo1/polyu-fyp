@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { apiDelete, apiGet, apiPut } from '../api/apiClient.js';
-import { dedupe } from '../utils/requestDeduper.js';
+import { dedupe, clearDedupeCache } from '../utils/requestDeduper.js';
 
 // 異步 Thunk 用於從 API 獲取文件
 export const fetchDocuments = createAsyncThunk(
@@ -88,6 +88,9 @@ const documentsSlice = createSlice({
     name: 'documents',
     initialState,
     reducers: {
+        invalidateDocumentContent: (state, action) => {
+            delete state.documentsById[action.payload];
+        },
         setSearchTerm: (state, action) => {
             state.searchTerm = action.payload;
         },
@@ -182,6 +185,7 @@ const documentsSlice = createSlice({
 });
 
 export const {
+    invalidateDocumentContent,
     setSearchTerm,
     setSelectedShowDocumentContentID,
     toggleFileSelection,
@@ -201,3 +205,10 @@ export const selectClassAndLoadDocuments = (classId) => async (dispatch) => {
 };
 
 export default documentsSlice.reducer;
+
+export const refreshReingestedDocument = (fileId) => async (dispatch, getState) => {
+    dispatch(invalidateDocumentContent(fileId));
+    clearDedupeCache(`docs:list:${getState().documents.currentClassId || '__all__'}`);
+    await dispatch(fetchDocumentContent(fileId));
+    await dispatch(fetchDocuments());
+};

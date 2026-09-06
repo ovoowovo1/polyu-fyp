@@ -32,7 +32,7 @@ class EmbeddingClientTests(unittest.TestCase):
         self.assertIn("\"error\"", error.raw_preview)
 
     def test_no_endpoints_found_is_retryable_for_fallback(self):
-        error = embedding_error_for({"error": {"message": "No endpoints found for google/gemini-embedding-001.", "code": 404}})
+        error = embedding_error_for({"error": {"message": "No endpoints found for google/gemini-embedding-2.", "code": 404}})
         self.assertEqual(error.code, "EMBEDDING_UPSTREAM_FAILED")
         self.assertTrue(error.retryable)
         self.assertEqual(error.upstream_code, 404)
@@ -40,12 +40,12 @@ class EmbeddingClientTests(unittest.TestCase):
 
     def test_invalid_embedding_count_raises_response_invalid(self):
         error = embedding_error_for(
-            {"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]},
+            {"data": [{"index": 0, "embedding": ([0.1, 0.2, 0.3] + [0.0] * 3069)}]},
             documents=["first", "second"],
         )
         self.assertEqual(error.code, "EMBEDDING_RESPONSE_INVALID")
-        self.assertTrue(error.retryable)
-        self.assertIn("count mismatch", error.message)
+        self.assertFalse(error.retryable)
+        self.assertIn("indices/count", error.message)
 
     def test_image_embedding_payload_uses_openrouter_multimodal_format(self):
         self.assertEqual(
@@ -61,7 +61,7 @@ class EmbeddingClientTests(unittest.TestCase):
             captured["headers"] = headers
             captured["timeout"] = timeout
             return FakeResponse(
-                payload={"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]},
+                payload={"data": [{"index": 0, "embedding": ([0.1, 0.2, 0.3] + [0.0] * 3069)}]},
                 text='{"data": "..."}',
             )
 
@@ -72,8 +72,8 @@ class EmbeddingClientTests(unittest.TestCase):
             client = OpenAIEmbeddings()
             vectors = client.embed_images([{"content": b"img", "mime_type": "image/png"}])
 
-        self.assertEqual(vectors, [[0.1, 0.2, 0.3]])
-        self.assertEqual(captured["json"]["model"], "google/gemini-embedding-001")
+        self.assertEqual(vectors, [([0.1, 0.2, 0.3] + [0.0] * 3069)])
+        self.assertEqual(captured["json"]["model"], "google/gemini-embedding-2")
         self.assertEqual(captured["json"]["encoding_format"], "float")
         image_input = captured["json"]["input"][0]
         self.assertEqual(image_input["content"][0]["type"], "image_url")

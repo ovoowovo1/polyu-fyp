@@ -1,770 +1,134 @@
-import unittest
+import asyncio
 from unittest.mock import AsyncMock, patch
 
-from app.services.rag.orchestration import routing as adaptive_rag_routing
-from app.services.rag import index as adaptive_rag_service
-from tests.support import EventRecorder
-
-
-def single_query_intent(question="question"):
-    return {
-        "mode": "single",
-        "intent_type": "single",
-        "required_concepts": [],
-        "subqueries": [],
-        "search_queries": [
-            {
-                "label": "original question",
-                "query": question,
-                "concept": None,
-                "query_kind": "original",
-            }
-        ],
-    }
-
-
-async def collect_stream(question, selected_file_ids):
-    with patch(
-        "app.services.rag.index.classify_query_intent",
-        AsyncMock(return_value=single_query_intent(question)),
-    ), patch(
-        "app.services.rag.index.plan_question",
-        AsyncMock(
-            return_value={
-                "decision": "retrieve",
-                "reason": "test planner",
-                "query_intent": single_query_intent(question),
-            }
-        ),
-    ):
-        return [
-            event
-            async for event in adaptive_rag_service.run_adaptive_rag_stream(question, selected_file_ids)
-        ]
-
-
-class AdaptiveRagServiceTests(unittest.IsolatedAsyncioTestCase):
-    async def test_classify_query_intent_delegates_to_llm_planner(self):
-        expected = single_query_intent("question")
-        with patch(
-            "app.services.rag.index.retrieval_intent.classify_query_intent",
-            AsyncMock(return_value=expected),
-        ) as classifier:
-            result = await adaptive_rag_service.classify_query_intent("question")
-
-        self.assertEqual(result, expected)
-        classifier.assert_awaited_once_with(
-            "question",
-            generate_structured_json_func=adaptive_rag_service.generate_structured_json,
-        )
-
-    async def test_plan_question_delegates_to_combined_planner(self):
-        expected = {
-            "decision": "retrieve",
-            "reason": "course material",
-            "query_intent": single_query_intent("question"),
-        }
-        with patch(
-            "app.services.rag.index.orchestration_routing.plan_question",
-            AsyncMock(return_value=expected),
-        ) as planner:
-            result = await adaptive_rag_service.plan_question("question")
-
-        self.assertEqual(result, expected)
-        planner.assert_awaited_once_with(
-            "question",
-            generate_structured_json=adaptive_rag_service.generate_structured_json,
-            logger=adaptive_rag_service.logger,
-        )
-
-        fallback = await adaptive_rag_routing.plan_question(
-            "question",
-            generate_structured_json=AsyncMock(return_value="not an object"),
-            logger=adaptive_rag_service.logger,
-        )
-        self.assertEqual(fallback["decision"], "retrieve")
-        self.assertEqual(fallback["reason"], "planner fallback")
-
-    async def test_helper_functions_and_node_delegates_work(self):
-        recorder = EventRecorder()
-
-        with patch(
-            "app.services.rag.index.retrieval_service.retrieve_documents_node",
-            AsyncMock(return_value={"step": "retrieve"}),
-        ) as retrieve_documents_node, patch(
-            "app.services.rag.index.retrieval_service.grade_documents_node",
-            AsyncMock(return_value={"step": "grade"}),
-        ) as grade_documents_node, patch(
-            "app.services.rag.index.retrieval_service.rewrite_query_node",
-            AsyncMock(return_value={"step": "rewrite"}),
-        ) as rewrite_query_node:
-            self.assertEqual(
-                await adaptive_rag_service.retrieve_documents_node({"question": "q"}, recorder.emit),
-                {"step": "retrieve"},
-            )
-            self.assertEqual(
-                await adaptive_rag_service.grade_documents_node({"question": "q"}, recorder.emit),
-                {"step": "grade"},
-            )
-            self.assertEqual(
-                await adaptive_rag_service.rewrite_query_node({"question": "q"}, recorder.emit),
-                {"step": "rewrite"},
-            )
-
-        retrieve_documents_node.assert_awaited_once()
-        grade_documents_node.assert_awaited_once()
-        rewrite_query_node.assert_awaited_once()
-
-    async def test_generate_answer_node_uses_citation_evidence_result(self):
-        state = {
-            "question": "What is CAP theorem?",
-            "filtered_documents": [
-                {
-                    "text": "CAP theorem describes trade-offs.",
-                    "source": "notes.pdf",
-                    "page": 1,
-                    "fileId": "file-1",
-                    "chunkId": "chunk-1",
-                }
-            ],
-        }
-
-        recorder = EventRecorder()
-
-        with patch(
-            "app.services.rag.index.citation_service.generate_citation_evidence",
-            AsyncMock(
-                return_value={
-                    "answer_text": "## CAP Theorem\nCAP theorem is a trade-off [1].",
-                    "citations": [{"chunk_id": "chunk-1", "file_id": "file-1", "source": "notes.pdf", "page": 1}],
-                    "answer_with_citations": [
-                        {
-                            "content_segments": [
-                                {
-                                    "segment_text": "## CAP Theorem\nCAP theorem is a trade-off.",
-                                    "source_references": [{"file_chunk_id": "chunk-1"}],
-                                }
-                            ]
-                        }
-                    ],
-                    "raw_sources": [
-                        {
-                            "content": "CAP theorem describes trade-offs.",
-                            "source": "notes.pdf",
-                            "pageNumber": 1,
-                            "score": None,
-                            "fileId": "file-1",
-                            "chunkId": "chunk-1",
-                        }
-                    ],
-                    "evidence_nodes": [
-                        {
-                            "node_id": "chunk-1",
-                            "file_id": "file-1",
-                            "chunk_id": "chunk-1",
-                            "source": "notes.pdf",
-                            "page": 1,
-                            "text": "CAP theorem describes trade-offs.",
-                            "score": None,
-                        }
-                    ],
-                    "required_concepts": [],
-                    "covered_concepts": [],
-                    "missing_concepts": [],
-                    "coverage_status": "complete",
-                }
-            ),
-        ) as generate_citation_evidence:
-            result = await adaptive_rag_service.generate_answer_node(state, recorder.emit)
-
-        generate_citation_evidence.assert_awaited_once_with(
-            "What is CAP theorem?",
-            state["filtered_documents"],
-            required_concepts=[],
-            covered_concepts=[],
-            intent_type="single",
-        )
-        self.assertEqual(result["answer"], "## CAP Theorem\nCAP theorem is a trade-off [1].")
-        self.assertEqual(result["citations"][0]["chunk_id"], "chunk-1")
-        self.assertEqual(
-            result["answer_with_citations"][0]["content_segments"][0]["segment_text"],
-            "## CAP Theorem\nCAP theorem is a trade-off.",
-        )
-        self.assertEqual(result["raw_sources"][0]["chunkId"], "chunk-1")
-        self.assertEqual(result["evidence_nodes"][0]["node_id"], "chunk-1")
-        self.assertEqual(result["result_reason"], None)
-
-    def test_build_result_payload_normalizes_sources_for_response(self):
-        payload = adaptive_rag_service._build_result_payload(
-            state={"result_reason": None},
-            question="  explain cap  ",
-            answer="answer",
-            answer_with_citations=[],
-            raw_sources=[
-                {
-                    "text": "chunk text",
-                    "source": "doc.pdf",
-                    "page": 4,
-                    "score": 0.2,
-                    "fileId": "file-1",
-                    "chunkId": "chunk-1",
-                }
-            ],
-        )
-
-        self.assertEqual(payload["question"], "explain cap")
-        self.assertEqual(
-            payload["raw_sources"],
-            [
-                {
-                    "content": "chunk text",
-                    "source": "doc.pdf",
-                    "pageNumber": 4,
-                    "score": 0.2,
-                    "fileId": "file-1",
-                    "chunkId": "chunk-1",
-                }
-            ],
-        )
-
-    async def test_route_question_node_and_grade_generation_cover_key_branches(self):
-        recorder = EventRecorder()
-
-        with patch(
-            "app.services.rag.index.generate_structured_json",
-            AsyncMock(
-                return_value={
-                    "decision": "reject",
-                    "reason": "out of scope",
-                    "query_intent": {
-                        "mode": "single",
-                        "intent_type": "single",
-                        "required_concepts": [],
-                        "subqueries": [],
-                        "search_queries": [
-                            {
-                                "label": "original question",
-                                "query": "weather today",
-                                "concept": None,
-                                "query_kind": "original",
-                            }
-                        ],
-                    },
-                }
-            ),
-        ) as planner:
-            routed = await adaptive_rag_service.route_question_node(
-                {"question": "weather today", "selected_file_ids": ["file-1"]},
-                recorder.emit,
-            )
-
-        self.assertEqual(routed["route_decision"], "reject")
-        self.assertEqual(routed["route_reason"], "out of scope")
-        self.assertEqual(routed["query_intent"]["intent_type"], "single")
-        planner.assert_awaited_once()
-        self.assertEqual(recorder.events[0][2], "router")
-
-        with patch(
-            "app.services.rag.index.generate_structured_json",
-            AsyncMock(side_effect=RuntimeError("boom")),
-        ):
-            fallback_route = await adaptive_rag_service.route_question_node(
-                {"question": "course notes", "selected_file_ids": ["file-1"]},
-                recorder.emit,
-            )
-
-        self.assertEqual(fallback_route["route_decision"], "retrieve")
-
-        self.assertEqual(adaptive_rag_routing.build_route_schema()["properties"]["decision"]["enum"], ["retrieve", "reject"])
-        self.assertIn("course documents", adaptive_rag_routing.build_route_prompt("course documents"))
-
-        malformed_intent = single_query_intent("weather today")
-        for malformed_plan in (
-            {"decision": "invalid", "reason": "bad", "query_intent": malformed_intent},
-            {"decision": "retrieve", "reason": "", "query_intent": malformed_intent},
-        ):
-            with patch(
-                "app.services.rag.index.generate_structured_json",
-                AsyncMock(return_value=malformed_plan),
-            ):
-                malformed_route = await adaptive_rag_service.route_question_node(
-                    {"question": "course notes", "selected_file_ids": ["file-1"]},
-                    recorder.emit,
-                )
-            self.assertEqual(malformed_route["route_decision"], "retrieve")
-            self.assertEqual(malformed_route["route_reason"], "planner fallback")
-
-        existing_plan = {
-            "decision": "retrieve",
-            "reason": "already planned",
-            "query_intent": single_query_intent("course notes"),
-        }
-        with patch(
-            "app.services.rag.index.generate_structured_json",
-            AsyncMock(side_effect=AssertionError("route must not call planner twice")),
-        ) as unexpected_planner:
-            existing_plan_route = await adaptive_rag_service.route_question_node(
-                {
-                    "question": "course notes",
-                    "selected_file_ids": ["file-1"],
-                    "planner_result": existing_plan,
-                },
-                recorder.emit,
-            )
-        self.assertEqual(existing_plan_route["route_reason"], "already planned")
-        unexpected_planner.assert_not_awaited()
-
-        with patch(
-            "app.services.rag.index.generate_structured_json",
-            AsyncMock(return_value={"decision": "retrieve", "reason": "ok", "query_intent": single_query_intent()}),
-        ):
-            malformed_state_route = await adaptive_rag_service.route_question_node(
-                {
-                    "question": "course notes",
-                    "selected_file_ids": ["file-1"],
-                    "planner_result": {"decision": "invalid"},
-                },
-                recorder.emit,
-            )
-        self.assertEqual(malformed_state_route["route_reason"], "planner fallback")
-
-        for invalid_planner_state in (
-            {
-                "decision": "invalid",
-                "reason": "bad decision",
-                "query_intent": single_query_intent("course notes"),
-            },
-            {
-                "decision": "retrieve",
-                "reason": "",
-                "query_intent": single_query_intent("course notes"),
-            },
-        ):
-            invalid_route = await adaptive_rag_service.route_question_node(
-                {
-                    "question": "course notes",
-                    "selected_file_ids": ["file-1"],
-                    "planner_result": invalid_planner_state,
-                },
-                recorder.emit,
-            )
-            self.assertEqual(invalid_route["route_reason"], "planner fallback")
-
-        missing_answer_state = await adaptive_rag_service.grade_generation_node(
-            {"answer": "", "answer_with_citations": [], "filtered_documents": []},
-            recorder.emit,
-        )
-        self.assertEqual(missing_answer_state["result_reason"], adaptive_rag_service.UNRELIABLE_RESULT_REASON)
-
-        with patch(
-            "app.services.rag.index.generate_structured_json",
-            AsyncMock(return_value={"grounded": "yes", "coverage_status": "full", "reason": "ok"}),
-        ):
-            citation_only_state = await adaptive_rag_service.grade_generation_node(
-                {
-                    "question": "What is CAP theorem?",
-                    "answer": "Grounded answer.",
-                    "answer_with_citations": [],
-                    "citations": [{"chunk_id": "chunk-1"}],
-                    "filtered_documents": [{"source": "doc.pdf", "page": 1, "text": "CAP theorem text"}],
-                    "query_intent": {"required_concepts": []},
-                    "covered_concepts": [],
-                    "missing_concepts": [],
-                },
-                recorder.emit,
-            )
-        self.assertNotEqual(citation_only_state.get("result_reason"), adaptive_rag_service.UNRELIABLE_RESULT_REASON)
-
-        accepted_state = {
-            "question": "What is CAP theorem?",
-            "answer": "Grounded answer.",
-            "answer_with_citations": [{"content_segments": [{"segment_text": "Grounded answer.", "source_references": [{"file_chunk_id": "chunk-1"}]}]}],
-            "filtered_documents": [{"source": "doc.pdf", "page": 1, "text": "CAP theorem text"}],
-            "query_intent": {"required_concepts": []},
-            "covered_concepts": [],
-            "missing_concepts": [],
-        }
-        with patch(
-            "app.services.rag.index.generate_structured_json",
-            AsyncMock(return_value={"grounded": "yes", "coverage_status": "full", "reason": "ok"}),
-        ):
-            accepted = await adaptive_rag_service.grade_generation_node(accepted_state, recorder.emit)
-        self.assertIsNone(accepted["result_reason"])
-
-        partial_state = {
-            "question": "What is SQL and NoSQL?",
-            "answer": "NoSQL uses flexible schemas.\n\nThe selected documents do not provide enough reliable information about SQL.",
-            "answer_with_citations": [{"content_segments": [{"segment_text": "NoSQL uses flexible schemas.", "source_references": [{"file_chunk_id": "chunk-1"}]}]}],
-            "filtered_documents": [{"source": "doc.pdf", "page": 1, "text": "NoSQL uses flexible schemas."}],
-            "query_intent": {"required_concepts": ["SQL", "NoSQL"]},
-            "covered_concepts": ["NoSQL"],
-            "missing_concepts": ["SQL"],
-        }
-        with patch(
-            "app.services.rag.index.generate_structured_json",
-            AsyncMock(return_value={"grounded": "yes", "coverage_status": "partial", "reason": "limited but honest"}),
-        ):
-            partial = await adaptive_rag_service.grade_generation_node(partial_state, recorder.emit)
-        self.assertEqual(partial["result_reason"], adaptive_rag_service.PARTIAL_COVERAGE_RESULT_REASON)
-
-        rejected_state = {
-            "question": "What is CAP theorem?",
-            "answer": "Ungrounded answer.",
-            "answer_with_citations": [{"content_segments": [{"segment_text": "Ungrounded answer.", "source_references": [{"file_chunk_id": "chunk-1"}]}]}],
-            "filtered_documents": [{"source": "doc.pdf", "page": 1, "text": "CAP theorem text"}],
-            "query_intent": {"required_concepts": []},
-            "covered_concepts": [],
-            "missing_concepts": [],
-        }
-        with patch(
-            "app.services.rag.index.generate_structured_json",
-            AsyncMock(return_value={"grounded": "no", "coverage_status": "insufficient", "reason": "hallucinated"}),
-        ):
-            rejected = await adaptive_rag_service.grade_generation_node(rejected_state, recorder.emit)
-        self.assertEqual(rejected["result_reason"], adaptive_rag_service.UNRELIABLE_RESULT_REASON)
-
-        with patch(
-            "app.services.rag.index.generate_structured_json",
-            AsyncMock(side_effect=RuntimeError("grader unavailable")),
-        ):
-            accepted_on_error = await adaptive_rag_service.grade_generation_node(
-                {
-                    "question": "What is CAP theorem?",
-                    "answer": "Grounded answer.",
-                    "answer_with_citations": [{"content_segments": [{"segment_text": "Grounded answer.", "source_references": [{"file_chunk_id": "chunk-1"}]}]}],
-                    "filtered_documents": [{"source": "doc.pdf", "page": 1, "text": "CAP theorem text"}],
-                    "query_intent": {"required_concepts": []},
-                    "covered_concepts": [],
-                    "missing_concepts": [],
-                },
-                recorder.emit,
-            )
-        self.assertNotIn("result_reason", accepted_on_error)
-
-    async def test_run_adaptive_rag_stream_success_path_keeps_backward_compatible_payload(self):
-        async def fake_route(state, emit):
-            await emit("router event", event_type="router")
-            state["route_decision"] = "retrieve"
-            return state
-
-        async def fake_retrieve(state, emit):
-            await emit("retrieved", 1, "retrieval")
-            state["candidate_documents"] = [{"chunkId": "chunk-1"}]
-            return state
-
-        async def fake_grade_docs(state, emit):
-            await emit("graded docs", 1, "grader")
-            state["filtered_documents"] = [
-                {
-                    "text": "chunk text",
-                    "source": "doc.pdf",
-                    "page": 2,
-                    "fileId": "file-1",
-                    "chunkId": "chunk-1",
-                }
-            ]
-            return state
-
-        async def fake_generate(state, emit):
-            await emit("generated", 1, "generation")
-            state["answer"] = "## Answer\nGrounded answer [1]."
-            state["citations"] = [{"chunk_id": "chunk-1", "file_id": "file-1", "source": "doc.pdf", "page": 2}]
-            state["answer_with_citations"] = [
-                {
-                    "content_segments": [
-                        {
-                            "segment_text": "## Answer\nGrounded answer.",
-                            "source_references": [{"file_chunk_id": "chunk-1"}],
-                        }
-                    ]
-                }
-            ]
-            state["raw_sources"] = [
-                {
-                    "content": "chunk text",
-                    "source": "doc.pdf",
-                    "pageNumber": 2,
-                    "score": None,
-                    "fileId": "file-1",
-                    "chunkId": "chunk-1",
-                }
-            ]
-            state["evidence_nodes"] = [{"node_id": "chunk-1"}]
-            state["covered_concepts"] = []
-            state["missing_concepts"] = []
-            return state
-
-        async def fake_grade_generation(state, emit):
-            await emit("graded answer", 1, "grader")
-            return state
-
-        with patch("app.services.rag.index.route_question_node", fake_route), patch(
-            "app.services.rag.index.retrieve_documents_node",
-            fake_retrieve,
-        ), patch(
-            "app.services.rag.index.grade_documents_node",
-            fake_grade_docs,
-        ), patch(
-            "app.services.rag.index.generate_answer_node",
-            fake_generate,
-        ), patch(
-            "app.services.rag.index.grade_generation_node",
-            fake_grade_generation,
-        ):
-            events = await collect_stream("question", ["file-1"])
-
-        result_event = events[-1]
-        self.assertEqual(result_event["type"], "result")
-        self.assertEqual(result_event["answer"], "## Answer\nGrounded answer [1].")
-        self.assertEqual(
-            result_event["answer_with_citations"][0]["content_segments"][0]["segment_text"],
-            "## Answer\nGrounded answer.",
-        )
-        self.assertEqual(result_event["raw_sources"][0]["chunkId"], "chunk-1")
-        self.assertEqual(events[1]["type"], "router")
-
-    async def test_run_adaptive_rag_stream_covers_empty_reject_retry_and_rewrite_limit_paths(self):
-        empty_events = await collect_stream("question", [])
-        self.assertEqual(empty_events[-1]["message"], "Please select at least one document for retrieval.")
-
-        async def reject_route(state, emit):
-            del emit
-            state["route_decision"] = "reject"
-            return state
-
-        with patch("app.services.rag.index.route_question_node", reject_route):
-            reject_events = await collect_stream("question", ["file-1"])
-        self.assertEqual(reject_events[-1]["answer"], adaptive_rag_service.OUT_OF_SCOPE_ANSWER)
-
-        async def retry_route(state, emit):
-            del emit
-            state["route_decision"] = "retrieve"
-            return state
-
-        async def retry_retrieve(state, emit):
-            del emit
-            state["filtered_documents"] = [{"chunkId": "chunk-1"}]
-            return state
-
-        async def retry_grade_docs(state, emit):
-            del emit
-            return state
-
-        async def retry_generate(state, emit):
-            del emit
-            state["answer"] = "Answer"
-            state["answer_with_citations"] = [{"content_segments": [{"segment_text": "Answer", "source_references": [{"file_chunk_id": "chunk-1"}]}]}]
-            state["raw_sources"] = [{"content": "text", "source": "doc.pdf", "pageNumber": 1, "score": None, "fileId": "file-1", "chunkId": "chunk-1"}]
-            return state
-
-        async def retry_grade_generation(state, emit):
-            del emit
-            state["result_reason"] = adaptive_rag_service.UNRELIABLE_RESULT_REASON
-            state["generation_retry_count"] = adaptive_rag_service.MAX_GENERATION_RETRIES
-            return state
-
-        with patch("app.services.rag.index.route_question_node", retry_route), patch(
-            "app.services.rag.index.retrieve_documents_node",
-            retry_retrieve,
-        ), patch(
-            "app.services.rag.index.grade_documents_node",
-            retry_grade_docs,
-        ), patch(
-            "app.services.rag.index.generate_answer_node",
-            retry_generate,
-        ), patch(
-            "app.services.rag.index.grade_generation_node",
-            retry_grade_generation,
-        ):
-            retry_events = await collect_stream("question", ["file-1"])
-        self.assertEqual(retry_events[-1]["answer"], adaptive_rag_service.NO_DOCUMENTS_ANSWER)
-
-        async def rewrite_limit_retrieve(state, emit):
-            del emit
-            state["filtered_documents"] = []
-            state["rewrite_count"] = adaptive_rag_service.MAX_REWRITE_ATTEMPTS
-            return state
-
-        with patch("app.services.rag.index.route_question_node", retry_route), patch(
-            "app.services.rag.index.retrieve_documents_node",
-            rewrite_limit_retrieve,
-        ), patch(
-            "app.services.rag.index.grade_documents_node",
-            retry_grade_docs,
-        ):
-            rewrite_events = await collect_stream("question", ["file-1"])
-        self.assertEqual(rewrite_events[-1]["result_reason"], adaptive_rag_service.NO_DOCUMENTS_RESULT_REASON)
-
-    async def test_run_adaptive_rag_stream_retries_generation_then_rewrites_query(self):
-        call_state = {"retrieve_calls": 0}
-
-        async def retry_route(state, emit):
-            del emit
-            state["route_decision"] = "retrieve"
-            return state
-
-        async def retrieve_after_retry(state, emit):
-            del emit
-            call_state["retrieve_calls"] += 1
-            if call_state["retrieve_calls"] == 1:
-                state["filtered_documents"] = [{"chunkId": "chunk-1"}]
-                state["rewrite_count"] = 0
-            else:
-                state["filtered_documents"] = []
-                state["rewrite_count"] = adaptive_rag_service.MAX_REWRITE_ATTEMPTS
-            return state
-
-        async def passthrough(state, emit):
-            del emit
-            return state
-
-        async def retry_generate(state, emit):
-            del emit
-            state["answer"] = "Answer"
-            state["answer_with_citations"] = [{"content_segments": [{"segment_text": "Answer", "source_references": [{"file_chunk_id": "chunk-1"}]}]}]
-            state["raw_sources"] = [{"content": "text", "source": "doc.pdf", "pageNumber": 1, "score": None, "fileId": "file-1", "chunkId": "chunk-1"}]
-            return state
-
-        async def retry_grade_generation(state, emit):
-            del emit
-            state["result_reason"] = adaptive_rag_service.UNRELIABLE_RESULT_REASON
-            return state
-
-        async def rewrite_query(state, emit):
-            await emit("rewritten", event_type="rewrite")
-            state["current_query"] = "rewritten query"
-            return state
-
-        with patch("app.services.rag.index.route_question_node", retry_route), patch(
-            "app.services.rag.index.retrieve_documents_node",
-            retrieve_after_retry,
-        ), patch(
-            "app.services.rag.index.grade_documents_node",
-            passthrough,
-        ), patch(
-            "app.services.rag.index.generate_answer_node",
-            retry_generate,
-        ), patch(
-            "app.services.rag.index.grade_generation_node",
-            retry_grade_generation,
-        ), patch(
-            "app.services.rag.index.rewrite_query_node",
-            rewrite_query,
-        ):
-            events = await collect_stream("question", ["file-1"])
-
-        self.assertEqual(events[-1]["result_reason"], adaptive_rag_service.UNRELIABLE_RESULT_REASON)
-        self.assertIn("rewritten", [event.get("message") for event in events])
-
-    async def test_run_adaptive_rag_stream_returns_partial_coverage_result_without_retry_loop(self):
-        async def route(state, emit):
-            del emit
-            state["route_decision"] = "retrieve"
-            return state
-
-        async def retrieve(state, emit):
-            del emit
-            state["candidate_documents"] = [{"chunkId": "chunk-1"}]
-            return state
-
-        async def grade_docs(state, emit):
-            del emit
-            state["filtered_documents"] = [
-                {
-                    "text": "NoSQL uses flexible schemas.",
-                    "source": "doc.pdf",
-                    "page": 2,
-                    "fileId": "file-1",
-                    "chunkId": "chunk-1",
-                }
-            ]
-            state["covered_concepts"] = ["NoSQL"]
-            state["missing_concepts"] = ["SQL"]
-            state["query_intent"] = {"required_concepts": ["SQL", "NoSQL"]}
-            return state
-
-        async def generate(state, emit):
-            del emit
-            state["answer"] = "NoSQL uses flexible schemas.\n\nThe selected documents do not provide enough reliable information about SQL."
-            state["answer_with_citations"] = [
-                {
-                    "content_segments": [
-                        {
-                            "segment_text": "NoSQL uses flexible schemas.",
-                            "source_references": [{"file_chunk_id": "chunk-1"}],
-                        }
-                    ]
-                }
-            ]
-            state["raw_sources"] = [
-                {
-                    "content": "NoSQL uses flexible schemas.",
-                    "source": "doc.pdf",
-                    "pageNumber": 2,
-                    "score": None,
-                    "fileId": "file-1",
-                    "chunkId": "chunk-1",
-                }
-            ]
-            state["result_reason"] = adaptive_rag_service.PARTIAL_COVERAGE_RESULT_REASON
-            return state
-
-        async def grade_generation(state, emit):
-            del emit
-            state["result_reason"] = adaptive_rag_service.PARTIAL_COVERAGE_RESULT_REASON
-            return state
-
-        with patch("app.services.rag.index.route_question_node", route), patch(
-            "app.services.rag.index.retrieve_documents_node",
-            retrieve,
-        ), patch(
-            "app.services.rag.index.grade_documents_node",
-            grade_docs,
-        ), patch(
-            "app.services.rag.index.generate_answer_node",
-            generate,
-        ), patch(
-            "app.services.rag.index.grade_generation_node",
-            grade_generation,
-        ):
-            events = await collect_stream("what is SQL and NoSQL", ["file-1"])
-
-        self.assertEqual(events[-1]["type"], "result")
-        self.assertEqual(events[-1]["result_reason"], adaptive_rag_service.PARTIAL_COVERAGE_RESULT_REASON)
-        self.assertIn("do not provide enough reliable information about SQL", events[-1]["answer"])
-
-    async def test_run_adaptive_rag_stream_stops_after_failed_targeted_retry(self):
-        async def route(state, emit):
-            del emit
-            state["route_decision"] = "retrieve"
-            state["query_intent"] = {
-                "required_concepts": ["SQL"],
-                "intent_type": "comparison",
-            }
-            return state
-
-        async def retrieve(state, emit):
-            del emit
-            state["filtered_documents"] = []
-            state["missing_concepts"] = ["SQL"]
-            return state
-
-        async def grade(state, emit):
-            await emit("batch grading complete", event_type="grader")
-            return state
-
-        async def retry(state, emit):
-            await emit("targeted retry complete", event_type="retrieval")
-            return state
-
-        with patch("app.services.rag.index.route_question_node", route), patch(
-            "app.services.rag.index.retrieve_documents_node", retrieve
-        ), patch(
-            "app.services.rag.index.grade_documents_node", grade
-        ), patch(
-            "app.services.rag.index.retry_missing_concepts_node", retry
-        ):
-            events = await collect_stream("what is SQL", ["file-1"])
-
-        self.assertEqual(events[-1]["result_reason"], adaptive_rag_service.NO_DOCUMENTS_RESULT_REASON)
-        self.assertIn("targeted retry complete", [event.get("message") for event in events])
+import pytest
+
+from app.services.rag import index
+from app.services.rag.orchestration import routing
+from app.services.rag.retrieval.intent import _build_single_query_intent
+from tests.test_citation_evidence_service import doc, draft, verdict
+
+
+def planner():
+    return {"decision": "retrieve", "reason": "course", "query_intent": _build_single_query_intent("q")}
+
+
+async def retrieved(state, emit, **kwargs):
+    state["candidate_documents"] = [doc()]
+    await emit("retrieved", 1, "retrieval")
+    return state
+
+
+async def graded(state, emit, **kwargs):
+    state["filtered_documents"] = list(state["candidate_documents"])
+    state["grading_failed"] = False
+    return state
+
+
+def patches():
+    return patch.multiple(index, plan_question=AsyncMock(return_value=planner()),
+        retrieve_documents_node=AsyncMock(side_effect=retrieved), grade_documents_node=AsyncMock(side_effect=graded),
+        retry_missing_concepts_node=AsyncMock(side_effect=retrieved),
+        build_context=AsyncMock(return_value=[doc()]), generate_answer=AsyncMock(return_value=draft()),
+        verify_answer=AsyncMock(return_value=(verdict(), {})))
+
+
+def test_stream_final_contract_and_trace():
+    async def run():
+        with patches():
+            events = [e async for e in index.run_adaptive_rag_stream(" q ", ["f1"])]
+            trace = {}
+            result = await index.run_rag("q", ["f1"], AsyncMock(), trace=trace)
+        assert events[0]["type"] == "retrieval"
+        assert events[-1]["status"] == "complete"
+        assert set(events[-1]) == {"type", "status", "blocks", "sources", "limitations", "trace_id"}
+        assert result["trace_id"] == trace["trace_id"]
+        assert trace["latency_seconds"] >= 0
+        assert [s["stage"] for s in trace["stages"]] == ["retrieved", "graded", "context", "cited"]
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("case", ["empty", "reject", "no_docs", "grade_failed", "verifier_failed", "retry_grade_failed"])
+def test_unavailable_never_releases_draft(case):
+    async def run():
+        with patches():
+            files = ["f1"]
+            if case == "empty":
+                files = []
+            if case == "reject":
+                index.plan_question.return_value = planner() | {"decision": "reject"}
+            if case == "no_docs":
+                index.build_context.return_value = []
+            if case in {"grade_failed", "retry_grade_failed"}:
+                async def fail(state, emit):
+                    state = await graded(state, emit)
+                    state["grading_failed"] = case == "grade_failed" or index.grade_documents_node.await_count > 1
+                    return state
+                index.grade_documents_node.side_effect = fail
+            if case == "verifier_failed":
+                index.verify_answer.side_effect = RuntimeError("offline")
+            if case == "retry_grade_failed":
+                index.verify_answer.return_value = verdict(missing=["missing"]), {}
+            result = await index.run_rag("請解釋", files, AsyncMock())
+        assert result["status"] == "unavailable" and not result["sources"]
+        assert all(not b["source_ids"] for b in result["blocks"])
+        assert "atomic" not in str(result["blocks"])
+    asyncio.run(run())
+
+
+def test_one_targeted_retrieval_and_one_repair_then_partial():
+    async def run():
+        with patches():
+            index.verify_answer.return_value = verdict(missing=["missing"]), {}
+            result = await index.run_rag("q", ["f1"], AsyncMock())
+            assert index.retry_missing_concepts_node.await_count == 1
+            assert index.generate_answer.await_count == 2
+            assert index.verify_answer.await_count == 2
+            assert index.generate_answer.await_args.kwargs["feedback"]["missing_topics"] == ["missing"]
+        assert result["status"] == "partial"
+    asyncio.run(run())
+
+
+def test_missing_initial_evidence_can_be_recovered_once():
+    async def run():
+        with patches():
+            plan = planner()
+            plan["query_intent"]["required_concepts"] = ["atomicity"]
+            index.plan_question.return_value = plan
+            async def partial_grade(state, emit):
+                state = await graded(state, emit)
+                state["missing_concepts"] = ["atomicity"]
+                return state
+            index.grade_documents_node.side_effect = partial_grade
+            index.build_context.side_effect = [[], [doc()]]
+            result = await index.run_rag("q", ["f1"], AsyncMock())
+            assert index.generate_answer.await_count == 1
+        assert result["status"] == "complete"
+    asyncio.run(run())
+
+
+def test_stream_disconnect_cancels_worker():
+    async def run():
+        with patches():
+            entered, cancelled = asyncio.Event(), asyncio.Event()
+            async def slow(state, emit):
+                await emit("start")
+                entered.set()
+                try:
+                    await asyncio.Future()
+                finally:
+                    cancelled.set()
+            index.retrieve_documents_node.side_effect = slow
+            stream = index.run_adaptive_rag_stream("q", ["f1"])
+            await anext(stream)
+            await entered.wait()
+            await stream.aclose()
+            assert cancelled.is_set()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("value", [None, {}, planner() | {"decision": "bad"}, planner() | {"reason": ""}, planner()])
+def test_planner_fallback_and_valid_plan(value):
+    result = asyncio.run(routing.plan_question("q", generate_structured_json=AsyncMock(return_value=value), logger=index.logger))
+    assert result["decision"] == "retrieve"
+    assert result["query_intent"]["search_queries"]

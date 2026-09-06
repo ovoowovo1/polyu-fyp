@@ -25,6 +25,7 @@ function DocumentItems({
     onSelect,
     onDelete,
     onRename,
+    onReingest,
     onToggleCollapse,
 }) {
     return (
@@ -45,6 +46,7 @@ function DocumentItems({
                     onSelect={onSelect}
                     onDelete={onDelete}
                     onRename={onRename}
+                    onReingest={onReingest}
                     onToggleCollapse={onToggleCollapse}
                 />
             )}

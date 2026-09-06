@@ -30,21 +30,20 @@ class DevCredentialsTests(unittest.TestCase):
                 make_settings(
                     eval_embedding_api_key="embed-key",
                     eval_embedding_base_url="https://embed.example",
-                    eval_embedding_model="embed-model",
                 ),
-                ("embed-key", "https://embed.example", "embed-model"),
+                ("embed-key", "https://embed.example", "google/gemini-embedding-2"),
             ),
             (
                 make_settings(
                     embedding_api_key="runtime-key",
                     embedding_base_url="https://runtime.example",
-                    embedding_model="runtime-model",
+                    embedding_model="google/gemini-embedding-2",
                 ),
-                ("runtime-key", "https://runtime.example", "runtime-model"),
+                ("runtime-key", "https://runtime.example", "google/gemini-embedding-2"),
             ),
             (
                 make_settings(llm_api_key="shared-key", llm_base_url="https://shared.example"),
-                ("shared-key", "https://shared.example", "google/gemini-embedding-2-preview"),
+                ("shared-key", "https://shared.example", "google/gemini-embedding-2"),
             ),
         )
         for settings, expected in cases:

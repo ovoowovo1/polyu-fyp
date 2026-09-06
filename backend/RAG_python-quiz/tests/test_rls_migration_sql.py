@@ -64,7 +64,7 @@ class RlsMigrationSqlTests(unittest.TestCase):
         migration_path = Path(__file__).resolve().parents[1] / "migrations" / "000_init_database.sql"
         sql = migration_path.read_text(encoding="utf-8")
 
-        for extension_name in ["pgcrypto", "vector", "pg_trgm", "pg_search"]:
+        for extension_name in ["pgcrypto", "vector", "pg_trgm"]:
             self.assertIn(f"CREATE EXTENSION IF NOT EXISTS {extension_name};", sql)
 
         for table_name in [
@@ -93,7 +93,6 @@ class RlsMigrationSqlTests(unittest.TestCase):
             "hash text",
             "idx_documents_class_hash ON public.documents(class_id, hash)",
             "embedding vector(3072)",
-            "embedding_v2 vector(3072)",
             "entities_json jsonb",
             "tsv tsvector",
             "grading_source text DEFAULT NULL",
@@ -101,8 +100,7 @@ class RlsMigrationSqlTests(unittest.TestCase):
             "revoked_at timestamptz",
             "replaced_by_token_id uuid",
             "CREATE TABLE IF NOT EXISTS public.chunk_media",
-            "USING bm25 (id, text)",
-            "WITH (key_field='id')",
+            "idx_chunks_document_order",
         ]:
             self.assertIn(required_fragment, sql)
 

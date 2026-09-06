@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Response, File, UploadFile, Query
 
-from app.api_helpers.service_helpers import error_detail, require_allowed, require_teacher, run_service
+from app.api_helpers.service_helpers import error_detail, require_allowed, require_teacher, run_service, run_async_service
+from app.services.documents.reingest import reingest_pdf
 from app.services.cache import redis_cache, studio_cache
 from app.services.pg.pg_access_control import can_access_chunk, can_access_class, can_access_document
 from app.services.pg.pg_classes_service import is_user_teacher
@@ -14,6 +15,14 @@ from app.services.pg.pg_files_service import (
 from app.utils.jwt_utils import get_current_user
 
 router = APIRouter(prefix="", tags=["files"])
+
+
+@router.post("/api/files/{file_id}/reingest")
+async def reingest_file(file_id: str, file: UploadFile = File(...),
+                        clientId: str | None = Query(default=None), user: dict = Depends(get_current_user)):
+    return await run_async_service(reingest_pdf, file_id, user["user_id"], file.filename or "",
+        await file.read(), file.content_type or "", clientId,
+        fallback_detail=error_detail("PDF reingestion failed. Please retry.", code="REINGEST_FAILED"))
 
 
 @router.get("/files")

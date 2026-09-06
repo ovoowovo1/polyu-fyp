@@ -61,6 +61,9 @@ export type CitationDetails = {
   chunkId?: string | number;
   source?: string;
   page?: string | number;
+  pageEnd?: string | number;
+  content?: string;
+  imageData?: string;
 };
 
 export type StructuredPart =

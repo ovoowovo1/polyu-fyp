@@ -24,13 +24,14 @@ def reciprocal_rank_fusion(
             if not chunk_id:
                 continue
 
-            score = 1.0 / (k + rank)
+            channel_ranks = [doc[key] for key in ("lexical_rank", "fuzzy_rank") if doc.get(key)]
+            score = sum(1.0 / (k + r) for r in channel_ranks) if channel_ranks else 1.0 / (k + rank)
             if chunk_id not in rrf_scores:
                 rrf_scores[chunk_id] = {"doc": doc, "rrf_score": 0.0}
             rrf_scores[chunk_id]["rrf_score"] += score
 
     sorted_docs = sorted(rrf_scores.values(), key=lambda item: item["rrf_score"], reverse=True)
-    return [{**item["doc"], "rrf_score": round(item["rrf_score"], 4)} for item in sorted_docs]
+    return [{**item["doc"], "rrf_score": item["rrf_score"]} for item in sorted_docs]
 
 
 def merge_candidate_documents(
@@ -77,13 +78,16 @@ def merge_candidate_documents(
             if existing is None or doc.get("rrf_score", 0.0) >= existing.get("rrf_score", 0.0):
                 doc_index[chunk_id] = normalize_doc(doc)
 
-        if concept:
-            for doc in fused[:reserved_candidates_per_subquery]:
-                chunk_id = doc.get("chunkId")
-                if not chunk_id or chunk_id in seen_reserved:
-                    continue
-                seen_reserved.add(chunk_id)
-                reserved_chunk_ids.append(chunk_id)
+    # Round-robin reservation prevents early concepts consuming later concepts' quota.
+    for position in range(reserved_candidates_per_subquery):
+        for result in search_results:
+            if result["query_spec"].get("concept"):
+                for doc in result.get("fused", [])[position:position + 1]:
+                    chunk_id = doc.get("chunkId")
+                    if not chunk_id or chunk_id in seen_reserved:
+                        continue
+                    seen_reserved.add(chunk_id)
+                    reserved_chunk_ids.append(chunk_id)
 
     global_fused = reciprocal_rank_fusion_func(global_inputs, k=rrf_k) if global_inputs else []
     for doc in global_fused:

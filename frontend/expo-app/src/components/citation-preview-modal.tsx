@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { useLanguage } from '@/lib/i18n';
 import { colors, commonStyles } from '@/lib/styles';
@@ -50,7 +50,7 @@ export function CitationPreviewModal({
               ) : null}
               {state.details?.page ? (
                 <Text selectable style={commonStyles.previewMeta}>
-                  {t('chat.citationPage', { page: state.details.page })}
+                  {t('chat.citationPage', { page: state.details.pageEnd && state.details.pageEnd !== state.details.page ? `${state.details.page}–${state.details.pageEnd}` : state.details.page })}
                 </Text>
               ) : null}
 
@@ -66,6 +66,10 @@ export function CitationPreviewModal({
                 </Text>
               )}
             </View>
+
+            {state.details?.imageData ? (
+              <Image accessibilityLabel={previewSourceName || 'Source image'} source={{ uri: state.details.imageData }} resizeMode="contain" style={{ width: '100%', height: 280 }} />
+            ) : null}
 
             <View style={commonStyles.modalActions}>
               <Pressable

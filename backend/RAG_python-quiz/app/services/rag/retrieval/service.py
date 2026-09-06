@@ -15,7 +15,7 @@ from app.services.rag.retrieval.vector import is_retryable_embedding_error, retr
 
 logger = get_logger(__name__)
 
-MAX_DOCS_TO_GRADE = 8
+MAX_DOCS_TO_GRADE = 40
 MAX_REWRITE_ATTEMPTS = 1
 RETRIEVAL_K = 20
 NO_RELEVANT_DOCUMENTS_FALLBACK_REASON = "no_relevant_documents"
@@ -23,7 +23,6 @@ EMPTY_SELECTION_FALLBACK_REASON = "empty_selection"
 
 # Compatibility aliases used by existing unit tests and older imports.
 RRF_K = adaptive_search.RRF_K
-MAX_DOC_PREVIEW_CHARS = adaptive_grading.MAX_DOC_PREVIEW_CHARS
 DOCUMENT_GRADING_CONCURRENCY = adaptive_grading.DOCUMENT_GRADING_CONCURRENCY
 SUBQUERY_RETRIEVAL_CONCURRENCY = adaptive_search.SUBQUERY_RETRIEVAL_CONCURRENCY
 RESERVED_CANDIDATES_PER_SUBQUERY = adaptive_search.RESERVED_CANDIDATES_PER_SUBQUERY

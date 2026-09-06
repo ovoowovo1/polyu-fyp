@@ -111,6 +111,8 @@ Retrieval planning rules:
 
 - Create subqueries for independently retrievable concepts or evidence needs.
 - Include every retrieval query in search_queries.
+- Each query's concept must be null or an EXACT entry in required_concepts.
+- Use null for combined/contextual queries; never invent a combined concept label.
 - Each search query must have a concise query_kind describing its purpose.
 - Use clear query_kind labels such as scenario_context or formula_support when
   the question requires case facts or quantitative/formula evidence.

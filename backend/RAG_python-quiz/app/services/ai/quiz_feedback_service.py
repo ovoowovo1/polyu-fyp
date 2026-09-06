@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.utils.model_usage import chat_completion, model_workflow
+
 import asyncio
 from typing import Any, Dict, List
 
@@ -69,6 +71,7 @@ def _build_quiz_feedback_prompt(
     )
 
 
+@model_workflow("QuizUsage")
 async def generate_quiz_feedback_text(
     quiz_name: str,
     score: int,
@@ -92,7 +95,7 @@ async def generate_quiz_feedback_text(
     async def _generate_feedback(api_key: str, prompt: str, model_name: str) -> str:
         client = get_llm_client(api_key)
         response = await asyncio.to_thread(
-            client.chat.completions.create,
+            chat_completion, client, stage=operation_name,
             model=model_name,
             messages=[{"role": "user", "content": prompt}],
         )

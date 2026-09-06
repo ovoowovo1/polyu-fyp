@@ -1,3 +1,4 @@
+from app.utils.model_usage import chat_completion
 # -*- coding: utf-8 -*-
 """Generator node facade for exam question generation."""
 
@@ -67,7 +68,7 @@ async def _create_section_response(
 ):
     client = get_llm_client(api_key)
     return await asyncio.to_thread(
-        client.chat.completions.create,
+        chat_completion, client, stage="generator",
         model=model_name,
         messages=[{"role": "user", "content": prompt}],
         response_format={

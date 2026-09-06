@@ -59,9 +59,5 @@ def get_eval_embedding_credentials() -> OpenAICompatibleCredentials:
         or settings.llm_base_url.strip()
         or "https://openrouter.ai/api/v1"
     )
-    model = (
-        settings.eval_embedding_model.strip()
-        or settings.embedding_model.strip()
-        or "google/gemini-embedding-2-preview"
-    )
+    model = "google/gemini-embedding-2"
     return OpenAICompatibleCredentials(api_key=api_key, base_url=base_url, model=model)

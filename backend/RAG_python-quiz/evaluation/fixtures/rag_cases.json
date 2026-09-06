@@ -1,0 +1,1296 @@
+[
+  {
+    "id": "english",
+    "question": "What is atomicity?",
+    "selected_file_ids": [
+      "4e476c36-f969-57d5-81c6-15da3e22c88e"
+    ],
+    "sources": [
+      {
+        "chunk_id": "fda55cd7-ab2b-5da5-a01e-f45d561b9c0e",
+        "file_id": "4e476c36-f969-57d5-81c6-15da3e22c88e",
+        "name": "english.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "Atomicity means a transaction completes entirely or has no effect."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "Atomicity means a transaction completes entirely or has no effect.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "fda55cd7-ab2b-5da5-a01e-f45d561b9c0e",
+              "quote": "Atomicity means a transaction completes entirely or has no effect."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "fda55cd7-ab2b-5da5-a01e-f45d561b9c0e"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "Atomicity means a transaction completes entirely or has no effect."
+    ]
+  },
+  {
+    "id": "chinese",
+    "question": "甚麼是資料庫交易的原子性？",
+    "selected_file_ids": [
+      "25a97b6b-703b-501d-944d-77d06a167226"
+    ],
+    "sources": [
+      {
+        "chunk_id": "3dda9680-9961-573d-b5a8-2e41919f93f3",
+        "file_id": "25a97b6b-703b-501d-944d-77d06a167226",
+        "name": "chinese.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "原子性表示交易中的操作全部完成，或全部不生效。"
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "原子性表示交易中的操作全部完成，或全部不生效。",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "3dda9680-9961-573d-b5a8-2e41919f93f3",
+              "quote": "原子性表示交易中的操作全部完成，或全部不生效。"
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "3dda9680-9961-573d-b5a8-2e41919f93f3"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "原子性表示交易中的操作全部完成，或全部不生效。"
+    ]
+  },
+  {
+    "id": "mixed",
+    "question": "請解釋 database isolation。",
+    "selected_file_ids": [
+      "e7dc5087-7ebf-598f-a884-4e20a9608ab5"
+    ],
+    "sources": [
+      {
+        "chunk_id": "87eacc62-628a-5e8a-8c64-dbd0676880df",
+        "file_id": "e7dc5087-7ebf-598f-a884-4e20a9608ab5",
+        "name": "mixed.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "Isolation prevents concurrent transactions from observing intermediate changes."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "Isolation prevents concurrent transactions from observing intermediate changes.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "87eacc62-628a-5e8a-8c64-dbd0676880df",
+              "quote": "Isolation prevents concurrent transactions from observing intermediate changes."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "87eacc62-628a-5e8a-8c64-dbd0676880df"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "Isolation prevents concurrent transactions from observing intermediate changes."
+    ]
+  },
+  {
+    "id": "cross_chunk",
+    "question": "Explain atomicity and durability.",
+    "selected_file_ids": [
+      "73c44fb3-0461-5366-ba5b-9b7564873921"
+    ],
+    "sources": [
+      {
+        "chunk_id": "7ea1b00a-4b58-56bf-bbb1-8a2411aca638",
+        "file_id": "73c44fb3-0461-5366-ba5b-9b7564873921",
+        "name": "cross_chunk.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "Atomicity means all operations succeed or none do."
+      },
+      {
+        "chunk_id": "e67629e3-b149-5240-a1b5-c7eb34097ae5",
+        "file_id": "73c44fb3-0461-5366-ba5b-9b7564873921",
+        "name": "cross_chunk.pdf",
+        "page_start": 2,
+        "page_end": 2,
+        "chunk_index": 1,
+        "content": "Durability means committed changes survive a restart."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "Atomicity means all operations succeed or none do.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "7ea1b00a-4b58-56bf-bbb1-8a2411aca638",
+              "quote": "Atomicity means all operations succeed or none do."
+            }
+          ]
+        },
+        {
+          "id": "b1",
+          "markdown": "Durability means committed changes survive a restart.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "e67629e3-b149-5240-a1b5-c7eb34097ae5",
+              "quote": "Durability means committed changes survive a restart."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "7ea1b00a-4b58-56bf-bbb1-8a2411aca638",
+      "e67629e3-b149-5240-a1b5-c7eb34097ae5"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "Atomicity means all operations succeed or none do.",
+      "Durability means committed changes survive a restart."
+    ]
+  },
+  {
+    "id": "cross_page",
+    "question": "Explain the two phases of a commit.",
+    "selected_file_ids": [
+      "a8d30acc-67b1-571e-968d-2aac448c42d3"
+    ],
+    "sources": [
+      {
+        "chunk_id": "b27b9374-8f03-5aee-929e-890ea32a3263",
+        "file_id": "a8d30acc-67b1-571e-968d-2aac448c42d3",
+        "name": "cross_page.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "Phase one asks participants to prepare."
+      },
+      {
+        "chunk_id": "cf27d62b-8a56-594f-baae-31b5f5622d96",
+        "file_id": "a8d30acc-67b1-571e-968d-2aac448c42d3",
+        "name": "cross_page.pdf",
+        "page_start": 2,
+        "page_end": 2,
+        "chunk_index": 1,
+        "content": "Phase two tells prepared participants to commit."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "Phase one asks participants to prepare.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "b27b9374-8f03-5aee-929e-890ea32a3263",
+              "quote": "Phase one asks participants to prepare."
+            }
+          ]
+        },
+        {
+          "id": "b1",
+          "markdown": "Phase two tells prepared participants to commit.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "cf27d62b-8a56-594f-baae-31b5f5622d96",
+              "quote": "Phase two tells prepared participants to commit."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "b27b9374-8f03-5aee-929e-890ea32a3263",
+      "cf27d62b-8a56-594f-baae-31b5f5622d96"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "Phase one asks participants to prepare.",
+      "Phase two tells prepared participants to commit."
+    ]
+  },
+  {
+    "id": "after_800",
+    "question": "What is the retry limit?",
+    "selected_file_ids": [
+      "e5aa14fa-f60b-58f3-a87e-b047c9f7435f"
+    ],
+    "sources": [
+      {
+        "chunk_id": "7d55b2b3-2d21-5847-907f-78f72787e349",
+        "file_id": "e5aa14fa-f60b-58f3-a87e-b047c9f7435f",
+        "name": "after_800.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. The retry limit is exactly three attempts."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "The retry limit is exactly three attempts.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "7d55b2b3-2d21-5847-907f-78f72787e349",
+              "quote": "The retry limit is exactly three attempts."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "7d55b2b3-2d21-5847-907f-78f72787e349"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. The retry limit is exactly three attempts."
+    ]
+  },
+  {
+    "id": "code",
+    "question": "Show the Python loop.",
+    "selected_file_ids": [
+      "94241426-a841-51a7-9507-3fc902dac833"
+    ],
+    "sources": [
+      {
+        "chunk_id": "059957f6-08fb-547c-9c2f-69c3202653d3",
+        "file_id": "94241426-a841-51a7-9507-3fc902dac833",
+        "name": "code.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "```python\nfor item in items:\n    print(item)\n```"
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "```python\nfor item in items:\n    print(item)\n```",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "059957f6-08fb-547c-9c2f-69c3202653d3",
+              "quote": "```python\nfor item in items:\n    print(item)\n```"
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "059957f6-08fb-547c-9c2f-69c3202653d3"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "```python\nfor item in items:\n    print(item)\n```"
+    ]
+  },
+  {
+    "id": "table",
+    "question": "Compare the measured runtimes.",
+    "selected_file_ids": [
+      "056f439c-eac1-58c7-afa2-2a0ea23230f3"
+    ],
+    "sources": [
+      {
+        "chunk_id": "a964d26c-e94f-53ca-98c0-d1e00d98b368",
+        "file_id": "056f439c-eac1-58c7-afa2-2a0ea23230f3",
+        "name": "table.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "| Algorithm | Runtime |\n|---|---|\n| A | 10 ms |\n| B | 25 ms |"
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "| Algorithm | Runtime |\n|---|---|\n| A | 10 ms |\n| B | 25 ms |",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "a964d26c-e94f-53ca-98c0-d1e00d98b368",
+              "quote": "| Algorithm | Runtime |\n|---|---|\n| A | 10 ms |\n| B | 25 ms |"
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "a964d26c-e94f-53ca-98c0-d1e00d98b368"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "| Algorithm | Runtime |\n|---|---|\n| A | 10 ms |\n| B | 25 ms |"
+    ]
+  },
+  {
+    "id": "list",
+    "question": "List the three stages.",
+    "selected_file_ids": [
+      "824ec9e5-cc31-51a3-bf3a-b6040956e381"
+    ],
+    "sources": [
+      {
+        "chunk_id": "86fbc163-1b77-5a29-a0e6-8dfc6dd0512a",
+        "file_id": "824ec9e5-cc31-51a3-bf3a-b6040956e381",
+        "name": "list.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "1. Parse the input.\n2. Validate the data.\n3. Store the result."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "1. Parse the input.\n2. Validate the data.\n3. Store the result.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "86fbc163-1b77-5a29-a0e6-8dfc6dd0512a",
+              "quote": "1. Parse the input.\n2. Validate the data.\n3. Store the result."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "86fbc163-1b77-5a29-a0e6-8dfc6dd0512a"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "1. Parse the input.\n2. Validate the data.\n3. Store the result."
+    ]
+  },
+  {
+    "id": "partial",
+    "question": "What are the timeout and retry limit?",
+    "selected_file_ids": [
+      "80812c5e-d80f-5479-9415-8297d9d99196"
+    ],
+    "sources": [
+      {
+        "chunk_id": "c2dc6799-95c0-5038-a327-4d11b2f1fc15",
+        "file_id": "80812c5e-d80f-5479-9415-8297d9d99196",
+        "name": "partial.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "The timeout is 30 seconds."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "The timeout is 30 seconds.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "c2dc6799-95c0-5038-a327-4d11b2f1fc15",
+              "quote": "The timeout is 30 seconds."
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        "The selected document does not specify the retry limit."
+      ]
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "c2dc6799-95c0-5038-a327-4d11b2f1fc15"
+    ],
+    "expected_status": "partial",
+    "expected_quotes": [
+      "The timeout is 30 seconds."
+    ]
+  },
+  {
+    "id": "repeated",
+    "question": "Describe the cache twice, in prose and as a short bullet.",
+    "selected_file_ids": [
+      "8f358a3e-0809-5d85-8f6f-d04e91fbecf1"
+    ],
+    "sources": [
+      {
+        "chunk_id": "219374e9-8f68-5017-920a-59f62c7f17aa",
+        "file_id": "8f358a3e-0809-5d85-8f6f-d04e91fbecf1",
+        "name": "repeated.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "A cache stores frequently accessed data."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "A cache stores frequently accessed data.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "219374e9-8f68-5017-920a-59f62c7f17aa",
+              "quote": "A cache stores frequently accessed data."
+            }
+          ]
+        },
+        {
+          "id": "b2",
+          "markdown": "- A cache stores frequently accessed data.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "219374e9-8f68-5017-920a-59f62c7f17aa",
+              "quote": "A cache stores frequently accessed data."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "219374e9-8f68-5017-920a-59f62c7f17aa"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "A cache stores frequently accessed data."
+    ]
+  },
+  {
+    "id": "multi_source",
+    "question": "Compare a stack with a queue.",
+    "selected_file_ids": [
+      "4a591f9c-7448-5165-b16c-bbb6ca3bf98a"
+    ],
+    "sources": [
+      {
+        "chunk_id": "13423d84-140d-52da-b430-63349c125a05",
+        "file_id": "4a591f9c-7448-5165-b16c-bbb6ca3bf98a",
+        "name": "multi_source.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "A stack uses last-in, first-out order."
+      },
+      {
+        "chunk_id": "7123c72e-bfce-5977-8663-abc147ec33ff",
+        "file_id": "4a591f9c-7448-5165-b16c-bbb6ca3bf98a",
+        "name": "multi_source.pdf",
+        "page_start": 2,
+        "page_end": 2,
+        "chunk_index": 1,
+        "content": "A queue uses first-in, first-out order."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "A stack uses last-in, first-out order.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "13423d84-140d-52da-b430-63349c125a05",
+              "quote": "A stack uses last-in, first-out order."
+            }
+          ]
+        },
+        {
+          "id": "b1",
+          "markdown": "A queue uses first-in, first-out order.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "7123c72e-bfce-5977-8663-abc147ec33ff",
+              "quote": "A queue uses first-in, first-out order."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "13423d84-140d-52da-b430-63349c125a05",
+      "7123c72e-bfce-5977-8663-abc147ec33ff"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "A stack uses last-in, first-out order.",
+      "A queue uses first-in, first-out order."
+    ]
+  },
+  {
+    "id": "heading",
+    "question": "Explain primary keys under a heading.",
+    "selected_file_ids": [
+      "bcd6e522-d746-54da-8f94-8af36b933b73"
+    ],
+    "sources": [
+      {
+        "chunk_id": "72998df1-ce0a-548c-be43-95a974f05b02",
+        "file_id": "bcd6e522-d746-54da-8f94-8af36b933b73",
+        "name": "heading.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "A primary key uniquely identifies a row."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "heading",
+          "markdown": "## Primary keys",
+          "kind": "structural",
+          "evidence": []
+        },
+        {
+          "id": "b0",
+          "markdown": "A primary key uniquely identifies a row.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "72998df1-ce0a-548c-be43-95a974f05b02",
+              "quote": "A primary key uniquely identifies a row."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "72998df1-ce0a-548c-be43-95a974f05b02"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "A primary key uniquely identifies a row."
+    ]
+  },
+  {
+    "id": "limitation",
+    "question": "Explain replication and its price.",
+    "selected_file_ids": [
+      "d9643083-10ee-50cf-a66f-06891a30857b"
+    ],
+    "sources": [
+      {
+        "chunk_id": "7b447b32-03ac-5c8f-9d57-96a7d0fc3356",
+        "file_id": "d9643083-10ee-50cf-a66f-06891a30857b",
+        "name": "limitation.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "Replication maintains copies of data on multiple servers."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "Replication maintains copies of data on multiple servers.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "7b447b32-03ac-5c8f-9d57-96a7d0fc3356",
+              "quote": "Replication maintains copies of data on multiple servers."
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        "The selected document does not specify the price."
+      ]
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "7b447b32-03ac-5c8f-9d57-96a7d0fc3356"
+    ],
+    "expected_status": "partial",
+    "expected_quotes": [
+      "Replication maintains copies of data on multiple servers."
+    ]
+  },
+  {
+    "id": "late_evidence",
+    "question": "What is the maximum batch size?",
+    "selected_file_ids": [
+      "1f6e3d63-c93e-54b2-a547-666a38154058"
+    ],
+    "sources": [
+      {
+        "chunk_id": "81dd76f5-e105-5c8a-92dc-3f9285a5ba68",
+        "file_id": "1f6e3d63-c93e-54b2-a547-666a38154058",
+        "name": "late_evidence.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. The maximum batch size is eight chunks."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "The maximum batch size is eight chunks.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "81dd76f5-e105-5c8a-92dc-3f9285a5ba68",
+              "quote": "The maximum batch size is eight chunks."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "81dd76f5-e105-5c8a-92dc-3f9285a5ba68"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. The maximum batch size is eight chunks."
+    ]
+  },
+  {
+    "id": "code_symbols",
+    "question": "What does this condition test?",
+    "selected_file_ids": [
+      "bcb0fc21-1e0e-52ef-b913-4ece9671c618"
+    ],
+    "sources": [
+      {
+        "chunk_id": "5f1d15c2-4b5d-5125-9c77-2824a7865b46",
+        "file_id": "bcb0fc21-1e0e-52ef-b913-4ece9671c618",
+        "name": "code_symbols.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "The Python expression x != 0 tests whether x is not zero."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "The Python expression x != 0 tests whether x is not zero.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "5f1d15c2-4b5d-5125-9c77-2824a7865b46",
+              "quote": "The Python expression x != 0 tests whether x is not zero."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "5f1d15c2-4b5d-5125-9c77-2824a7865b46"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "The Python expression x != 0 tests whether x is not zero."
+    ]
+  },
+  {
+    "id": "punctuation",
+    "question": "請列出三個步驟。",
+    "selected_file_ids": [
+      "5aa2c960-6117-5bfb-a9e4-63c186ef4b86"
+    ],
+    "sources": [
+      {
+        "chunk_id": "de3c8bcc-528e-59f1-a161-4151e38f1897",
+        "file_id": "5aa2c960-6117-5bfb-a9e4-63c186ef4b86",
+        "name": "punctuation.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "第一步：讀取資料。第二步：驗證格式；第三步：儲存結果。"
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "第一步：讀取資料。第二步：驗證格式；第三步：儲存結果。",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "de3c8bcc-528e-59f1-a161-4151e38f1897",
+              "quote": "第一步：讀取資料。第二步：驗證格式；第三步：儲存結果。"
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "de3c8bcc-528e-59f1-a161-4151e38f1897"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "第一步：讀取資料。第二步：驗證格式；第三步：儲存結果。"
+    ]
+  },
+  {
+    "id": "short",
+    "question": "What is the transport protocol?",
+    "selected_file_ids": [
+      "7bd12b4d-0c87-5181-a568-6e2adcf26e82"
+    ],
+    "sources": [
+      {
+        "chunk_id": "5a0b726a-c697-52fb-a708-8cda2520f6e8",
+        "file_id": "7bd12b4d-0c87-5181-a568-6e2adcf26e82",
+        "name": "short.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "TCP"
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "TCP",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "5a0b726a-c697-52fb-a708-8cda2520f6e8",
+              "quote": "TCP"
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "5a0b726a-c697-52fb-a708-8cda2520f6e8"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "TCP"
+    ]
+  },
+  {
+    "id": "units",
+    "question": "What is the memory limit?",
+    "selected_file_ids": [
+      "d176cb34-b237-5261-8781-df44d6be81ab"
+    ],
+    "sources": [
+      {
+        "chunk_id": "ce68dfdc-7020-5fc1-a2fa-98b1f68f2c20",
+        "file_id": "d176cb34-b237-5261-8781-df44d6be81ab",
+        "name": "units.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "The memory limit is 256 MiB, not 256 MB."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "The memory limit is 256 MiB, not 256 MB.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "ce68dfdc-7020-5fc1-a2fa-98b1f68f2c20",
+              "quote": "The memory limit is 256 MiB, not 256 MB."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "ce68dfdc-7020-5fc1-a2fa-98b1f68f2c20"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "The memory limit is 256 MiB, not 256 MB."
+    ]
+  },
+  {
+    "id": "coverage",
+    "question": "Compare availability, consistency and partition tolerance.",
+    "selected_file_ids": [
+      "bbda1d85-f2a1-56f7-835d-e2344a482164"
+    ],
+    "sources": [
+      {
+        "chunk_id": "455394b1-936d-5303-9220-f195a1587511",
+        "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+        "name": "coverage.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "Availability means every request receives a response."
+      },
+      {
+        "chunk_id": "fd9f5952-6696-559b-ab1d-3d0c2866037b",
+        "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+        "name": "coverage.pdf",
+        "page_start": 2,
+        "page_end": 2,
+        "chunk_index": 1,
+        "content": "Consistency means reads observe the latest completed write."
+      },
+      {
+        "chunk_id": "08ff712a-11fd-5e4a-b091-6c709ea3c9d8",
+        "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+        "name": "coverage.pdf",
+        "page_start": 3,
+        "page_end": 3,
+        "chunk_index": 2,
+        "content": "Partition tolerance permits operation despite network partitions."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "Availability means every request receives a response.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "455394b1-936d-5303-9220-f195a1587511",
+              "quote": "Availability means every request receives a response."
+            }
+          ]
+        },
+        {
+          "id": "b1",
+          "markdown": "Consistency means reads observe the latest completed write.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "fd9f5952-6696-559b-ab1d-3d0c2866037b",
+              "quote": "Consistency means reads observe the latest completed write."
+            }
+          ]
+        },
+        {
+          "id": "b2",
+          "markdown": "Partition tolerance permits operation despite network partitions.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "08ff712a-11fd-5e4a-b091-6c709ea3c9d8",
+              "quote": "Partition tolerance permits operation despite network partitions."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "normal",
+    "expected_source_ids": [
+      "455394b1-936d-5303-9220-f195a1587511",
+      "fd9f5952-6696-559b-ab1d-3d0c2866037b",
+      "08ff712a-11fd-5e4a-b091-6c709ea3c9d8"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "Availability means every request receives a response.",
+      "Consistency means reads observe the latest completed write.",
+      "Partition tolerance permits operation despite network partitions."
+    ]
+  },
+  {
+    "id": "wrong_quote",
+    "question": "What is atomicity?",
+    "selected_file_ids": [
+      "cd00f3d9-dc3f-5b98-ac5c-501213b2997d"
+    ],
+    "sources": [
+      {
+        "chunk_id": "c84276c0-e340-5937-aa32-2715fe60641f",
+        "file_id": "cd00f3d9-dc3f-5b98-ac5c-501213b2997d",
+        "name": "wrong_quote.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "Atomicity means a transaction completes entirely or has no effect."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "Atomicity means a transaction completes entirely or has no effect.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "c84276c0-e340-5937-aa32-2715fe60641f",
+              "quote": "The timeout is 99 seconds."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "wrong_quote",
+    "expected_source_ids": [],
+    "expected_status": "unavailable",
+    "expected_quotes": []
+  },
+  {
+    "id": "foreign_source",
+    "question": "What is the timeout in the selected file?",
+    "selected_file_ids": [
+      "1cfb2cb8-d438-5ba0-bec3-37f5280aae2f"
+    ],
+    "sources": [
+      {
+        "chunk_id": "5439baf9-8984-5d8d-945b-d92a19cad1e7",
+        "file_id": "1cfb2cb8-d438-5ba0-bec3-37f5280aae2f",
+        "name": "foreign_source.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "The timeout is 30 seconds."
+      },
+      {
+        "chunk_id": "75b95152-bafe-5377-96fd-758ab2a55f31",
+        "file_id": "48df4c6a-0403-5b8f-963d-9397d467399d",
+        "name": "private.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "The timeout is 99 seconds."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "The timeout is 30 seconds.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "75b95152-bafe-5377-96fd-758ab2a55f31",
+              "quote": "The timeout is 99 seconds."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "foreign_source",
+    "expected_source_ids": [],
+    "expected_status": "unavailable",
+    "expected_quotes": []
+  },
+  {
+    "id": "wrong_semantics",
+    "question": "What is the timeout?",
+    "selected_file_ids": [
+      "0aed1af4-818d-5a9e-959a-d8dbc973bcff"
+    ],
+    "sources": [
+      {
+        "chunk_id": "6c8d1ec0-2752-506d-afad-1882c178d2f1",
+        "file_id": "0aed1af4-818d-5a9e-959a-d8dbc973bcff",
+        "name": "wrong_semantics.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "The timeout is 30 seconds."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "The timeout is 99 seconds.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "6c8d1ec0-2752-506d-afad-1882c178d2f1",
+              "quote": "The timeout is 30 seconds."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "wrong_semantics",
+    "expected_source_ids": [],
+    "expected_status": "unavailable",
+    "expected_quotes": []
+  },
+  {
+    "id": "service_failure",
+    "question": "What is the timeout?",
+    "selected_file_ids": [
+      "6860a0b0-5506-5a56-b856-5db508fa94b0"
+    ],
+    "sources": [
+      {
+        "chunk_id": "d6e7fcdf-dece-52d5-9b4f-79d72134ce98",
+        "file_id": "6860a0b0-5506-5a56-b856-5db508fa94b0",
+        "name": "service_failure.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "The timeout is 30 seconds."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "The timeout is 30 seconds.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "d6e7fcdf-dece-52d5-9b4f-79d72134ce98",
+              "quote": "The timeout is 30 seconds."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "service_failure",
+    "expected_source_ids": [],
+    "expected_status": "unavailable",
+    "expected_quotes": []
+  },
+  {
+    "id": "missing_citation",
+    "question": "What is the timeout?",
+    "selected_file_ids": [
+      "a85cf218-4f3f-5df5-917c-064b15d194ce"
+    ],
+    "sources": [
+      {
+        "chunk_id": "9856d80c-499c-5ab8-90db-0a66408d613a",
+        "file_id": "a85cf218-4f3f-5df5-917c-064b15d194ce",
+        "name": "missing_citation.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "The timeout is 30 seconds."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "The timeout is 30 seconds.",
+          "kind": "factual",
+          "evidence": []
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "missing_citation",
+    "expected_source_ids": [],
+    "expected_status": "unavailable",
+    "expected_quotes": []
+  },
+  {
+    "id": "unknown_source",
+    "question": "What is the timeout?",
+    "selected_file_ids": [
+      "60f1e5c9-d338-5304-ae3e-5389bfbf64f9"
+    ],
+    "sources": [
+      {
+        "chunk_id": "e4da8ff5-a4d8-50f9-9bf5-3d5787b04185",
+        "file_id": "60f1e5c9-d338-5304-ae3e-5389bfbf64f9",
+        "name": "unknown_source.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "The timeout is 30 seconds."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "The timeout is 30 seconds.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "ef5dc7e2-5e43-5d3d-95dd-e071191964c6",
+              "quote": "The timeout is 30 seconds."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "unknown_source",
+    "expected_source_ids": [],
+    "expected_status": "unavailable",
+    "expected_quotes": []
+  },
+  {
+    "id": "duplicate_block",
+    "question": "What is the timeout?",
+    "selected_file_ids": [
+      "41e4adac-11e4-5e98-8966-8bac936426dd"
+    ],
+    "sources": [
+      {
+        "chunk_id": "fadd0ca3-f2b0-505b-bcfe-0e6f632746cf",
+        "file_id": "41e4adac-11e4-5e98-8966-8bac936426dd",
+        "name": "duplicate_block.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "The timeout is 30 seconds."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "The timeout is 30 seconds.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "fadd0ca3-f2b0-505b-bcfe-0e6f632746cf",
+              "quote": "The timeout is 30 seconds."
+            }
+          ]
+        },
+        {
+          "id": "b0",
+          "markdown": "The timeout is 30 seconds.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "fadd0ca3-f2b0-505b-bcfe-0e6f632746cf",
+              "quote": "The timeout is 30 seconds."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "duplicate_block",
+    "expected_source_ids": [],
+    "expected_status": "unavailable",
+    "expected_quotes": []
+  },
+  {
+    "id": "repair",
+    "question": "What is the timeout?",
+    "selected_file_ids": [
+      "f29117b6-026a-5f3c-8fd3-3f7430803f9a"
+    ],
+    "sources": [
+      {
+        "chunk_id": "d6f80964-6690-5f3e-9e6a-100c4a8b6922",
+        "file_id": "f29117b6-026a-5f3c-8fd3-3f7430803f9a",
+        "name": "repair.pdf",
+        "page_start": 1,
+        "page_end": 1,
+        "chunk_index": 0,
+        "content": "The timeout is 30 seconds."
+      }
+    ],
+    "draft": {
+      "blocks": [
+        {
+          "id": "b0",
+          "markdown": "The timeout is 30 seconds.",
+          "kind": "factual",
+          "evidence": [
+            {
+              "chunk_id": "d6f80964-6690-5f3e-9e6a-100c4a8b6922",
+              "quote": "The timeout is 99 seconds."
+            }
+          ]
+        }
+      ],
+      "limitations": []
+    },
+    "scenario": "repair",
+    "expected_source_ids": [
+      "d6f80964-6690-5f3e-9e6a-100c4a8b6922"
+    ],
+    "expected_status": "complete",
+    "expected_quotes": [
+      "The timeout is 30 seconds."
+    ]
+  }
+]

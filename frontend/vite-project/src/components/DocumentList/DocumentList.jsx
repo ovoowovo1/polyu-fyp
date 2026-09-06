@@ -14,6 +14,7 @@ import {
 import { getCurrentUser } from '../../api/auth';
 import { useTranslation } from 'react-i18next';
 import { canUploadSources } from '../../utils/sourceUploadAccess.js';
+import ReingestModal from './ReingestModal.jsx';
 
 import {
     areAllFilteredDocumentsSelected,
@@ -52,6 +53,7 @@ function DocumentList({ widthSize, isMediumScreen }) {
     const [linkModalVisible, setLinkModalVisible] = useState(false);
     const [renameModalVisible, setRenameModalVisible] = useState(false);
     const [renamingDoc, setRenamingDoc] = useState(null);
+    const [reingestingDoc, setReingestingDoc] = useState(null);
 
     useEffect(() => {
         if (error) {
@@ -109,6 +111,7 @@ function DocumentList({ widthSize, isMediumScreen }) {
         onSelect: (fileId) => dispatch(toggleFileSelection(fileId)),
         onDelete: handleDeleteClick,
         onRename: handleRenameClick,
+        onReingest: isTeacher ? (id) => setReingestingDoc(findDocumentById(documents, id)) : undefined,
     };
 
     const handleFetchDocuments = () => dispatch(fetchDocuments());
@@ -116,6 +119,7 @@ function DocumentList({ widthSize, isMediumScreen }) {
 
     return (
         <>
+            {reingestingDoc && <ReingestModal key={reingestingDoc.id} document={reingestingDoc} onClose={() => setReingestingDoc(null)} />}
             <Card
                 className="h-full border-r border-gray-100 flex flex-col"
                 style={{ width: widthSize || '100%' }}

@@ -4,8 +4,9 @@
 from typing import Any, Dict, Optional
 
 from app.logger import get_logger
+from app.services.core.exceptions import PermissionDeniedError, ValidationServiceError
 from app.services.pg.pg_db import set_rls_user
-from app.services.pg.pg_shared import _get_embedding_column, _to_pgvector
+from app.services.pg.pg_shared import _to_pgvector
 
 
 logger = get_logger(__name__)
@@ -111,13 +112,7 @@ def verify_document_write_context(cur, *, user_id: Optional[str], class_id: str)
         raise PermissionError("Document write RLS context does not authorize this class.")
 
 
-def choose_chunk_embedding_columns(chunks: list[dict], embedding_column: Optional[str] = None) -> list[str]:
-    if any("embedding_v2" in chunk for chunk in chunks):
-        return ["embedding", "embedding_v2"]
-    return [_get_embedding_column(embedding_column)]
-
-
-def build_chunk_rows(doc_id: str, chunks: list[dict], insert_columns: list[str]) -> list[tuple]:
+def build_chunk_rows(doc_id: str, chunks: list[dict]) -> list[tuple]:
     rows = []
     for index, chunk in enumerate(chunks):
         meta = chunk.get("metadata") or {}
@@ -125,28 +120,25 @@ def build_chunk_rows(doc_id: str, chunks: list[dict], insert_columns: list[str])
         row = [
             doc_id,
             page_number,
-            page_number,
+            int(meta.get("pageEnd") or page_number),
             index,
             chunk.get("text") or "",
         ]
-        for column_name in insert_columns:
-            vector = chunk.get(column_name)
-            row.append(_to_pgvector(vector) if vector is not None else None)
+        vector = chunk.get("embedding")
+        row.append(_to_pgvector(vector) if vector is not None else None)
         rows.append(tuple(row))
     return rows
 
 
-def insert_chunks(execute_values, cur, rows: list[tuple], insert_columns: list[str]) -> None:
-    insert_column_sql = ", ".join(insert_columns)
-    value_placeholders = ",".join(["%s"] * 5 + ["%s::vector"] * len(insert_columns))
+def insert_chunks(execute_values, cur, rows: list[tuple]) -> None:
     execute_values(
         cur,
-        f"""
-        INSERT INTO chunks (document_id, page_start, page_end, chunk_index, text, {insert_column_sql})
+        """
+        INSERT INTO chunks (document_id, page_start, page_end, chunk_index, text, embedding)
         VALUES %s
         """,
         rows,
-        template=f"({value_placeholders})",
+        template="(%s,%s,%s,%s,%s,%s::vector)",
     )
 
 
@@ -195,10 +187,8 @@ def create_graph_from_document(
     execute_values,
     document: dict,
     chunks: list[dict],
-    embedding_column: Optional[str] = None,
     user_id: Optional[str] = None,
 ) -> dict:
-    insert_columns = choose_chunk_embedding_columns(chunks, embedding_column)
     with get_conn() as conn, conn.cursor() as cur:
         try:
             if document.get("class_id"):
@@ -230,11 +220,47 @@ def create_graph_from_document(
             return {"fileId": doc_id, "isNew": False}
 
         try:
-            rows = build_chunk_rows(doc_id, chunks, insert_columns)
-            insert_chunks(execute_values, cur, rows, insert_columns)
+            rows = build_chunk_rows(doc_id, chunks)
+            insert_chunks(execute_values, cur, rows)
             insert_chunk_media(execute_values, cur, doc_id, chunks)
         except Exception as error:
             raise DocumentStorageError("chunks", error) from error
 
         conn.commit()
         return {"fileId": doc_id, "isNew": True}
+
+
+def get_reingest_document(*, get_conn, file_id: str, user_id: str) -> dict:
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("""SELECT d.id, d.name, d.hash, d.mimetype, d.class_id
+            FROM documents d JOIN classes c ON c.id = d.class_id
+            WHERE d.id = %s AND c.teacher_id = %s""", (file_id, user_id))
+        row = cur.fetchone()
+        if not row:
+            raise PermissionDeniedError("Only the teacher who owns this document's class can reingest it.")
+        return dict(row)
+
+
+def replace_document_chunks(*, get_conn, execute_values, file_id: str, user_id: str,
+                            expected_hash: str, chunks: list[dict]) -> dict:
+    if not chunks:
+        raise ValidationServiceError("The PDF contains no usable chunks.")
+    with get_conn() as conn, conn.cursor() as cur:
+        try:
+            # Recheck ownership and hash under the same lock/transaction as the replacement.
+            cur.execute("""SELECT d.hash FROM documents d JOIN classes c ON c.id = d.class_id
+                WHERE d.id = %s AND c.teacher_id = %s FOR UPDATE OF d, c""", (file_id, user_id))
+            row = cur.fetchone()
+            if not row:
+                raise PermissionDeniedError("Document is unavailable or class ownership changed.")
+            if row["hash"] != expected_hash:
+                raise ValidationServiceError("Original PDF hash does not match this document.")
+            rows = build_chunk_rows(file_id, chunks)
+            cur.execute("DELETE FROM chunks WHERE document_id = %s", (file_id,))
+            insert_chunks(execute_values, cur, rows)
+            insert_chunk_media(execute_values, cur, file_id, chunks)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+    return {"fileId": file_id, "chunksCount": len(chunks), "status": "success"}

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.utils.model_usage import chat_completion
+
 import json
 import os
 from typing import Any, Callable, Dict, List, Optional
@@ -88,7 +90,7 @@ async def run_review_request(
     )
 
     response = await to_thread(
-        client.chat.completions.create,
+        chat_completion, client, stage="review_runtime",
         model=model_name,
         messages=[{"role": "user", "content": content_list}],
         response_format={

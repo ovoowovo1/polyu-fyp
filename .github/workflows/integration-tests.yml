@@ -24,7 +24,7 @@ jobs:
       contents: read
     services:
       postgres:
-        image: postgres:16
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: password
@@ -40,6 +40,7 @@ jobs:
       PG_DSN: postgresql://postgres:password@localhost:5432/postgres
       JWT_SECRET_KEY: test-secret
       PORT: 3000
+      FULLTEXT_SEARCH_BACKEND: postgres
     steps:
       - uses: actions/checkout@v6
 
@@ -73,6 +74,12 @@ jobs:
           psql "$PG_DSN" -v ON_ERROR_STOP=1 -f migrations/enable_rls_policies.sql
           psql "$PG_DSN" -v ON_ERROR_STOP=1 -f tests/integration/rls_chunk_media.sql
           psql "$PG_DSN" -v ON_ERROR_STOP=1 -f migrations/add_auth_refresh_tokens.sql
+          psql "$PG_DSN" -v ON_ERROR_STOP=1 -f migrations/add_rag_search.sql
+          psql "$PG_DSN" -v ON_ERROR_STOP=1 -f migrations/use_single_embedding.sql
+
+      - name: Verify RAG search and atomic PDF reingestion
+        working-directory: backend/RAG_python-quiz
+        run: python tests/integration/check_rag_database.py
 
       - name: Start backend
         working-directory: backend/RAG_python-quiz

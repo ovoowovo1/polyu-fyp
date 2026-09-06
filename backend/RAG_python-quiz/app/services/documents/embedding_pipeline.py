@@ -99,68 +99,8 @@ async def embed_batch_with_adaptive_retry(
     return left + right
 
 
-async def embed_texts_with_retry(
-    texts: List[str],
-    *,
-    embeddings_model=None,
-    create_embedding_model: Callable[..., Any],
-    initial_batch_size: int,
-    embed_batch,
-    logger,
-) -> List[List[float]]:
-    if not texts:
-        return []
-
-    if embeddings_model is None:
-        embeddings_model = create_embedding_model()
-    all_vectors: List[List[float]] = []
-    logger.info("[Ingest] Starting adaptive embedding generation")
-
-    for start in range(0, len(texts), initial_batch_size):
-        batch_texts = texts[start : start + initial_batch_size]
-        batch_number = start // initial_batch_size + 1
-        vectors = await embed_batch(
-            batch_texts,
-            embeddings_model,
-            batch_label=str(batch_number),
-        )
-        all_vectors.extend(vectors)
-        logger.info("[Ingest] Embedding batch %s completed successfully (%s vectors)", batch_number, len(vectors))
-
-    logger.info("[Ingest] Generated %s vectors in total", len(all_vectors))
-    return all_vectors
-
-
 async def embed_chunks_for_storage(
-    chunks: List[Dict[str, Any]],
-    *,
-    create_embedding_model: Callable[..., Any],
-    embed_texts,
-    get_settings,
-    logger,
-) -> tuple[List[List[float]], Optional[List[List[float]]]]:
-    embedding_inputs = [chunk.get("embeddingInput", chunk["pageContent"]) for chunk in chunks]
-    primary_model = create_embedding_model()
-    primary_vectors = await embed_texts(embedding_inputs, embeddings_model=primary_model)
-
-    settings = get_settings()
-    fallback_model_name = settings.embedding_fallback_model
-    fallback_column = settings.embedding_fallback_column
-    if not fallback_model_name or fallback_column == "embedding":
-        return primary_vectors, None
-
-    try:
-        fallback_model = create_embedding_model(
-            model_name=fallback_model_name,
-            base_url=settings.embedding_base_url,
-        )
-        fallback_vectors = await embed_texts(embedding_inputs, embeddings_model=fallback_model)
-        return primary_vectors, fallback_vectors
-    except Exception as err:
-        logger.warning(
-            "[Ingest] Standby embeddings unavailable for column=%s model=%s; continuing with primary only: %s",
-            fallback_column,
-            fallback_model_name,
-            err,
-        )
-        return primary_vectors, None
+    chunks: List[Dict[str, Any]], *, embed_texts,
+) -> List[List[float]]:
+    inputs = [chunk.get("embeddingInput", chunk["pageContent"]) for chunk in chunks]
+    return await embed_texts(inputs)

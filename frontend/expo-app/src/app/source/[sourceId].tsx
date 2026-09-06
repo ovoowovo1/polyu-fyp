@@ -1,5 +1,5 @@
-import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { SourceReaderChunk } from '@/components/source-reader-chunk';
@@ -36,7 +36,7 @@ export default function SourceReaderScreen() {
   const chunks = documentData?.chunks ?? [];
   const focusedChunkId = chunkId ? String(chunkId) : '';
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let active = true;
 
     const loadDocument = async () => {
@@ -63,7 +63,7 @@ export default function SourceReaderScreen() {
     return () => {
       active = false;
     };
-  }, [sourceId, t]);
+  }, [sourceId, t]));
 
   useEffect(() => {
     if (!focusedChunkId || hasScrolledRef.current) {

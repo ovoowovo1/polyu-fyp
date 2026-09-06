@@ -11,14 +11,14 @@ import os
 import sys
 from typing import Any, Dict, List
 
-from openai import OpenAI
+
 
 # Keep the evaluation script runnable when executed directly from this folder.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.services.pg import pg_retrieval_service as pg_service
-from app.services.pg.pg_retrieval_keywords import sanitize_query_for_bm25
 from app.utils.dev_credentials import get_eval_embedding_credentials
+from app.utils.api_key_manager import create_embedding_model
 
 
 class EvaluationEmbeddings:
@@ -26,15 +26,11 @@ class EvaluationEmbeddings:
 
     def __init__(self):
         credentials = get_eval_embedding_credentials()
-        self.client = OpenAI(api_key=credentials.api_key, base_url=credentials.base_url)
+        self.client = create_embedding_model(api_key=credentials.api_key, base_url=credentials.base_url, model_name=credentials.model)
         self.model_name = credentials.model
 
     def embed_query(self, text: str) -> List[float]:
-        response = self.client.embeddings.create(
-            model=self.model_name,
-            input=text,
-        )
-        return response.data[0].embedding
+        return self.client.embed_query(text)
 
     async def aembed_query(self, text: str) -> List[float]:
         return await asyncio.to_thread(self.embed_query, text)
@@ -64,10 +60,9 @@ async def fulltext_only_search(
 ) -> List[Dict[str, Any]]:
     """Run BM25-only keyword retrieval."""
 
-    sanitized_query = sanitize_query_for_bm25(query)
     return await asyncio.to_thread(
         pg_service.retrieve_context_by_keywords,
-        sanitized_query,
+        query,
         selected_file_ids,
         k,
     )

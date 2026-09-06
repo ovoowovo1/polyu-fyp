@@ -1,0 +1,11 @@
+{
+  "candidate_recall": 1.0,
+  "citation_precision": 1.0,
+  "citation_completeness": 1.0,
+  "latency_seconds": 16.426549999997953,
+  "embedding_model": "google/gemini-embedding-2",
+  "embedding_dimensions": 3072,
+  "all_scopes_correct": true,
+  "all_source_ids_correct": true,
+  "targets_met": true
+}

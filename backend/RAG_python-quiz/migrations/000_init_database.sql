@@ -10,7 +10,6 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
-CREATE EXTENSION IF NOT EXISTS pg_search;
 
 CREATE SCHEMA IF NOT EXISTS app_security;
 
@@ -69,14 +68,12 @@ CREATE TABLE IF NOT EXISTS public.chunks (
     page_end int,
     chunk_index int NOT NULL DEFAULT 0,
     embedding vector(3072),
-    embedding_v2 vector(3072),
     entities_json jsonb NOT NULL DEFAULT '{}'::jsonb,
     tsv tsvector GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, coalesce(text, ''))) STORED,
     created_at timestamptz NOT NULL DEFAULT now()
 );
 
 ALTER TABLE public.chunks ADD COLUMN IF NOT EXISTS embedding vector(3072);
-ALTER TABLE public.chunks ADD COLUMN IF NOT EXISTS embedding_v2 vector(3072);
 ALTER TABLE public.chunks ADD COLUMN IF NOT EXISTS entities_json jsonb NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE public.chunks ADD COLUMN IF NOT EXISTS tsv tsvector
     GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, coalesce(text, ''))) STORED;
@@ -205,9 +202,8 @@ CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON public.chunks(document_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_tsv ON public.chunks USING gin(tsv);
 CREATE INDEX IF NOT EXISTS idx_chunks_text_trgm ON public.chunks USING gin(text gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_chunks_entities_trgm ON public.chunks USING gin ((entities_json::text) gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_chunks_bm25 ON public.chunks
-    USING bm25 (id, text)
-    WITH (key_field='id');
+-- Build the optional Lakebase BM25 index after loading data, using migrate_rag_lakebase.sql.
+CREATE INDEX IF NOT EXISTS idx_chunks_document_order ON public.chunks(document_id, chunk_index);
 CREATE INDEX IF NOT EXISTS idx_quizzes_class_id ON public.quizzes(class_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_documents_document_id ON public.quiz_documents(document_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_submissions_quiz_id ON public.quiz_submissions(quiz_id);

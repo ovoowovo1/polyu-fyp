@@ -1,3 +1,5 @@
+from app.utils.model_usage import model_workflow
+from app.utils.model_usage import chat_completion
 import asyncio
 import json
 from typing import List, Optional
@@ -82,7 +84,7 @@ async def _generate_quiz_with_model(api_key: str, quiz_prompt: str, raw_model_na
     client = get_llm_client(api_key)
     logger.info("[QuizGeneration] generating quiz content")
     response = await asyncio.to_thread(
-        client.chat.completions.create,
+        chat_completion, client, stage="quiz_generation_service",
         model=raw_model_name,
         messages=[{"role": "user", "content": quiz_prompt}],
         response_format={
@@ -104,6 +106,7 @@ async def _generate_quiz_with_model(api_key: str, quiz_prompt: str, raw_model_na
     return {"quiz_name": quiz_name, "questions": questions}
 
 
+@model_workflow("QuizUsage")
 async def generate_quiz_from_files(
     file_ids: List[str],
     bloom_levels: Optional[List[BloomLevel]],

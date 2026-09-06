@@ -1,274 +1,40 @@
 from contextlib import contextmanager
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 import unittest
-
 from app.services.rag.retrieval import vector as vector_query_service
-from app.utils.ingest_errors import EmbeddingProviderError
-from tests.support import make_embedding_error as make_retryable_error
-from tests.support import make_embedding_settings
-
-EMBEDDING_SETTINGS = make_embedding_settings(embedding_active_column="embedding", redis_cache_enabled=False)
-UNSET = object()
-
-
-def make_no_endpoints_error():
-    message = "No endpoints found for google/gemini-embedding-001."
-    return make_retryable_error(
-        upstream_message=message,
-        raw_preview=f'{{"error":{{"message":"{message}","code":404}}}}',
-    )
-
+from tests.support import make_embedding_settings, make_embedding_error
 
 class SuccessfulQueryModel:
     def __init__(self, model_name, vector):
-        self.model_name = model_name
-        self.vector = vector
-        self.calls = []
-
+        self.model_name, self.vector, self.calls = model_name, vector, []
     async def aembed_query(self, text):
         self.calls.append(text)
         return self.vector
 
-
-class RetryableFailingQueryModel:
-    model_name = "google/gemini-embedding-001"
-
-    async def aembed_query(self, text):
-        raise make_retryable_error()
-
-
-class ValueErrorQueryModel:
-    model_name = "google/gemini-embedding-001"
-
-    async def aembed_query(self, text):
-        raise ValueError("bad input")
-
-
 @contextmanager
-def patched_vector_dependencies(primary_model, *, fallback_model=UNSET, rows=UNSET):
-    fallback_patch = patch("app.services.rag.retrieval.vector.get_fallback_embedding_model")
-    if fallback_model is not UNSET:
-        fallback_patch = patch(
-            "app.services.rag.retrieval.vector.get_fallback_embedding_model",
-            return_value=fallback_model,
-        )
-
-    rows = rows if rows is not UNSET else [{"chunkId": "chunk"}]
-    with patch(
-        "app.services.rag.retrieval.vector.get_settings",
-        return_value=EMBEDDING_SETTINGS,
-    ), patch(
-        "app.services.rag.retrieval.vector.get_embedding_model",
-        return_value=primary_model,
-    ), fallback_patch as get_fallback_model, patch(
-        "app.services.rag.retrieval.vector.pg_service.retrieve_graph_context",
-        return_value=rows,
-    ) as retrieve_graph_context, patch(
-        "app.services.cache.rag_cache.redis_cache.is_enabled",
-        return_value=False,
-    ):
-        yield retrieve_graph_context, get_fallback_model
-
+def patched_vector_dependencies(primary_model, *, rows=None):
+    with patch.object(vector_query_service, 'get_settings', return_value=make_embedding_settings(redis_cache_enabled=False)), patch.object(vector_query_service, 'get_embedding_model', return_value=primary_model), patch.object(vector_query_service.pg_service, 'retrieve_graph_context', return_value=rows or []) as retrieve, patch('app.services.cache.rag_cache.redis_cache.is_enabled', return_value=False):
+        yield retrieve
 
 class VectorQueryServiceTests(unittest.IsolatedAsyncioTestCase):
-    async def test_rehydrate_graph_context_uses_postgres_in_worker_thread(self):
-        hydrated = [{"chunkId": "chunk-1", "text": "full text"}]
-        with patch(
-            "app.services.rag.retrieval.vector.pg_service.retrieve_context_by_chunk_ids",
-            return_value=hydrated,
-        ) as retrieve:
-            rows = await vector_query_service._rehydrate_graph_context(
-                [{"chunkId": "chunk-1", "score": 0.2}]
-            )
+    async def test_model_is_required(self):
+        with patched_vector_dependencies(None), self.assertRaises(RuntimeError):
+            await vector_query_service.retrieve_vector_context('q', ['f1'])
 
-        self.assertEqual(rows, hydrated)
-        retrieve.assert_called_once_with([{"chunkId": "chunk-1", "score": 0.2}])
+    async def test_single_model_and_selected_file_scope(self):
+        model = SuccessfulQueryModel('google/gemini-embedding-2', [0.1])
+        with patched_vector_dependencies(model, rows=[{'chunkId':'c1'}]) as retrieve:
+            rows, mode = await vector_query_service.retrieve_vector_context(' hello ', ['f1'], k=5)
+        self.assertEqual(mode, 'single')
+        self.assertEqual(rows, [{'chunkId':'c1'}])
+        self.assertEqual(model.calls, ['hello'])
+        retrieve.assert_called_once_with([0.1], 5, ['f1'])
 
-    async def test_retrieve_vector_context_requires_primary_embedding_model(self):
-        with patched_vector_dependencies(primary_model=None):
-            with self.assertRaises(RuntimeError) as ctx:
-                await vector_query_service.retrieve_vector_context("hello", ["file-1"])
-
-        self.assertIn("Embedding API Key not configured", str(ctx.exception))
-
-    async def test_retrieve_vector_context_uses_primary_model_by_default(self):
-        primary_model = SuccessfulQueryModel("google/gemini-embedding-001", [0.1, 0.2])
-
-        with patched_vector_dependencies(primary_model, rows=[{"chunkId": "chunk-1"}]) as (
-            retrieve_graph_context,
-            get_fallback_model,
-        ):
-            rows, mode = await vector_query_service.retrieve_vector_context("hello", ["file-1"])
-
-        self.assertEqual(mode, "primary")
-        self.assertEqual(rows, [{"chunkId": "chunk-1"}])
-        retrieve_graph_context.assert_called_once_with(
-            [0.1, 0.2],
-            20,
-            ["file-1"],
-            embedding_column="embedding",
-        )
-        get_fallback_model.assert_not_called()
-
-    async def test_retrieve_vector_context_delegates_primary_cache_helpers(self):
-        primary_model = SuccessfulQueryModel("google/gemini-embedding-001", [0.1, 0.2])
-
-        async def load_rows(*_args, **kwargs):
-            return await kwargs["loader"]()
-
-        with patch("app.services.rag.retrieval.vector.get_settings", return_value=EMBEDDING_SETTINGS), patch(
-            "app.services.rag.retrieval.vector.get_embedding_model",
-            return_value=primary_model,
-        ), patch(
-            "app.services.rag.retrieval.vector.rag_cache.get_or_set_query_embedding",
-            new_callable=AsyncMock,
-            return_value=[0.9, 0.8],
-        ) as query_cache, patch(
-            "app.services.rag.retrieval.vector.rag_cache.get_or_set_retrieval_rows",
-            new_callable=AsyncMock,
-            side_effect=load_rows,
-        ) as retrieval_cache, patch(
-            "app.services.rag.retrieval.vector.pg_service.retrieve_graph_context",
-            return_value=[{"chunkId": "chunk-1"}],
-        ):
-            rows, mode = await vector_query_service.retrieve_vector_context("  hello   world  ", ["file-1"], k=7)
-
-        self.assertEqual(mode, "primary")
-        self.assertEqual(rows, [{"chunkId": "chunk-1"}])
-        query_cache.assert_awaited_once_with(
-            primary_model,
-            "hello world",
-            mode="primary",
-            settings=EMBEDDING_SETTINGS,
-        )
-        self.assertEqual(retrieval_cache.await_args.kwargs["mode"], "primary")
-        self.assertEqual(retrieval_cache.await_args.kwargs["query_text"], "hello world")
-        self.assertEqual(retrieval_cache.await_args.kwargs["k"], 7)
-
-    async def test_retrieve_vector_context_falls_back_on_retryable_provider_error(self):
-        fallback_model = SuccessfulQueryModel("google/gemini-embedding-2-preview", [0.3, 0.4])
-
-        with patched_vector_dependencies(
-            RetryableFailingQueryModel(),
-            fallback_model=fallback_model,
-            rows=[{"chunkId": "chunk-2"}],
-        ) as (retrieve_graph_context, get_fallback_model):
-            rows, mode = await vector_query_service.retrieve_vector_context("hello", ["file-1"])
-
-        self.assertEqual(mode, "fallback")
-        self.assertEqual(rows, [{"chunkId": "chunk-2"}])
-        retrieve_graph_context.assert_called_once_with(
-            [0.3, 0.4],
-            20,
-            ["file-1"],
-            embedding_column="embedding_v2",
-        )
-        get_fallback_model.assert_called_once()
-
-    async def test_retrieve_vector_context_delegates_fallback_cache_helpers(self):
-        fallback_model = SuccessfulQueryModel("google/gemini-embedding-2-preview", [0.3, 0.4])
-
-        async def query_cache(model, query_text, *, mode, settings):
-            if mode == "primary":
-                raise make_retryable_error()
-            return await model.aembed_query(query_text)
-
-        async def load_rows(*_args, **kwargs):
-            return await kwargs["loader"]()
-
-        with patch("app.services.rag.retrieval.vector.get_settings", return_value=EMBEDDING_SETTINGS), patch(
-            "app.services.rag.retrieval.vector.get_embedding_model",
-            return_value=RetryableFailingQueryModel(),
-        ), patch(
-            "app.services.rag.retrieval.vector.get_fallback_embedding_model",
-            return_value=fallback_model,
-        ), patch(
-            "app.services.rag.retrieval.vector.rag_cache.get_or_set_query_embedding",
-            new_callable=AsyncMock,
-            side_effect=query_cache,
-        ) as query_cache_mock, patch(
-            "app.services.rag.retrieval.vector.rag_cache.get_or_set_retrieval_rows",
-            new_callable=AsyncMock,
-            side_effect=load_rows,
-        ) as retrieval_cache, patch(
-            "app.services.rag.retrieval.vector.pg_service.retrieve_graph_context",
-            return_value=[{"chunkId": "chunk-2"}],
-        ):
-            rows, mode = await vector_query_service.retrieve_vector_context("hello", ["file-1"])
-
-        self.assertEqual(mode, "fallback")
-        self.assertEqual(rows, [{"chunkId": "chunk-2"}])
-        self.assertEqual(query_cache_mock.await_args_list[0].kwargs["mode"], "primary")
-        self.assertEqual(query_cache_mock.await_args_list[1].kwargs["mode"], "fallback")
-        self.assertEqual(retrieval_cache.await_args.kwargs["mode"], "fallback")
-        self.assertEqual(retrieval_cache.await_args.kwargs["embedding_column"], "embedding_v2")
-
-    async def test_retrieve_vector_context_re_raises_when_fallback_model_missing(self):
-        with patched_vector_dependencies(RetryableFailingQueryModel(), fallback_model=None):
-            with self.assertRaises(EmbeddingProviderError):
-                await vector_query_service.retrieve_vector_context("hello", ["file-1"])
-
-    async def test_retrieve_vector_context_falls_back_on_no_endpoints_found_error(self):
-        fallback_model = SuccessfulQueryModel("google/gemini-embedding-2-preview", [0.5, 0.6])
-
-        class NoEndpointsFailingQueryModel:
-            model_name = "google/gemini-embedding-001"
-
-            async def aembed_query(self, text):
-                raise make_no_endpoints_error()
-
-        with patched_vector_dependencies(
-            NoEndpointsFailingQueryModel(),
-            fallback_model=fallback_model,
-            rows=[{"chunkId": "chunk-3"}],
-        ) as (retrieve_graph_context, get_fallback_model):
-            rows, mode = await vector_query_service.retrieve_vector_context("hello", ["file-1"])
-
-        self.assertEqual(mode, "fallback")
-        self.assertEqual(rows, [{"chunkId": "chunk-3"}])
-        retrieve_graph_context.assert_called_once_with(
-            [0.5, 0.6],
-            20,
-            ["file-1"],
-            embedding_column="embedding_v2",
-        )
-        get_fallback_model.assert_called_once()
-
-    async def test_retrieve_vector_context_does_not_fallback_on_empty_primary_results(self):
-        primary_model = SuccessfulQueryModel("google/gemini-embedding-001", [0.1, 0.2])
-
-        with patched_vector_dependencies(primary_model, rows=[]) as (
-            retrieve_graph_context,
-            get_fallback_model,
-        ):
-            rows, mode = await vector_query_service.retrieve_vector_context("hello", ["file-1"])
-
-        self.assertEqual(mode, "primary")
-        self.assertEqual(rows, [])
-        retrieve_graph_context.assert_called_once()
-        get_fallback_model.assert_not_called()
-
-    async def test_retrieve_vector_context_does_not_fallback_on_local_error(self):
-        with patched_vector_dependencies(ValueErrorQueryModel()) as (_, get_fallback_model):
-            with self.assertRaises(ValueError):
-                await vector_query_service.retrieve_vector_context("hello", ["file-1"])
-
-        get_fallback_model.assert_not_called()
-
-    async def test_retrieve_vector_context_re_raises_fallback_error(self):
-        fallback_error = make_retryable_error()
-
-        class RetryableFallbackModel:
-            model_name = "google/gemini-embedding-2-preview"
-
-            async def aembed_query(self, text):
-                raise fallback_error
-
-        with patched_vector_dependencies(
-            RetryableFailingQueryModel(),
-            fallback_model=RetryableFallbackModel(),
-        ):
-            with self.assertRaises(EmbeddingProviderError) as ctx:
-                await vector_query_service.retrieve_vector_context("hello", ["file-1"])
-
-        self.assertIs(ctx.exception, fallback_error)
+    async def test_failure_propagates_without_switching_model(self):
+        from unittest.mock import AsyncMock
+        for error in (ValueError('bad input'), make_embedding_error()):
+            model = SuccessfulQueryModel('google/gemini-embedding-2', [])
+            model.aembed_query = AsyncMock(side_effect=error)
+            with patched_vector_dependencies(model) as retrieve, self.assertRaises(type(error)):
+                await vector_query_service.retrieve_vector_context('q', ['f1'])
+            retrieve.assert_not_called()

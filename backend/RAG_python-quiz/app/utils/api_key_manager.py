@@ -13,6 +13,7 @@ from app.config import get_settings
 from app.logger import get_logger
 from app.utils.runtime import embeddings as embedding_runtime
 from app.utils.runtime import llm_client, llm_keys, retry
+from app.utils.model_usage import operation_scope
 
 logger = get_logger(__name__)
 
@@ -158,17 +159,6 @@ def get_embedding_model() -> Optional[OpenAIEmbeddings]:
     return create_embedding_model()
 
 
-def get_fallback_embedding_model() -> Optional[OpenAIEmbeddings]:
-    settings = get_settings()
-    effective_api_key, _ = _resolve_embedding_api_key(settings=settings)
-    if not effective_api_key or not settings.embedding_fallback_model:
-        return None
-    return create_embedding_model(
-        model_name=settings.embedding_fallback_model,
-        base_url=settings.embedding_base_url,
-    )
-
-
 def _build_retry_error_message(
     operation_name: str,
     key_count: int,
@@ -187,21 +177,22 @@ async def with_llm_retry_async(
     retry_delay: float = 0.5,
     **kwargs,
 ) -> Any:
-    return await retry.with_llm_retry_async(
-        operation_name,
-        operation_func,
-        *args,
-        max_retries=max_retries,
-        error_type=error_type,
-        retry_delay=retry_delay,
-        reset_key_index_func=reset_llm_key_index,
-        key_count_func=get_llm_keys_count,
-        current_key_func=get_current_llm_api_key,
-        switch_key_func=switch_to_next_llm_key,
-        sleep_func=asyncio.sleep,
-        logger=logger,
-        **kwargs,
-    )
+    with operation_scope(operation_name):
+        return await retry.with_llm_retry_async(
+            operation_name,
+            operation_func,
+            *args,
+            max_retries=max_retries,
+            error_type=error_type,
+            retry_delay=retry_delay,
+            reset_key_index_func=reset_llm_key_index,
+            key_count_func=get_llm_keys_count,
+            current_key_func=get_current_llm_api_key,
+            switch_key_func=switch_to_next_llm_key,
+            sleep_func=asyncio.sleep,
+            logger=logger,
+            **kwargs,
+        )
 
 
 def with_llm_retry_sync(
@@ -213,18 +204,19 @@ def with_llm_retry_sync(
     retry_delay: float = 0.5,
     **kwargs,
 ) -> Any:
-    return retry.with_llm_retry_sync(
-        operation_name,
-        operation_func,
-        *args,
-        max_retries=max_retries,
-        error_type=error_type,
-        retry_delay=retry_delay,
-        reset_key_index_func=reset_llm_key_index,
-        key_count_func=get_llm_keys_count,
-        current_key_func=get_current_llm_api_key,
-        switch_key_func=switch_to_next_llm_key,
-        sleep_func=time.sleep,
-        logger=logger,
-        **kwargs,
-    )
+    with operation_scope(operation_name):
+        return retry.with_llm_retry_sync(
+            operation_name,
+            operation_func,
+            *args,
+            max_retries=max_retries,
+            error_type=error_type,
+            retry_delay=retry_delay,
+            reset_key_index_func=reset_llm_key_index,
+            key_count_func=get_llm_keys_count,
+            current_key_func=get_current_llm_api_key,
+            switch_key_func=switch_to_next_llm_key,
+            sleep_func=time.sleep,
+            logger=logger,
+            **kwargs,
+        )

@@ -1,5 +1,6 @@
 import React from 'react';
-import { List, Typography } from 'antd';
+import { List, Typography, Button } from 'antd';
+import { useTranslation } from 'react-i18next';
 import DocumentStatusIcon from './DocumentStatusIcon';
 
 const { Text } = Typography;
@@ -16,8 +17,10 @@ const DocumentListItem = ({
     onSelect,
     onDelete,
     onRename,
+    onReingest,
     onToggleCollapse,
 }) => {
+    const { t } = useTranslation();
     const isHovered = hoveredDocId === doc.id || dropdownOpen === doc.id;
 
     if (isCollapsed) {
@@ -84,6 +87,7 @@ const DocumentListItem = ({
                         {doc.filename}
                     </Text>
                 </div>
+
                 <input
                     type="checkbox"
                     checked={isSelected}

@@ -19,4 +19,5 @@ def create_llm_client(*, api_key: Optional[str], settings, openai_cls):
     return openai_cls(
         base_url=resolve_llm_base_url(settings),
         api_key=api_key,
+        max_retries=0,
     )

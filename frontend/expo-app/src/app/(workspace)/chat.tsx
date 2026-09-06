@@ -13,8 +13,7 @@ import {
   View,
 } from 'react-native';
 
-import { askQuestion, getDocumentContent } from '@/lib/api';
-import { resolveChunkId } from '@/lib/chunk-utils';
+import { askQuestion } from '@/lib/api';
 import { useDocumentWorkspace } from '@/lib/document-workspace-context';
 import { useLanguage } from '@/lib/i18n';
 import { colors, commonStyles } from '@/lib/styles';
@@ -123,52 +122,11 @@ export default function ChatScreen() {
     }
   };
 
-  const openCitationPreview = async (number: number, details?: CitationDetails) => {
-    if (!details?.fileId || !details.chunkId) {
-      setCitationPreview({
-        visible: true,
-        citationNumber: number,
-        details,
-        loading: false,
-        chunk: null,
-        error: t('chat.citationPreviewUnavailable'),
-      });
-      return;
-    }
-
-    setCitationPreview({
-      visible: true,
-      citationNumber: number,
-      details,
-      loading: true,
-      chunk: null,
-      error: '',
+  const openCitationPreview = (number: number, details?: CitationDetails) => {
+    setCitationPreview({ visible: true, citationNumber: number, details, loading: false,
+      chunk: details?.content !== undefined ? { id: details.chunkId, content: details.content } : null,
+      error: details?.content !== undefined ? '' : t('chat.citationPreviewUnavailable'),
     });
-
-    try {
-      const result = await getDocumentContent(String(details.fileId));
-      const chunk = (result.chunks ?? []).find((item, index) => (
-        resolveChunkId(item, index) === String(details.chunkId)
-      ));
-
-      setCitationPreview({
-        visible: true,
-        citationNumber: number,
-        details,
-        loading: false,
-        chunk: chunk ?? null,
-        error: chunk ? '' : t('chat.citationPreviewMissing'),
-      });
-    } catch (error) {
-      setCitationPreview({
-        visible: true,
-        citationNumber: number,
-        details,
-        loading: false,
-        chunk: null,
-        error: error instanceof Error ? error.message : t('common.unknownError'),
-      });
-    }
   };
 
   const openFullSource = () => {

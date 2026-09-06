@@ -28,7 +28,7 @@ test('handleProChatRequestWithSse forwards progress events and preserves final r
   global.fetch = async () => createResponse([
     'event: router\ndata: {"type":"router","message":"routing question"}\n\n',
     'event: retrieval\ndata: {"type":"retrieval","message":"retrieving documents","data":2}\n\n',
-    'event: result\ndata: {"type":"result","answer":"Grounded answer.","answer_with_citations":[{"content_segments":[{"segment_text":"Grounded answer.","source_references":[{"file_chunk_id":"chunk-1"}]}]}],"raw_sources":[{"fileId":"file-1","chunkId":"chunk-1","source":"notes.pdf","pageNumber":5}],"result_reason":"no_relevant_documents"}\n\n',
+    'event: result\ndata: {"type":"result","status":"complete","blocks":[{"id":"b1","markdown":"Grounded answer.","source_ids":["chunk-1"]}],"sources":[{"chunk_id":"chunk-1","file_id":"file-1","name":"notes.pdf","page_start":5,"page_end":5,"content":"original evidence"}],"limitations":[],"trace_id":"trace-1"}\n\n',
   ]);
 
   try {
@@ -44,7 +44,7 @@ test('handleProChatRequestWithSse forwards progress events and preserves final r
 
     assert.equal(progressEvents.length, 3);
     assert.deepEqual(progressEvents.map((event) => event.type), ['router', 'retrieval', 'result']);
-    assert.equal(response.result.result_reason, 'no_relevant_documents');
+    assert.equal(response.result.trace_id, 'trace-1');
     assert.deepEqual(content, [
       { type: 'text', value: 'Grounded answer.' },
       {
@@ -55,6 +55,8 @@ test('handleProChatRequestWithSse forwards progress events and preserves final r
           chunkId: 'chunk-1',
           source: 'notes.pdf',
           page: 5,
+          pageEnd: 5,
+          content: 'original evidence',
         },
       },
     ]);
@@ -69,7 +71,7 @@ test('handleProChatRequestWithSse forwards rejected-route result events so progr
 
   global.fetch = async () => createResponse([
     'event: router\ndata: {"type":"router","message":"routing question"}\n\n',
-    'event: result\ndata: {"type":"result","answer":"Sorry, this question cannot be answered reliably from the selected documents.","answer_with_citations":[],"raw_sources":[],"result_reason":"unsupported_question"}\n\n',
+    'event: result\ndata: {"type":"result","status":"unavailable","blocks":[{"id":"b1","markdown":"Sorry, this question cannot be answered reliably from the selected documents.","source_ids":[]}],"sources":[],"limitations":[],"trace_id":"trace-1"}\n\n',
   ]);
 
   try {
@@ -81,7 +83,7 @@ test('handleProChatRequestWithSse forwards rejected-route result events so progr
       },
     );
 
-    assert.equal(response.result.result_reason, 'unsupported_question');
+    assert.equal(response.result.status, 'unavailable');
     assert.deepEqual(progressEvents.map((event) => event.type), ['router', 'result']);
   } finally {
     global.fetch = originalFetch;
@@ -130,7 +132,7 @@ test('handleProChatRequestWithSse refreshes and retries when the stream request 
       return new Response(JSON.stringify({ detail: { error: 'Token expired' } }), { status: 401 });
     }
     return createResponse([
-      'event: result\ndata: {"type":"result","answer":"Fresh answer.","answer_with_citations":[],"raw_sources":[]}\n\n',
+      'event: result\ndata: {"type":"result","status":"unavailable","blocks":[{"id":"b1","markdown":"Fresh answer.","source_ids":[]}],"sources":[],"limitations":[],"trace_id":"trace-1"}\n\n',
     ]);
   };
 

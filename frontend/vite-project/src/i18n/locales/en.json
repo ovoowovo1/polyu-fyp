@@ -77,7 +77,11 @@
     },
     "chooseSourceType": "Please choose the type of source you want to add:",
     "uploadPDF": "Upload PDF",
-    "addLink": "Add Link"
+    "addLink": "Add Link",
+    "reingest": "Reimport PDF",
+    "reingestHint": "Select the original PDF to rebuild its content.",
+    "chooseOriginalPdf": "Choose original PDF",
+    "reingestComplete": "Reimported successfully: {{count}} chunks."
   },
   "classes": {
     "title": "Classes List",

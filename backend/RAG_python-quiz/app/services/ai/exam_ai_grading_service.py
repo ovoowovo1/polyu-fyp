@@ -11,6 +11,7 @@ from app.utils.api_key_manager import (
     with_llm_retry_async,
 )
 from app.utils.openai_response import extract_chat_completion_text
+from app.utils.model_usage import model_workflow
 
 logger = get_logger(__name__)
 
@@ -35,6 +36,7 @@ async def _grade_answer(api_key: str, schema: Dict[str, Any], prompt: str, max_m
     )
 
 
+@model_workflow("ExamUsage")
 async def ai_grade_answer(
     question_text: str,
     question_type: str,
@@ -82,6 +84,7 @@ async def _generate_comment(api_key: str, prompt: str, operation_name: str) -> s
     )
 
 
+@model_workflow("ExamUsage")
 async def ai_generate_exam_overall_comment(
     submission_summary: str,
     total_score: int,

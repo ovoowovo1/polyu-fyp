@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.api_helpers.service_helpers import error_detail
+from app.services.pg.pg_access_control import can_access_document
 from app.services.pg.rls_context import clear_current_rls_user, set_current_rls_user
 from app.services.rag.index import run_adaptive_rag_stream
 from app.utils.jwt_utils import get_current_user
@@ -45,6 +47,10 @@ async def query_stream(body: QueryStreamRequest, user: dict = Depends(get_curren
         raise HTTPException(status_code=400, detail=error_detail("Please provide a query question"))
     if not body.selectedFileIds:
         raise HTTPException(status_code=400, detail=error_detail("Please select at least one document for retrieval"))
+
+    for file_id in set(body.selectedFileIds):
+        if not await asyncio.to_thread(can_access_document, user["user_id"], file_id):
+            raise HTTPException(status_code=403, detail=error_detail("You cannot access one or more selected documents."))
 
     return StreamingResponse(
         sse_event_stream(question, body.selectedFileIds, user["user_id"]),

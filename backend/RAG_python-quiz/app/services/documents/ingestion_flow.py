@@ -42,14 +42,12 @@ async def ingest_document(
         chunks = ingestion_steps.build_pdf_chunks(filename, pages_text, text_splitter)
     logger.info("[Ingest] Document split into %s chunks", len(chunks))
 
-    primary_vectors, fallback_vectors = await ingestion_steps.embed_document_chunks(chunks, embed_chunks_for_storage)
+    vectors = await ingestion_steps.embed_document_chunks(chunks, embed_chunks_for_storage)
 
     chunks_for_db = ingestion_steps.build_chunks_for_db(
         chunks,
-        primary_vectors,
-        fallback_vectors,
+        vectors,
         assemble_chunks_for_db=assemble_chunks_for_db,
-        get_settings=get_settings,
     )
 
     try:
@@ -69,7 +67,7 @@ async def ingest_document(
             {
                 column_name
                 for chunk in chunks_for_db
-                for column_name in ("embedding", "embedding_v2")
+                for column_name in ("embedding",)
                 if column_name in chunk
             }
         )
@@ -127,13 +125,11 @@ async def ingest_website(
     total_with_db = total_tasks + 1
     await ingestion_steps.publish_progress_event(publish_progress, client_id, 0, total_with_db)
 
-    primary_vectors, fallback_vectors = await embed_chunks_for_storage(chunks)
+    vectors = await embed_chunks_for_storage(chunks)
     chunks_for_db = ingestion_steps.build_chunks_for_db(
         chunks,
-        primary_vectors,
-        fallback_vectors,
+        vectors,
         assemble_chunks_for_db=assemble_chunks_for_db,
-        get_settings=get_settings,
     )
     result = ingestion_steps.build_and_store_document(
         name=url,

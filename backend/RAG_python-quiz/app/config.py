@@ -4,8 +4,7 @@ from typing import List, Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-EmbeddingColumn = Literal["embedding", "embedding_v2"]
-FullTextSearchBackend = Literal["pg_search", "postgres"]
+FullTextSearchBackend = Literal["lakebase_text", "postgres"]
 
 
 class Settings(BaseSettings):
@@ -29,17 +28,13 @@ class Settings(BaseSettings):
 
     embedding_api_key: str = ""
     embedding_base_url: str = "https://openrouter.ai/api/v1"
-    embedding_model: str = "google/gemini-embedding-2-preview"
-    embedding_active_column: EmbeddingColumn = "embedding"
-    embedding_fallback_model: str = "google/gemini-embedding-2-preview"
-    embedding_fallback_column: EmbeddingColumn = "embedding_v2"
-    fulltext_search_backend: FullTextSearchBackend = "pg_search"
+    embedding_model: Literal["google/gemini-embedding-2"] = "google/gemini-embedding-2"
+    fulltext_search_backend: FullTextSearchBackend = "lakebase_text"
     eval_llm_api_key: str = ""
     eval_llm_base_url: str = "https://www.chataiapi.com/v1"
     eval_llm_model: str = "gemini-2.5-flash"
     eval_embedding_api_key: str = ""
     eval_embedding_base_url: str = ""
-    eval_embedding_model: str = ""
 
     user_agent: str = "RAG-FastAPI"
 

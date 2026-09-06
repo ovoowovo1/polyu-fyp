@@ -17,6 +17,7 @@ import {
   submitQuiz,
   uploadLink,
   uploadMultiple,
+  reingestPdf,
 } from '@/lib/workspaceApi';
 import { setApiTokens } from '@/lib/apiClient';
 
@@ -54,6 +55,25 @@ function expectFormDataValues(body: BodyInit | null | undefined, name: string, e
 }
 
 describe('workspaceApi', () => {
+  it('reimports the selected original PDF with authentication and no class override', async () => {
+    const append = jest.spyOn(FormData.prototype, 'append');
+    setApiTokens('access-token', null);
+    fetchMock().mockResolvedValueOnce(jsonResponse({ fileId: 'file-1', chunksCount: 4, status: 'success' }));
+    const result = await reingestPdf('file-1', { uri: 'file:///notes.pdf', name: 'notes.pdf' }, 'client');
+    const [url, init] = lastRequest();
+    expect(String(url)).toContain('/api/files/file-1/reingest?clientId=client');
+    expectAuthHeader(init);
+    expect(init?.body).toBeInstanceOf(FormData);
+    expect(append).toHaveBeenCalledWith('file', { uri: 'file:///notes.pdf', name: 'notes.pdf', type: 'application/pdf' });
+    expectFormDataValues(init?.body, 'class_id', []);
+    append.mockRestore();
+    expect(result.chunksCount).toBe(4);
+  });
+
+  it('surfaces reimport hash/permission failures from the backend', async () => {
+    fetchMock().mockResolvedValueOnce(jsonResponse({ detail: 'Original PDF hash does not match.' }, 400));
+    await expect(reingestPdf('file-1', { uri: 'file:///wrong.pdf', name: 'wrong.pdf' }, 'client')).rejects.toThrow(/hash/);
+  });
   beforeEach(() => {
     setApiTokens(null, null);
   });

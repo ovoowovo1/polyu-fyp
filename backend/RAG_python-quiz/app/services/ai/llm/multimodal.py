@@ -15,6 +15,8 @@ def build_multimodal_content(text: str, image_inputs: Iterable[dict[str, Any]] =
         if not data_url or data_url in seen:
             continue
         seen.add(data_url)
+        if image.get("chunk_id"):
+            content.append({"type": "text", "text": f"Image for chunk_id: {image['chunk_id']}"})
         content.append({"type": "image_url", "image_url": {"url": data_url}})
         if len(seen) >= MAX_RAG_IMAGES:
             break

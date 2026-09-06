@@ -18,8 +18,6 @@ FALSE_POSITIVE_MODULES = {
 }
 
 TOOLS_ONLY_MODULES = {
-    # Used by scripts/backfill_embedding_v2.py.
-    "app.services.documents.embedding_backfill_service",
     # Used by evaluation/*.py scripts, not by FastAPI runtime routes.
     "app.utils.dev_credentials",
 }
@@ -83,12 +81,6 @@ def test_backend_app_modules_are_not_only_referenced_by_tests():
     assert suspicious == []
 
 
-def test_embedding_backfill_script_imports_current_service_path():
-    script = _read(ROOT / "scripts" / "backfill_embedding_v2.py")
-    old_import = "from app.services." + "embedding_backfill_service import"
-
-    assert "from app.services.documents.embedding_backfill_service import" in script
-    assert old_import not in script
 
 
 def test_dev_credentials_is_documented_as_evaluation_tooling():

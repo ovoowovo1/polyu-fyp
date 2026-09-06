@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from app.utils.model_usage import chat_completion
 from pydantic import BaseModel, Field
 from typing import Dict, List, Literal
 from openai import OpenAI
@@ -56,7 +58,7 @@ def maybe_truncate_or_summarize(client: OpenAI, model: str, text: str) -> str:
         "Return concise bullet points; avoid anecdotes and lengthy examples. Keep it under "
         f"{SUMMARY_TARGET_CHARS} characters.\n\nTEXT:\n" + text
     )
-    response = client.chat.completions.create(
+    response = chat_completion(client, stage="aqg",
         model=model,
         messages=[{"role": "user", "content": prompt}]
     )
@@ -89,7 +91,7 @@ def build_prompt(source_text: str, level_counts: Dict[BloomLevel, int]) -> str:
         level_lines = [f"- remember: {BLOOM_DESCRIPTIONS['remember']} (generate 1 question)"]
 
     # NOTE: We ask the model to respect exact per-level quotas and return only JSON.
-    
+
     return f"""
 You are a university-level question writer. Based strictly on the SOURCE TEXT, generate multiple-choice questions across these Bloom levels with the exact quotas specified:
 {os.linesep.join(level_lines)}

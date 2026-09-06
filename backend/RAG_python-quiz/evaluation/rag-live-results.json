@@ -1,0 +1,2802 @@
+[
+  {
+    "id": "english",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 9.141000000061467
+    },
+    "result": {
+      "status": "complete",
+      "blocks": [
+        {
+          "id": "1",
+          "markdown": "Atomicity means a transaction completes entirely or has no effect.",
+          "source_ids": [
+            "fda55cd7-ab2b-5da5-a01e-f45d561b9c0e"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "fda55cd7-ab2b-5da5-a01e-f45d561b9c0e",
+          "file_id": "4e476c36-f969-57d5-81c6-15da3e22c88e",
+          "name": "english.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "Atomicity means a transaction completes entirely or has no effect."
+        }
+      ],
+      "limitations": [],
+      "trace_id": "befc9e32-8f14-44aa-81f2-d5e5b71c6133"
+    },
+    "trace": {
+      "trace_id": "befc9e32-8f14-44aa-81f2-d5e5b71c6133",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "fda55cd7-ab2b-5da5-a01e-f45d561b9c0e",
+              "file_id": "4e476c36-f969-57d5-81c6-15da3e22c88e",
+              "concepts": [],
+              "reason": null,
+              "score": 0.01639344262295082
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "fda55cd7-ab2b-5da5-a01e-f45d561b9c0e",
+              "file_id": "4e476c36-f969-57d5-81c6-15da3e22c88e",
+              "concepts": [
+                "atomicity"
+              ],
+              "reason": "Directly and accurately defines atomicity as an all-or-nothing transaction property.",
+              "score": 1.0
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "fda55cd7-ab2b-5da5-a01e-f45d561b9c0e",
+              "relevance_score": 1.0,
+              "covered_concepts": [
+                "atomicity"
+              ],
+              "grading_reason": "Directly and accurately defines atomicity as an all-or-nothing transaction property."
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "fda55cd7-ab2b-5da5-a01e-f45d561b9c0e",
+              "file_id": "4e476c36-f969-57d5-81c6-15da3e22c88e",
+              "concepts": [
+                "atomicity"
+              ],
+              "reason": "Directly and accurately defines atomicity as an all-or-nothing transaction property.",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "fda55cd7-ab2b-5da5-a01e-f45d561b9c0e",
+              "file_id": "4e476c36-f969-57d5-81c6-15da3e22c88e",
+              "concepts": [
+                "atomicity"
+              ],
+              "reason": "Directly and accurately defines atomicity as an all-or-nothing transaction property.",
+              "score": 1.0
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "complete"
+        }
+      ],
+      "latency_seconds": 9.141000000061467
+    }
+  },
+  {
+    "id": "chinese",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 10.015000000130385
+    },
+    "result": {
+      "status": "complete",
+      "blocks": [
+        {
+          "id": "b1",
+          "markdown": "資料庫交易的原子性表示：交易中的操作要麼全部完成，要麼全部不生效。",
+          "source_ids": [
+            "3dda9680-9961-573d-b5a8-2e41919f93f3"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "3dda9680-9961-573d-b5a8-2e41919f93f3",
+          "file_id": "25a97b6b-703b-501d-944d-77d06a167226",
+          "name": "chinese.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "原子性表示交易中的操作全部完成，或全部不生效。"
+        }
+      ],
+      "limitations": [],
+      "trace_id": "fbba2e31-9a67-4971-a37d-33fd87bfeaf5"
+    },
+    "trace": {
+      "trace_id": "fbba2e31-9a67-4971-a37d-33fd87bfeaf5",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "3dda9680-9961-573d-b5a8-2e41919f93f3",
+              "file_id": "25a97b6b-703b-501d-944d-77d06a167226",
+              "concepts": [],
+              "reason": null,
+              "score": 0.01639344262295082
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "3dda9680-9961-573d-b5a8-2e41919f93f3",
+              "file_id": "25a97b6b-703b-501d-944d-77d06a167226",
+              "concepts": [
+                "資料庫交易的原子性"
+              ],
+              "reason": "直接且完整地定義資料庫交易的原子性：交易中的操作要麼全部完成，要麼全部不生效。",
+              "score": 1.0
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "3dda9680-9961-573d-b5a8-2e41919f93f3",
+              "relevance_score": 1.0,
+              "covered_concepts": [
+                "資料庫交易的原子性"
+              ],
+              "grading_reason": "直接且完整地定義資料庫交易的原子性：交易中的操作要麼全部完成，要麼全部不生效。"
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "3dda9680-9961-573d-b5a8-2e41919f93f3",
+              "file_id": "25a97b6b-703b-501d-944d-77d06a167226",
+              "concepts": [
+                "資料庫交易的原子性"
+              ],
+              "reason": "直接且完整地定義資料庫交易的原子性：交易中的操作要麼全部完成，要麼全部不生效。",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "3dda9680-9961-573d-b5a8-2e41919f93f3",
+              "file_id": "25a97b6b-703b-501d-944d-77d06a167226",
+              "concepts": [
+                "資料庫交易的原子性"
+              ],
+              "reason": "直接且完整地定義資料庫交易的原子性：交易中的操作要麼全部完成，要麼全部不生效。",
+              "score": 1.0
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "complete"
+        }
+      ],
+      "latency_seconds": 10.015000000130385
+    }
+  },
+  {
+    "id": "mixed",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 31.67199999978766
+    },
+    "result": {
+      "status": "complete",
+      "blocks": [
+        {
+          "id": "block-1",
+          "markdown": "## Database isolation（資料庫隔離）",
+          "source_ids": []
+        },
+        {
+          "id": "block-2",
+          "markdown": "資料庫隔離可防止並行交易觀察到其他交易的中間變更。",
+          "source_ids": [
+            "87eacc62-628a-5e8a-8c64-dbd0676880df"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "87eacc62-628a-5e8a-8c64-dbd0676880df",
+          "file_id": "e7dc5087-7ebf-598f-a884-4e20a9608ab5",
+          "name": "mixed.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "Isolation prevents concurrent transactions from observing intermediate changes."
+        }
+      ],
+      "limitations": [],
+      "trace_id": "05f09f30-827b-4f9e-8963-b52fedfd6776"
+    },
+    "trace": {
+      "trace_id": "05f09f30-827b-4f9e-8963-b52fedfd6776",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "87eacc62-628a-5e8a-8c64-dbd0676880df",
+              "file_id": "e7dc5087-7ebf-598f-a884-4e20a9608ab5",
+              "concepts": [],
+              "reason": null,
+              "score": 0.03278688524590164
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "87eacc62-628a-5e8a-8c64-dbd0676880df",
+              "file_id": "e7dc5087-7ebf-598f-a884-4e20a9608ab5",
+              "concepts": [
+                "database isolation"
+              ],
+              "reason": "直接說明 isolation 的核心概念：防止並行交易看到其他交易的中間變更，與問題高度相關，但內容較簡短，未涵蓋不同隔離級別或其細節。",
+              "score": 0.7
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "87eacc62-628a-5e8a-8c64-dbd0676880df",
+              "relevance_score": 0.7,
+              "covered_concepts": [
+                "database isolation"
+              ],
+              "grading_reason": "直接說明 isolation 的核心概念：防止並行交易看到其他交易的中間變更，與問題高度相關，但內容較簡短，未涵蓋不同隔離級別或其細節。"
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "87eacc62-628a-5e8a-8c64-dbd0676880df",
+              "file_id": "e7dc5087-7ebf-598f-a884-4e20a9608ab5",
+              "concepts": [
+                "database isolation"
+              ],
+              "reason": "直接說明 isolation 的核心概念：防止並行交易看到其他交易的中間變更，與問題高度相關，但內容較簡短，未涵蓋不同隔離級別或其細節。",
+              "score": 0.7
+            }
+          ]
+        },
+        {
+          "stage": "retry_retrieved",
+          "chunks": []
+        },
+        {
+          "stage": "retry_graded",
+          "chunks": [
+            {
+              "chunk_id": "87eacc62-628a-5e8a-8c64-dbd0676880df",
+              "file_id": "e7dc5087-7ebf-598f-a884-4e20a9608ab5",
+              "concepts": [
+                "database isolation"
+              ],
+              "reason": "直接說明 isolation 的核心概念：防止並行交易看到其他交易的中間變更，與問題高度相關，但內容較簡短，未涵蓋不同隔離級別或其細節。",
+              "score": 0.7
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "87eacc62-628a-5e8a-8c64-dbd0676880df",
+              "relevance_score": 0.7,
+              "covered_concepts": [
+                "database isolation"
+              ],
+              "grading_reason": "直接說明 isolation 的核心概念：防止並行交易看到其他交易的中間變更，與問題高度相關，但內容較簡短，未涵蓋不同隔離級別或其細節。"
+            }
+          ]
+        },
+        {
+          "stage": "retry_context",
+          "chunks": [
+            {
+              "chunk_id": "87eacc62-628a-5e8a-8c64-dbd0676880df",
+              "file_id": "e7dc5087-7ebf-598f-a884-4e20a9608ab5",
+              "concepts": [
+                "database isolation"
+              ],
+              "reason": "直接說明 isolation 的核心概念：防止並行交易看到其他交易的中間變更，與問題高度相關，但內容較簡短，未涵蓋不同隔離級別或其細節。",
+              "score": 0.7
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "87eacc62-628a-5e8a-8c64-dbd0676880df",
+              "file_id": "e7dc5087-7ebf-598f-a884-4e20a9608ab5",
+              "concepts": [
+                "database isolation"
+              ],
+              "reason": "直接說明 isolation 的核心概念：防止並行交易看到其他交易的中間變更，與問題高度相關，但內容較簡短，未涵蓋不同隔離級別或其細節。",
+              "score": 0.7
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "complete"
+        }
+      ],
+      "latency_seconds": 31.67199999978766
+    }
+  },
+  {
+    "id": "cross_chunk",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 12.860000000102445
+    },
+    "result": {
+      "status": "complete",
+      "blocks": [
+        {
+          "id": "atomicity",
+          "markdown": "原子性（atomicity）是指：所有操作都成功，或一个都不成功。",
+          "source_ids": [
+            "7ea1b00a-4b58-56bf-bbb1-8a2411aca638"
+          ]
+        },
+        {
+          "id": "durability",
+          "markdown": "持久性（durability）是指：已提交的變更在重新啟動後仍然存在。",
+          "source_ids": [
+            "e67629e3-b149-5240-a1b5-c7eb34097ae5"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "7ea1b00a-4b58-56bf-bbb1-8a2411aca638",
+          "file_id": "73c44fb3-0461-5366-ba5b-9b7564873921",
+          "name": "cross_chunk.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "Atomicity means all operations succeed or none do."
+        },
+        {
+          "chunk_id": "e67629e3-b149-5240-a1b5-c7eb34097ae5",
+          "file_id": "73c44fb3-0461-5366-ba5b-9b7564873921",
+          "name": "cross_chunk.pdf",
+          "page_start": 2,
+          "page_end": 2,
+          "chunk_index": 1,
+          "content": "Durability means committed changes survive a restart."
+        }
+      ],
+      "limitations": [],
+      "trace_id": "6f9f8ea3-36ed-4152-87a8-c2407c056161"
+    },
+    "trace": {
+      "trace_id": "6f9f8ea3-36ed-4152-87a8-c2407c056161",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "7ea1b00a-4b58-56bf-bbb1-8a2411aca638",
+              "file_id": "73c44fb3-0461-5366-ba5b-9b7564873921",
+              "concepts": [],
+              "reason": null,
+              "score": 0.03252247488101534
+            },
+            {
+              "chunk_id": "e67629e3-b149-5240-a1b5-c7eb34097ae5",
+              "file_id": "73c44fb3-0461-5366-ba5b-9b7564873921",
+              "concepts": [],
+              "reason": null,
+              "score": 0.03252247488101534
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "7ea1b00a-4b58-56bf-bbb1-8a2411aca638",
+              "file_id": "73c44fb3-0461-5366-ba5b-9b7564873921",
+              "concepts": [
+                "atomicity"
+              ],
+              "reason": "Directly defines atomicity as an all-or-nothing property of transaction operations.",
+              "score": 0.9
+            },
+            {
+              "chunk_id": "e67629e3-b149-5240-a1b5-c7eb34097ae5",
+              "file_id": "73c44fb3-0461-5366-ba5b-9b7564873921",
+              "concepts": [
+                "durability"
+              ],
+              "reason": "Directly defines durability as the persistence of committed changes after a restart.",
+              "score": 0.9
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "7ea1b00a-4b58-56bf-bbb1-8a2411aca638",
+              "relevance_score": 0.9,
+              "covered_concepts": [
+                "atomicity"
+              ],
+              "grading_reason": "Directly defines atomicity as an all-or-nothing property of transaction operations."
+            },
+            {
+              "chunk_id": "e67629e3-b149-5240-a1b5-c7eb34097ae5",
+              "relevance_score": 0.9,
+              "covered_concepts": [
+                "durability"
+              ],
+              "grading_reason": "Directly defines durability as the persistence of committed changes after a restart."
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "7ea1b00a-4b58-56bf-bbb1-8a2411aca638",
+              "file_id": "73c44fb3-0461-5366-ba5b-9b7564873921",
+              "concepts": [
+                "atomicity"
+              ],
+              "reason": "Directly defines atomicity as an all-or-nothing property of transaction operations.",
+              "score": 0.9
+            },
+            {
+              "chunk_id": "e67629e3-b149-5240-a1b5-c7eb34097ae5",
+              "file_id": "73c44fb3-0461-5366-ba5b-9b7564873921",
+              "concepts": [
+                "durability"
+              ],
+              "reason": "Directly defines durability as the persistence of committed changes after a restart.",
+              "score": 0.9
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "7ea1b00a-4b58-56bf-bbb1-8a2411aca638",
+              "file_id": "73c44fb3-0461-5366-ba5b-9b7564873921",
+              "concepts": [
+                "atomicity"
+              ],
+              "reason": "Directly defines atomicity as an all-or-nothing property of transaction operations.",
+              "score": 0.9
+            },
+            {
+              "chunk_id": "e67629e3-b149-5240-a1b5-c7eb34097ae5",
+              "file_id": "73c44fb3-0461-5366-ba5b-9b7564873921",
+              "concepts": [
+                "durability"
+              ],
+              "reason": "Directly defines durability as the persistence of committed changes after a restart.",
+              "score": 0.9
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "complete"
+        }
+      ],
+      "latency_seconds": 12.860000000102445
+    }
+  },
+  {
+    "id": "cross_page",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 13.561999999918044
+    },
+    "result": {
+      "status": "complete",
+      "blocks": [
+        {
+          "id": "heading",
+          "markdown": "## The Two Phases of a Commit",
+          "source_ids": []
+        },
+        {
+          "id": "phase-one",
+          "markdown": "**Phase one:** Participants are asked to prepare.",
+          "source_ids": [
+            "b27b9374-8f03-5aee-929e-890ea32a3263"
+          ]
+        },
+        {
+          "id": "phase-two",
+          "markdown": "**Phase two:** Prepared participants are told to commit.",
+          "source_ids": [
+            "cf27d62b-8a56-594f-baae-31b5f5622d96"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "b27b9374-8f03-5aee-929e-890ea32a3263",
+          "file_id": "a8d30acc-67b1-571e-968d-2aac448c42d3",
+          "name": "cross_page.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "Phase one asks participants to prepare."
+        },
+        {
+          "chunk_id": "cf27d62b-8a56-594f-baae-31b5f5622d96",
+          "file_id": "a8d30acc-67b1-571e-968d-2aac448c42d3",
+          "name": "cross_page.pdf",
+          "page_start": 2,
+          "page_end": 2,
+          "chunk_index": 1,
+          "content": "Phase two tells prepared participants to commit."
+        }
+      ],
+      "limitations": [],
+      "trace_id": "3166de03-f513-4c26-9958-e64bb0cccef8"
+    },
+    "trace": {
+      "trace_id": "3166de03-f513-4c26-9958-e64bb0cccef8",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "cf27d62b-8a56-594f-baae-31b5f5622d96",
+              "file_id": "a8d30acc-67b1-571e-968d-2aac448c42d3",
+              "concepts": [],
+              "reason": null,
+              "score": 0.01639344262295082
+            },
+            {
+              "chunk_id": "b27b9374-8f03-5aee-929e-890ea32a3263",
+              "file_id": "a8d30acc-67b1-571e-968d-2aac448c42d3",
+              "concepts": [],
+              "reason": null,
+              "score": 0.016129032258064516
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "cf27d62b-8a56-594f-baae-31b5f5622d96",
+              "file_id": "a8d30acc-67b1-571e-968d-2aac448c42d3",
+              "concepts": [
+                "two phases of a commit"
+              ],
+              "reason": "Directly describes the second phase: instructing prepared participants to commit.",
+              "score": 0.5
+            },
+            {
+              "chunk_id": "b27b9374-8f03-5aee-929e-890ea32a3263",
+              "file_id": "a8d30acc-67b1-571e-968d-2aac448c42d3",
+              "concepts": [
+                "two phases of a commit"
+              ],
+              "reason": "Directly describes the first phase: asking participants to prepare.",
+              "score": 0.5
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "cf27d62b-8a56-594f-baae-31b5f5622d96",
+              "relevance_score": 0.5,
+              "covered_concepts": [
+                "two phases of a commit"
+              ],
+              "grading_reason": "Directly describes the second phase: instructing prepared participants to commit."
+            },
+            {
+              "chunk_id": "b27b9374-8f03-5aee-929e-890ea32a3263",
+              "relevance_score": 0.5,
+              "covered_concepts": [
+                "two phases of a commit"
+              ],
+              "grading_reason": "Directly describes the first phase: asking participants to prepare."
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "cf27d62b-8a56-594f-baae-31b5f5622d96",
+              "file_id": "a8d30acc-67b1-571e-968d-2aac448c42d3",
+              "concepts": [
+                "two phases of a commit"
+              ],
+              "reason": "Directly describes the second phase: instructing prepared participants to commit.",
+              "score": 0.5
+            },
+            {
+              "chunk_id": "b27b9374-8f03-5aee-929e-890ea32a3263",
+              "file_id": "a8d30acc-67b1-571e-968d-2aac448c42d3",
+              "concepts": [
+                "two phases of a commit"
+              ],
+              "reason": "Directly describes the first phase: asking participants to prepare.",
+              "score": 0.5
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "cf27d62b-8a56-594f-baae-31b5f5622d96",
+              "file_id": "a8d30acc-67b1-571e-968d-2aac448c42d3",
+              "concepts": [
+                "two phases of a commit"
+              ],
+              "reason": "Directly describes the second phase: instructing prepared participants to commit.",
+              "score": 0.5
+            },
+            {
+              "chunk_id": "b27b9374-8f03-5aee-929e-890ea32a3263",
+              "file_id": "a8d30acc-67b1-571e-968d-2aac448c42d3",
+              "concepts": [
+                "two phases of a commit"
+              ],
+              "reason": "Directly describes the first phase: asking participants to prepare.",
+              "score": 0.5
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "complete"
+        }
+      ],
+      "latency_seconds": 13.561999999918044
+    }
+  },
+  {
+    "id": "after_800",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 9.561999999918044
+    },
+    "result": {
+      "status": "complete",
+      "blocks": [
+        {
+          "id": "1",
+          "markdown": "The retry limit is exactly three attempts.",
+          "source_ids": [
+            "7d55b2b3-2d21-5847-907f-78f72787e349"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "7d55b2b3-2d21-5847-907f-78f72787e349",
+          "file_id": "e5aa14fa-f60b-58f3-a87e-b047c9f7435f",
+          "name": "after_800.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. Background context. The retry limit is exactly three attempts."
+        }
+      ],
+      "limitations": [],
+      "trace_id": "7f38fa36-8e38-4c6d-8c42-dc85283e538b"
+    },
+    "trace": {
+      "trace_id": "7f38fa36-8e38-4c6d-8c42-dc85283e538b",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "7d55b2b3-2d21-5847-907f-78f72787e349",
+              "file_id": "e5aa14fa-f60b-58f3-a87e-b047c9f7435f",
+              "concepts": [],
+              "reason": null,
+              "score": 0.01639344262295082
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "7d55b2b3-2d21-5847-907f-78f72787e349",
+              "file_id": "e5aa14fa-f60b-58f3-a87e-b047c9f7435f",
+              "concepts": [
+                "retry limit"
+              ],
+              "reason": "Directly states that the retry limit is exactly three attempts.",
+              "score": 1.0
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "7d55b2b3-2d21-5847-907f-78f72787e349",
+              "relevance_score": 1.0,
+              "covered_concepts": [
+                "retry limit"
+              ],
+              "grading_reason": "Directly states that the retry limit is exactly three attempts."
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "7d55b2b3-2d21-5847-907f-78f72787e349",
+              "file_id": "e5aa14fa-f60b-58f3-a87e-b047c9f7435f",
+              "concepts": [
+                "retry limit"
+              ],
+              "reason": "Directly states that the retry limit is exactly three attempts.",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "7d55b2b3-2d21-5847-907f-78f72787e349",
+              "file_id": "e5aa14fa-f60b-58f3-a87e-b047c9f7435f",
+              "concepts": [
+                "retry limit"
+              ],
+              "reason": "Directly states that the retry limit is exactly three attempts.",
+              "score": 1.0
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "complete"
+        }
+      ],
+      "latency_seconds": 9.561999999918044
+    }
+  },
+  {
+    "id": "code",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 9.266000000061467
+    },
+    "result": {
+      "status": "complete",
+      "blocks": [
+        {
+          "id": "1",
+          "markdown": "```python\nfor item in items:\n    print(item)\n```",
+          "source_ids": [
+            "059957f6-08fb-547c-9c2f-69c3202653d3"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "059957f6-08fb-547c-9c2f-69c3202653d3",
+          "file_id": "94241426-a841-51a7-9507-3fc902dac833",
+          "name": "code.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "```python\nfor item in items:\n    print(item)\n```"
+        }
+      ],
+      "limitations": [],
+      "trace_id": "46fc5ff7-a6ec-4309-9c3a-399a1ce8012b"
+    },
+    "trace": {
+      "trace_id": "46fc5ff7-a6ec-4309-9c3a-399a1ce8012b",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "059957f6-08fb-547c-9c2f-69c3202653d3",
+              "file_id": "94241426-a841-51a7-9507-3fc902dac833",
+              "concepts": [],
+              "reason": null,
+              "score": 0.01639344262295082
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "059957f6-08fb-547c-9c2f-69c3202653d3",
+              "file_id": "94241426-a841-51a7-9507-3fc902dac833",
+              "concepts": [
+                "Python loop"
+              ],
+              "reason": "Provides a direct Python for-loop example that iterates over items and prints each one.",
+              "score": 1.0
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "059957f6-08fb-547c-9c2f-69c3202653d3",
+              "relevance_score": 1.0,
+              "covered_concepts": [
+                "Python loop"
+              ],
+              "grading_reason": "Provides a direct Python for-loop example that iterates over items and prints each one."
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "059957f6-08fb-547c-9c2f-69c3202653d3",
+              "file_id": "94241426-a841-51a7-9507-3fc902dac833",
+              "concepts": [
+                "Python loop"
+              ],
+              "reason": "Provides a direct Python for-loop example that iterates over items and prints each one.",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "059957f6-08fb-547c-9c2f-69c3202653d3",
+              "file_id": "94241426-a841-51a7-9507-3fc902dac833",
+              "concepts": [
+                "Python loop"
+              ],
+              "reason": "Provides a direct Python for-loop example that iterates over items and prints each one.",
+              "score": 1.0
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "complete"
+        }
+      ],
+      "latency_seconds": 9.266000000061467
+    }
+  },
+  {
+    "id": "table",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 16.655999999959022
+    },
+    "result": {
+      "status": "complete",
+      "blocks": [
+        {
+          "id": "heading-1",
+          "markdown": "## Measured runtime comparison",
+          "source_ids": []
+        },
+        {
+          "id": "runtime-a",
+          "markdown": "Algorithm A measured **10 ms**.",
+          "source_ids": [
+            "a964d26c-e94f-53ca-98c0-d1e00d98b368"
+          ]
+        },
+        {
+          "id": "runtime-b",
+          "markdown": "Algorithm B measured **25 ms**.",
+          "source_ids": [
+            "a964d26c-e94f-53ca-98c0-d1e00d98b368"
+          ]
+        },
+        {
+          "id": "comparison",
+          "markdown": "Algorithm B took **15 ms longer** than Algorithm A (25 ms versus 10 ms).",
+          "source_ids": [
+            "a964d26c-e94f-53ca-98c0-d1e00d98b368"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "a964d26c-e94f-53ca-98c0-d1e00d98b368",
+          "file_id": "056f439c-eac1-58c7-afa2-2a0ea23230f3",
+          "name": "table.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "| Algorithm | Runtime |\n|---|---|\n| A | 10 ms |\n| B | 25 ms |"
+        }
+      ],
+      "limitations": [],
+      "trace_id": "63b46dcf-bec0-4152-b46d-2da512b88dea"
+    },
+    "trace": {
+      "trace_id": "63b46dcf-bec0-4152-b46d-2da512b88dea",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "a964d26c-e94f-53ca-98c0-d1e00d98b368",
+              "file_id": "056f439c-eac1-58c7-afa2-2a0ea23230f3",
+              "concepts": [],
+              "reason": null,
+              "score": 0.01639344262295082
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "a964d26c-e94f-53ca-98c0-d1e00d98b368",
+              "file_id": "056f439c-eac1-58c7-afa2-2a0ea23230f3",
+              "concepts": [
+                "measured runtimes"
+              ],
+              "reason": "Directly provides measured runtimes for Algorithms A and B, enabling comparison.",
+              "score": 1.0
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "a964d26c-e94f-53ca-98c0-d1e00d98b368",
+              "relevance_score": 1.0,
+              "covered_concepts": [
+                "measured runtimes"
+              ],
+              "grading_reason": "Directly provides measured runtimes for Algorithms A and B, enabling comparison."
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "a964d26c-e94f-53ca-98c0-d1e00d98b368",
+              "file_id": "056f439c-eac1-58c7-afa2-2a0ea23230f3",
+              "concepts": [
+                "measured runtimes"
+              ],
+              "reason": "Directly provides measured runtimes for Algorithms A and B, enabling comparison.",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "a964d26c-e94f-53ca-98c0-d1e00d98b368",
+              "file_id": "056f439c-eac1-58c7-afa2-2a0ea23230f3",
+              "concepts": [
+                "measured runtimes"
+              ],
+              "reason": "Directly provides measured runtimes for Algorithms A and B, enabling comparison.",
+              "score": 1.0
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "complete"
+        }
+      ],
+      "latency_seconds": 16.655999999959022
+    }
+  },
+  {
+    "id": "list",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 12.922000000020489
+    },
+    "result": {
+      "status": "complete",
+      "blocks": [
+        {
+          "id": "1",
+          "markdown": "1. Parse the input.",
+          "source_ids": [
+            "86fbc163-1b77-5a29-a0e6-8dfc6dd0512a"
+          ]
+        },
+        {
+          "id": "2",
+          "markdown": "2. Validate the data.",
+          "source_ids": [
+            "86fbc163-1b77-5a29-a0e6-8dfc6dd0512a"
+          ]
+        },
+        {
+          "id": "3",
+          "markdown": "3. Store the result.",
+          "source_ids": [
+            "86fbc163-1b77-5a29-a0e6-8dfc6dd0512a"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "86fbc163-1b77-5a29-a0e6-8dfc6dd0512a",
+          "file_id": "824ec9e5-cc31-51a3-bf3a-b6040956e381",
+          "name": "list.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "1. Parse the input.\n2. Validate the data.\n3. Store the result."
+        }
+      ],
+      "limitations": [],
+      "trace_id": "5ad75e28-b4c3-4e0d-8d21-0168493c6076"
+    },
+    "trace": {
+      "trace_id": "5ad75e28-b4c3-4e0d-8d21-0168493c6076",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "86fbc163-1b77-5a29-a0e6-8dfc6dd0512a",
+              "file_id": "824ec9e5-cc31-51a3-bf3a-b6040956e381",
+              "concepts": [],
+              "reason": null,
+              "score": 0.01639344262295082
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "86fbc163-1b77-5a29-a0e6-8dfc6dd0512a",
+              "file_id": "824ec9e5-cc31-51a3-bf3a-b6040956e381",
+              "concepts": [
+                "three stages"
+              ],
+              "reason": "The chunk explicitly lists three stages: parse the input, validate the data, and store the result.",
+              "score": 1.0
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "86fbc163-1b77-5a29-a0e6-8dfc6dd0512a",
+              "relevance_score": 1.0,
+              "covered_concepts": [
+                "three stages"
+              ],
+              "grading_reason": "The chunk explicitly lists three stages: parse the input, validate the data, and store the result."
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "86fbc163-1b77-5a29-a0e6-8dfc6dd0512a",
+              "file_id": "824ec9e5-cc31-51a3-bf3a-b6040956e381",
+              "concepts": [
+                "three stages"
+              ],
+              "reason": "The chunk explicitly lists three stages: parse the input, validate the data, and store the result.",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "86fbc163-1b77-5a29-a0e6-8dfc6dd0512a",
+              "file_id": "824ec9e5-cc31-51a3-bf3a-b6040956e381",
+              "concepts": [
+                "three stages"
+              ],
+              "reason": "The chunk explicitly lists three stages: parse the input, validate the data, and store the result.",
+              "score": 1.0
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "complete"
+        }
+      ],
+      "latency_seconds": 12.922000000020489
+    }
+  },
+  {
+    "id": "partial",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 25.859000000171363
+    },
+    "result": {
+      "status": "partial",
+      "blocks": [
+        {
+          "id": "timeout",
+          "markdown": "The timeout is **30 seconds**.",
+          "source_ids": [
+            "c2dc6799-95c0-5038-a327-4d11b2f1fc15"
+          ]
+        },
+        {
+          "id": "limitation:0",
+          "markdown": "The retry limit is not specified in the supplied evidence.",
+          "source_ids": []
+        },
+        {
+          "id": "limitation:1",
+          "markdown": "提供的證據未說明重試上限。",
+          "source_ids": []
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "c2dc6799-95c0-5038-a327-4d11b2f1fc15",
+          "file_id": "80812c5e-d80f-5479-9415-8297d9d99196",
+          "name": "partial.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "The timeout is 30 seconds."
+        }
+      ],
+      "limitations": [
+        "The retry limit is not specified in the supplied evidence.",
+        "提供的證據未說明重試上限。"
+      ],
+      "trace_id": "c0c6d670-71d0-4cbb-9d33-d40c3d3b76cc"
+    },
+    "trace": {
+      "trace_id": "c0c6d670-71d0-4cbb-9d33-d40c3d3b76cc",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "c2dc6799-95c0-5038-a327-4d11b2f1fc15",
+              "file_id": "80812c5e-d80f-5479-9415-8297d9d99196",
+              "concepts": [],
+              "reason": null,
+              "score": 0.03278688524590164
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "c2dc6799-95c0-5038-a327-4d11b2f1fc15",
+              "file_id": "80812c5e-d80f-5479-9415-8297d9d99196",
+              "concepts": [
+                "timeout"
+              ],
+              "reason": "Directly states the timeout is 30 seconds, but provides no information about the retry limit.",
+              "score": 0.5
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "c2dc6799-95c0-5038-a327-4d11b2f1fc15",
+              "relevance_score": 0.5,
+              "covered_concepts": [
+                "timeout"
+              ],
+              "grading_reason": "Directly states the timeout is 30 seconds, but provides no information about the retry limit."
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "c2dc6799-95c0-5038-a327-4d11b2f1fc15",
+              "file_id": "80812c5e-d80f-5479-9415-8297d9d99196",
+              "concepts": [
+                "timeout"
+              ],
+              "reason": "Directly states the timeout is 30 seconds, but provides no information about the retry limit.",
+              "score": 0.5
+            }
+          ]
+        },
+        {
+          "stage": "retry_retrieved",
+          "chunks": []
+        },
+        {
+          "stage": "retry_graded",
+          "chunks": [
+            {
+              "chunk_id": "c2dc6799-95c0-5038-a327-4d11b2f1fc15",
+              "file_id": "80812c5e-d80f-5479-9415-8297d9d99196",
+              "concepts": [
+                "timeout"
+              ],
+              "reason": "Directly states the timeout is 30 seconds, but provides no information about the retry limit.",
+              "score": 0.5
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "c2dc6799-95c0-5038-a327-4d11b2f1fc15",
+              "relevance_score": 0.5,
+              "covered_concepts": [
+                "timeout"
+              ],
+              "grading_reason": "Directly states the timeout is 30 seconds, but provides no information about the retry limit."
+            }
+          ]
+        },
+        {
+          "stage": "retry_context",
+          "chunks": [
+            {
+              "chunk_id": "c2dc6799-95c0-5038-a327-4d11b2f1fc15",
+              "file_id": "80812c5e-d80f-5479-9415-8297d9d99196",
+              "concepts": [
+                "timeout"
+              ],
+              "reason": "Directly states the timeout is 30 seconds, but provides no information about the retry limit.",
+              "score": 0.5
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "c2dc6799-95c0-5038-a327-4d11b2f1fc15",
+              "file_id": "80812c5e-d80f-5479-9415-8297d9d99196",
+              "concepts": [
+                "timeout"
+              ],
+              "reason": "Directly states the timeout is 30 seconds, but provides no information about the retry limit.",
+              "score": 0.5
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "partial"
+        }
+      ],
+      "latency_seconds": 25.859000000171363
+    }
+  },
+  {
+    "id": "repeated",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 13.609999999869615
+    },
+    "result": {
+      "status": "complete",
+      "blocks": [
+        {
+          "id": "prose",
+          "markdown": "快取儲存經常存取的資料。",
+          "source_ids": [
+            "219374e9-8f68-5017-920a-59f62c7f17aa"
+          ]
+        },
+        {
+          "id": "bullet",
+          "markdown": "- 儲存經常存取的資料",
+          "source_ids": [
+            "219374e9-8f68-5017-920a-59f62c7f17aa"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "219374e9-8f68-5017-920a-59f62c7f17aa",
+          "file_id": "8f358a3e-0809-5d85-8f6f-d04e91fbecf1",
+          "name": "repeated.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "A cache stores frequently accessed data."
+        }
+      ],
+      "limitations": [],
+      "trace_id": "5d839895-b377-4c83-b000-af69beb843f2"
+    },
+    "trace": {
+      "trace_id": "5d839895-b377-4c83-b000-af69beb843f2",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "219374e9-8f68-5017-920a-59f62c7f17aa",
+              "file_id": "8f358a3e-0809-5d85-8f6f-d04e91fbecf1",
+              "concepts": [],
+              "reason": null,
+              "score": 0.01639344262295082
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "219374e9-8f68-5017-920a-59f62c7f17aa",
+              "file_id": "8f358a3e-0809-5d85-8f6f-d04e91fbecf1",
+              "concepts": [
+                "cache"
+              ],
+              "reason": "Directly defines a cache as storing frequently accessed data, providing concise evidence for the required concept.",
+              "score": 0.9
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "219374e9-8f68-5017-920a-59f62c7f17aa",
+              "relevance_score": 0.9,
+              "covered_concepts": [
+                "cache"
+              ],
+              "grading_reason": "Directly defines a cache as storing frequently accessed data, providing concise evidence for the required concept."
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "219374e9-8f68-5017-920a-59f62c7f17aa",
+              "file_id": "8f358a3e-0809-5d85-8f6f-d04e91fbecf1",
+              "concepts": [
+                "cache"
+              ],
+              "reason": "Directly defines a cache as storing frequently accessed data, providing concise evidence for the required concept.",
+              "score": 0.9
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "219374e9-8f68-5017-920a-59f62c7f17aa",
+              "file_id": "8f358a3e-0809-5d85-8f6f-d04e91fbecf1",
+              "concepts": [
+                "cache"
+              ],
+              "reason": "Directly defines a cache as storing frequently accessed data, providing concise evidence for the required concept.",
+              "score": 0.9
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "complete"
+        }
+      ],
+      "latency_seconds": 13.609999999869615
+    }
+  },
+  {
+    "id": "multi_source",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 18.436999999918044
+    },
+    "result": {
+      "status": "complete",
+      "blocks": [
+        {
+          "id": "heading-1",
+          "markdown": "## Stack 與 Queue 的比較",
+          "source_ids": []
+        },
+        {
+          "id": "stack-1",
+          "markdown": "Stack（堆疊）採用後進先出（LIFO）順序：最後加入的元素會先被處理。",
+          "source_ids": [
+            "13423d84-140d-52da-b430-63349c125a05"
+          ]
+        },
+        {
+          "id": "queue-1",
+          "markdown": "Queue（佇列）採用先進先出（FIFO）順序：最先加入的元素會先被處理。",
+          "source_ids": [
+            "7123c72e-bfce-5977-8663-abc147ec33ff"
+          ]
+        },
+        {
+          "id": "comparison-1",
+          "markdown": "因此，兩者的主要差異在於元素被處理的順序：Stack 是後進先出，而 Queue 是先進先出。",
+          "source_ids": [
+            "13423d84-140d-52da-b430-63349c125a05",
+            "7123c72e-bfce-5977-8663-abc147ec33ff"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "13423d84-140d-52da-b430-63349c125a05",
+          "file_id": "4a591f9c-7448-5165-b16c-bbb6ca3bf98a",
+          "name": "multi_source.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "A stack uses last-in, first-out order."
+        },
+        {
+          "chunk_id": "7123c72e-bfce-5977-8663-abc147ec33ff",
+          "file_id": "4a591f9c-7448-5165-b16c-bbb6ca3bf98a",
+          "name": "multi_source.pdf",
+          "page_start": 2,
+          "page_end": 2,
+          "chunk_index": 1,
+          "content": "A queue uses first-in, first-out order."
+        }
+      ],
+      "limitations": [],
+      "trace_id": "3c4153d5-a513-4854-b7fa-a13991f9f997"
+    },
+    "trace": {
+      "trace_id": "3c4153d5-a513-4854-b7fa-a13991f9f997",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "13423d84-140d-52da-b430-63349c125a05",
+              "file_id": "4a591f9c-7448-5165-b16c-bbb6ca3bf98a",
+              "concepts": [],
+              "reason": null,
+              "score": 0.048915917503966164
+            },
+            {
+              "chunk_id": "7123c72e-bfce-5977-8663-abc147ec33ff",
+              "file_id": "4a591f9c-7448-5165-b16c-bbb6ca3bf98a",
+              "concepts": [],
+              "reason": null,
+              "score": 0.048651507139079855
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "13423d84-140d-52da-b430-63349c125a05",
+              "file_id": "4a591f9c-7448-5165-b16c-bbb6ca3bf98a",
+              "concepts": [
+                "stack"
+              ],
+              "reason": "Directly states the ordering principle of a stack, providing one side of the comparison.",
+              "score": 0.5
+            },
+            {
+              "chunk_id": "7123c72e-bfce-5977-8663-abc147ec33ff",
+              "file_id": "4a591f9c-7448-5165-b16c-bbb6ca3bf98a",
+              "concepts": [
+                "queue"
+              ],
+              "reason": "Directly states the ordering principle of a queue, providing the other side of the comparison.",
+              "score": 0.5
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "13423d84-140d-52da-b430-63349c125a05",
+              "relevance_score": 0.5,
+              "covered_concepts": [
+                "stack"
+              ],
+              "grading_reason": "Directly states the ordering principle of a stack, providing one side of the comparison."
+            },
+            {
+              "chunk_id": "7123c72e-bfce-5977-8663-abc147ec33ff",
+              "relevance_score": 0.5,
+              "covered_concepts": [
+                "queue"
+              ],
+              "grading_reason": "Directly states the ordering principle of a queue, providing the other side of the comparison."
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "13423d84-140d-52da-b430-63349c125a05",
+              "file_id": "4a591f9c-7448-5165-b16c-bbb6ca3bf98a",
+              "concepts": [
+                "stack"
+              ],
+              "reason": "Directly states the ordering principle of a stack, providing one side of the comparison.",
+              "score": 0.5
+            },
+            {
+              "chunk_id": "7123c72e-bfce-5977-8663-abc147ec33ff",
+              "file_id": "4a591f9c-7448-5165-b16c-bbb6ca3bf98a",
+              "concepts": [
+                "queue"
+              ],
+              "reason": "Directly states the ordering principle of a queue, providing the other side of the comparison.",
+              "score": 0.5
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "13423d84-140d-52da-b430-63349c125a05",
+              "file_id": "4a591f9c-7448-5165-b16c-bbb6ca3bf98a",
+              "concepts": [
+                "stack"
+              ],
+              "reason": "Directly states the ordering principle of a stack, providing one side of the comparison.",
+              "score": 0.5
+            },
+            {
+              "chunk_id": "7123c72e-bfce-5977-8663-abc147ec33ff",
+              "file_id": "4a591f9c-7448-5165-b16c-bbb6ca3bf98a",
+              "concepts": [
+                "queue"
+              ],
+              "reason": "Directly states the ordering principle of a queue, providing the other side of the comparison.",
+              "score": 0.5
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "complete"
+        }
+      ],
+      "latency_seconds": 18.436999999918044
+    }
+  },
+  {
+    "id": "heading",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 12.453000000212342
+    },
+    "result": {
+      "status": "complete",
+      "blocks": [
+        {
+          "id": "heading",
+          "markdown": "## Primary keys",
+          "source_ids": []
+        },
+        {
+          "id": "explanation",
+          "markdown": "A primary key uniquely identifies a row.",
+          "source_ids": [
+            "72998df1-ce0a-548c-be43-95a974f05b02"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "72998df1-ce0a-548c-be43-95a974f05b02",
+          "file_id": "bcd6e522-d746-54da-8f94-8af36b933b73",
+          "name": "heading.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "A primary key uniquely identifies a row."
+        }
+      ],
+      "limitations": [],
+      "trace_id": "b9ac2660-7b10-4e50-88a6-079354330a7e"
+    },
+    "trace": {
+      "trace_id": "b9ac2660-7b10-4e50-88a6-079354330a7e",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "72998df1-ce0a-548c-be43-95a974f05b02",
+              "file_id": "bcd6e522-d746-54da-8f94-8af36b933b73",
+              "concepts": [],
+              "reason": null,
+              "score": 0.01639344262295082
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "72998df1-ce0a-548c-be43-95a974f05b02",
+              "file_id": "bcd6e522-d746-54da-8f94-8af36b933b73",
+              "concepts": [
+                "primary keys"
+              ],
+              "reason": "Directly explains that a primary key uniquely identifies a row, which fully supports the required concept.",
+              "score": 1.0
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "72998df1-ce0a-548c-be43-95a974f05b02",
+              "relevance_score": 1.0,
+              "covered_concepts": [
+                "primary keys"
+              ],
+              "grading_reason": "Directly explains that a primary key uniquely identifies a row, which fully supports the required concept."
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "72998df1-ce0a-548c-be43-95a974f05b02",
+              "file_id": "bcd6e522-d746-54da-8f94-8af36b933b73",
+              "concepts": [
+                "primary keys"
+              ],
+              "reason": "Directly explains that a primary key uniquely identifies a row, which fully supports the required concept.",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "72998df1-ce0a-548c-be43-95a974f05b02",
+              "file_id": "bcd6e522-d746-54da-8f94-8af36b933b73",
+              "concepts": [
+                "primary keys"
+              ],
+              "reason": "Directly explains that a primary key uniquely identifies a row, which fully supports the required concept.",
+              "score": 1.0
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "complete"
+        }
+      ],
+      "latency_seconds": 12.453000000212342
+    }
+  },
+  {
+    "id": "limitation",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 28.843999999808148
+    },
+    "result": {
+      "status": "partial",
+      "blocks": [
+        {
+          "id": "replication-heading",
+          "markdown": "## Replication",
+          "source_ids": []
+        },
+        {
+          "id": "replication",
+          "markdown": "Replication maintains copies of data on multiple servers.",
+          "source_ids": [
+            "7b447b32-03ac-5c8f-9d57-96a7d0fc3356"
+          ]
+        },
+        {
+          "id": "price-heading",
+          "markdown": "## Price",
+          "source_ids": []
+        },
+        {
+          "id": "limitation:0",
+          "markdown": "The price or cost of replication is not provided in the supplied evidence.",
+          "source_ids": []
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "7b447b32-03ac-5c8f-9d57-96a7d0fc3356",
+          "file_id": "d9643083-10ee-50cf-a66f-06891a30857b",
+          "name": "limitation.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "Replication maintains copies of data on multiple servers."
+        }
+      ],
+      "limitations": [
+        "The price or cost of replication is not provided in the supplied evidence."
+      ],
+      "trace_id": "30d57604-4072-4425-a0bc-7e6716215716"
+    },
+    "trace": {
+      "trace_id": "30d57604-4072-4425-a0bc-7e6716215716",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "7b447b32-03ac-5c8f-9d57-96a7d0fc3356",
+              "file_id": "d9643083-10ee-50cf-a66f-06891a30857b",
+              "concepts": [],
+              "reason": null,
+              "score": 0.04918032786885246
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "7b447b32-03ac-5c8f-9d57-96a7d0fc3356",
+              "file_id": "d9643083-10ee-50cf-a66f-06891a30857b",
+              "concepts": [
+                "replication"
+              ],
+              "reason": "Directly defines replication as maintaining copies of data on multiple servers, but provides no information about its costs or trade-offs.",
+              "score": 0.5
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "7b447b32-03ac-5c8f-9d57-96a7d0fc3356",
+              "relevance_score": 0.5,
+              "covered_concepts": [
+                "replication"
+              ],
+              "grading_reason": "Directly defines replication as maintaining copies of data on multiple servers, but provides no information about its costs or trade-offs."
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "7b447b32-03ac-5c8f-9d57-96a7d0fc3356",
+              "file_id": "d9643083-10ee-50cf-a66f-06891a30857b",
+              "concepts": [
+                "replication"
+              ],
+              "reason": "Directly defines replication as maintaining copies of data on multiple servers, but provides no information about its costs or trade-offs.",
+              "score": 0.5
+            }
+          ]
+        },
+        {
+          "stage": "retry_retrieved",
+          "chunks": []
+        },
+        {
+          "stage": "retry_graded",
+          "chunks": [
+            {
+              "chunk_id": "7b447b32-03ac-5c8f-9d57-96a7d0fc3356",
+              "file_id": "d9643083-10ee-50cf-a66f-06891a30857b",
+              "concepts": [
+                "replication"
+              ],
+              "reason": "Directly defines replication as maintaining copies of data on multiple servers, but provides no information about its costs or trade-offs.",
+              "score": 0.5
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "7b447b32-03ac-5c8f-9d57-96a7d0fc3356",
+              "relevance_score": 0.5,
+              "covered_concepts": [
+                "replication"
+              ],
+              "grading_reason": "Directly defines replication as maintaining copies of data on multiple servers, but provides no information about its costs or trade-offs."
+            }
+          ]
+        },
+        {
+          "stage": "retry_context",
+          "chunks": [
+            {
+              "chunk_id": "7b447b32-03ac-5c8f-9d57-96a7d0fc3356",
+              "file_id": "d9643083-10ee-50cf-a66f-06891a30857b",
+              "concepts": [
+                "replication"
+              ],
+              "reason": "Directly defines replication as maintaining copies of data on multiple servers, but provides no information about its costs or trade-offs.",
+              "score": 0.5
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "7b447b32-03ac-5c8f-9d57-96a7d0fc3356",
+              "file_id": "d9643083-10ee-50cf-a66f-06891a30857b",
+              "concepts": [
+                "replication"
+              ],
+              "reason": "Directly defines replication as maintaining copies of data on multiple servers, but provides no information about its costs or trade-offs.",
+              "score": 0.5
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "partial"
+        }
+      ],
+      "latency_seconds": 28.843999999808148
+    }
+  },
+  {
+    "id": "late_evidence",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 13.936999999918044
+    },
+    "result": {
+      "status": "complete",
+      "blocks": [
+        {
+          "id": "answer-1",
+          "markdown": "最大批次大小是八個區塊。",
+          "source_ids": [
+            "81dd76f5-e105-5c8a-92dc-3f9285a5ba68"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "81dd76f5-e105-5c8a-92dc-3f9285a5ba68",
+          "file_id": "1f6e3d63-c93e-54b2-a547-666a38154058",
+          "name": "late_evidence.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. Notes. The maximum batch size is eight chunks."
+        }
+      ],
+      "limitations": [],
+      "trace_id": "40347ce5-d4fa-46f2-a4f2-2f610a66eb7b"
+    },
+    "trace": {
+      "trace_id": "40347ce5-d4fa-46f2-a4f2-2f610a66eb7b",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "81dd76f5-e105-5c8a-92dc-3f9285a5ba68",
+              "file_id": "1f6e3d63-c93e-54b2-a547-666a38154058",
+              "concepts": [],
+              "reason": null,
+              "score": 0.04918032786885246
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "81dd76f5-e105-5c8a-92dc-3f9285a5ba68",
+              "file_id": "1f6e3d63-c93e-54b2-a547-666a38154058",
+              "concepts": [
+                "maximum batch size"
+              ],
+              "reason": "The chunk explicitly states that the maximum batch size is eight chunks.",
+              "score": 1.0
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "81dd76f5-e105-5c8a-92dc-3f9285a5ba68",
+              "relevance_score": 1.0,
+              "covered_concepts": [
+                "maximum batch size"
+              ],
+              "grading_reason": "The chunk explicitly states that the maximum batch size is eight chunks."
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "81dd76f5-e105-5c8a-92dc-3f9285a5ba68",
+              "file_id": "1f6e3d63-c93e-54b2-a547-666a38154058",
+              "concepts": [
+                "maximum batch size"
+              ],
+              "reason": "The chunk explicitly states that the maximum batch size is eight chunks.",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "81dd76f5-e105-5c8a-92dc-3f9285a5ba68",
+              "file_id": "1f6e3d63-c93e-54b2-a547-666a38154058",
+              "concepts": [
+                "maximum batch size"
+              ],
+              "reason": "The chunk explicitly states that the maximum batch size is eight chunks.",
+              "score": 1.0
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "complete"
+        }
+      ],
+      "latency_seconds": 13.936999999918044
+    }
+  },
+  {
+    "id": "code_symbols",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 14.625
+    },
+    "result": {
+      "status": "complete",
+      "blocks": [
+        {
+          "id": "b1",
+          "markdown": "The condition `x != 0` tests whether `x` is not zero.",
+          "source_ids": [
+            "5f1d15c2-4b5d-5125-9c77-2824a7865b46"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "5f1d15c2-4b5d-5125-9c77-2824a7865b46",
+          "file_id": "bcb0fc21-1e0e-52ef-b913-4ece9671c618",
+          "name": "code_symbols.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "The Python expression x != 0 tests whether x is not zero."
+        }
+      ],
+      "limitations": [],
+      "trace_id": "b470cc5c-b54d-4e22-b483-84c77bbf5fb1"
+    },
+    "trace": {
+      "trace_id": "b470cc5c-b54d-4e22-b483-84c77bbf5fb1",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "5f1d15c2-4b5d-5125-9c77-2824a7865b46",
+              "file_id": "bcb0fc21-1e0e-52ef-b913-4ece9671c618",
+              "concepts": [],
+              "reason": null,
+              "score": 0.01639344262295082
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "5f1d15c2-4b5d-5125-9c77-2824a7865b46",
+              "file_id": "bcb0fc21-1e0e-52ef-b913-4ece9671c618",
+              "concepts": [
+                "condition"
+              ],
+              "reason": "Directly explains that the condition x != 0 tests whether x is not zero.",
+              "score": 1.0
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "5f1d15c2-4b5d-5125-9c77-2824a7865b46",
+              "relevance_score": 1.0,
+              "covered_concepts": [
+                "condition"
+              ],
+              "grading_reason": "Directly explains that the condition x != 0 tests whether x is not zero."
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "5f1d15c2-4b5d-5125-9c77-2824a7865b46",
+              "file_id": "bcb0fc21-1e0e-52ef-b913-4ece9671c618",
+              "concepts": [
+                "condition"
+              ],
+              "reason": "Directly explains that the condition x != 0 tests whether x is not zero.",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "5f1d15c2-4b5d-5125-9c77-2824a7865b46",
+              "file_id": "bcb0fc21-1e0e-52ef-b913-4ece9671c618",
+              "concepts": [
+                "condition"
+              ],
+              "reason": "Directly explains that the condition x != 0 tests whether x is not zero.",
+              "score": 1.0
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "complete"
+        }
+      ],
+      "latency_seconds": 14.625
+    }
+  },
+  {
+    "id": "punctuation",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 15.656000000191852
+    },
+    "result": {
+      "status": "complete",
+      "blocks": [
+        {
+          "id": "step-1",
+          "markdown": "第一步：讀取資料。",
+          "source_ids": [
+            "de3c8bcc-528e-59f1-a161-4151e38f1897"
+          ]
+        },
+        {
+          "id": "step-2",
+          "markdown": "第二步：驗證格式。",
+          "source_ids": [
+            "de3c8bcc-528e-59f1-a161-4151e38f1897"
+          ]
+        },
+        {
+          "id": "step-3",
+          "markdown": "第三步：儲存結果。",
+          "source_ids": [
+            "de3c8bcc-528e-59f1-a161-4151e38f1897"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "de3c8bcc-528e-59f1-a161-4151e38f1897",
+          "file_id": "5aa2c960-6117-5bfb-a9e4-63c186ef4b86",
+          "name": "punctuation.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "第一步：讀取資料。第二步：驗證格式；第三步：儲存結果。"
+        }
+      ],
+      "limitations": [],
+      "trace_id": "9917aee7-496b-4db2-b7b7-0771db65d9ae"
+    },
+    "trace": {
+      "trace_id": "9917aee7-496b-4db2-b7b7-0771db65d9ae",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "de3c8bcc-528e-59f1-a161-4151e38f1897",
+              "file_id": "5aa2c960-6117-5bfb-a9e4-63c186ef4b86",
+              "concepts": [],
+              "reason": null,
+              "score": 0.01639344262295082
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "de3c8bcc-528e-59f1-a161-4151e38f1897",
+              "file_id": "5aa2c960-6117-5bfb-a9e4-63c186ef4b86",
+              "concepts": [
+                "three steps"
+              ],
+              "reason": "內容直接列出三個步驟：讀取資料、驗證格式、儲存結果。",
+              "score": 1.0
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "de3c8bcc-528e-59f1-a161-4151e38f1897",
+              "relevance_score": 1.0,
+              "covered_concepts": [
+                "three steps"
+              ],
+              "grading_reason": "內容直接列出三個步驟：讀取資料、驗證格式、儲存結果。"
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "de3c8bcc-528e-59f1-a161-4151e38f1897",
+              "file_id": "5aa2c960-6117-5bfb-a9e4-63c186ef4b86",
+              "concepts": [
+                "three steps"
+              ],
+              "reason": "內容直接列出三個步驟：讀取資料、驗證格式、儲存結果。",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "de3c8bcc-528e-59f1-a161-4151e38f1897",
+              "file_id": "5aa2c960-6117-5bfb-a9e4-63c186ef4b86",
+              "concepts": [
+                "three steps"
+              ],
+              "reason": "內容直接列出三個步驟：讀取資料、驗證格式、儲存結果。",
+              "score": 1.0
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "complete"
+        }
+      ],
+      "latency_seconds": 15.656000000191852
+    }
+  },
+  {
+    "id": "short",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 11.968999999808148
+    },
+    "result": {
+      "status": "complete",
+      "blocks": [
+        {
+          "id": "1",
+          "markdown": "TCP",
+          "source_ids": [
+            "5a0b726a-c697-52fb-a708-8cda2520f6e8"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "5a0b726a-c697-52fb-a708-8cda2520f6e8",
+          "file_id": "7bd12b4d-0c87-5181-a568-6e2adcf26e82",
+          "name": "short.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "TCP"
+        }
+      ],
+      "limitations": [],
+      "trace_id": "97da8b50-0736-474f-9b02-164c1c737403"
+    },
+    "trace": {
+      "trace_id": "97da8b50-0736-474f-9b02-164c1c737403",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "5a0b726a-c697-52fb-a708-8cda2520f6e8",
+              "file_id": "7bd12b4d-0c87-5181-a568-6e2adcf26e82",
+              "concepts": [],
+              "reason": null,
+              "score": 0.01639344262295082
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "5a0b726a-c697-52fb-a708-8cda2520f6e8",
+              "file_id": "7bd12b4d-0c87-5181-a568-6e2adcf26e82",
+              "concepts": [
+                "transport protocol"
+              ],
+              "reason": "The chunk directly identifies TCP, which is a transport protocol.",
+              "score": 1.0
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "5a0b726a-c697-52fb-a708-8cda2520f6e8",
+              "relevance_score": 1.0,
+              "covered_concepts": [
+                "transport protocol"
+              ],
+              "grading_reason": "The chunk directly identifies TCP, which is a transport protocol."
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "5a0b726a-c697-52fb-a708-8cda2520f6e8",
+              "file_id": "7bd12b4d-0c87-5181-a568-6e2adcf26e82",
+              "concepts": [
+                "transport protocol"
+              ],
+              "reason": "The chunk directly identifies TCP, which is a transport protocol.",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "5a0b726a-c697-52fb-a708-8cda2520f6e8",
+              "file_id": "7bd12b4d-0c87-5181-a568-6e2adcf26e82",
+              "concepts": [
+                "transport protocol"
+              ],
+              "reason": "The chunk directly identifies TCP, which is a transport protocol.",
+              "score": 1.0
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "complete"
+        }
+      ],
+      "latency_seconds": 11.968999999808148
+    }
+  },
+  {
+    "id": "units",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 10.313000000081956
+    },
+    "result": {
+      "status": "complete",
+      "blocks": [
+        {
+          "id": "b1",
+          "markdown": "記憶體限制是 **256 MiB**，不是 256 MB。",
+          "source_ids": [
+            "ce68dfdc-7020-5fc1-a2fa-98b1f68f2c20"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "ce68dfdc-7020-5fc1-a2fa-98b1f68f2c20",
+          "file_id": "d176cb34-b237-5261-8781-df44d6be81ab",
+          "name": "units.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "The memory limit is 256 MiB, not 256 MB."
+        }
+      ],
+      "limitations": [],
+      "trace_id": "6c850cfa-a584-4649-9812-74a68b1dc547"
+    },
+    "trace": {
+      "trace_id": "6c850cfa-a584-4649-9812-74a68b1dc547",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "ce68dfdc-7020-5fc1-a2fa-98b1f68f2c20",
+              "file_id": "d176cb34-b237-5261-8781-df44d6be81ab",
+              "concepts": [],
+              "reason": null,
+              "score": 0.04918032786885246
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "ce68dfdc-7020-5fc1-a2fa-98b1f68f2c20",
+              "file_id": "d176cb34-b237-5261-8781-df44d6be81ab",
+              "concepts": [
+                "memory limit"
+              ],
+              "reason": "Directly states that the memory limit is 256 MiB.",
+              "score": 1.0
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "ce68dfdc-7020-5fc1-a2fa-98b1f68f2c20",
+              "relevance_score": 1.0,
+              "covered_concepts": [
+                "memory limit"
+              ],
+              "grading_reason": "Directly states that the memory limit is 256 MiB."
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "ce68dfdc-7020-5fc1-a2fa-98b1f68f2c20",
+              "file_id": "d176cb34-b237-5261-8781-df44d6be81ab",
+              "concepts": [
+                "memory limit"
+              ],
+              "reason": "Directly states that the memory limit is 256 MiB.",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "ce68dfdc-7020-5fc1-a2fa-98b1f68f2c20",
+              "file_id": "d176cb34-b237-5261-8781-df44d6be81ab",
+              "concepts": [
+                "memory limit"
+              ],
+              "reason": "Directly states that the memory limit is 256 MiB.",
+              "score": 1.0
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "complete"
+        }
+      ],
+      "latency_seconds": 10.313000000081956
+    }
+  },
+  {
+    "id": "coverage",
+    "metrics": {
+      "candidate_recall": 1.0,
+      "citation_precision": 1.0,
+      "citation_completeness": 1.0,
+      "file_scope_correct": true,
+      "source_ids_correct": true,
+      "latency_seconds": 37.17200000002049
+    },
+    "result": {
+      "status": "partial",
+      "blocks": [
+        {
+          "id": "heading-definitions",
+          "markdown": "## Definitions",
+          "source_ids": []
+        },
+        {
+          "id": "availability",
+          "markdown": "**Availability** means every request receives a response.",
+          "source_ids": [
+            "455394b1-936d-5303-9220-f195a1587511"
+          ]
+        },
+        {
+          "id": "consistency",
+          "markdown": "**Consistency** means reads observe the latest completed write.",
+          "source_ids": [
+            "fd9f5952-6696-559b-ab1d-3d0c2866037b"
+          ]
+        },
+        {
+          "id": "partition-tolerance",
+          "markdown": "**Partition tolerance** permits operation despite network partitions.",
+          "source_ids": [
+            "08ff712a-11fd-5e4a-b091-6c709ea3c9d8"
+          ]
+        },
+        {
+          "id": "limitation:0",
+          "markdown": "提供的證據只定義三者，未說明它們之間的取捨、相對差異或互動方式，因此無法進一步比較這些面向。",
+          "source_ids": []
+        },
+        {
+          "id": "limitation:1",
+          "markdown": "未比較可用性、一致性與分區容錯性之間的相對差異、取捨及互動方式。",
+          "source_ids": []
+        }
+      ],
+      "sources": [
+        {
+          "chunk_id": "455394b1-936d-5303-9220-f195a1587511",
+          "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+          "name": "coverage.pdf",
+          "page_start": 1,
+          "page_end": 1,
+          "chunk_index": 0,
+          "content": "Availability means every request receives a response."
+        },
+        {
+          "chunk_id": "fd9f5952-6696-559b-ab1d-3d0c2866037b",
+          "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+          "name": "coverage.pdf",
+          "page_start": 2,
+          "page_end": 2,
+          "chunk_index": 1,
+          "content": "Consistency means reads observe the latest completed write."
+        },
+        {
+          "chunk_id": "08ff712a-11fd-5e4a-b091-6c709ea3c9d8",
+          "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+          "name": "coverage.pdf",
+          "page_start": 3,
+          "page_end": 3,
+          "chunk_index": 2,
+          "content": "Partition tolerance permits operation despite network partitions."
+        }
+      ],
+      "limitations": [
+        "提供的證據只定義三者，未說明它們之間的取捨、相對差異或互動方式，因此無法進一步比較這些面向。",
+        "未比較可用性、一致性與分區容錯性之間的相對差異、取捨及互動方式。"
+      ],
+      "trace_id": "02a6933d-ade0-495a-9ce3-bf1403c7ab33"
+    },
+    "trace": {
+      "trace_id": "02a6933d-ade0-495a-9ce3-bf1403c7ab33",
+      "stages": [
+        {
+          "stage": "retrieved",
+          "chunks": [
+            {
+              "chunk_id": "455394b1-936d-5303-9220-f195a1587511",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [],
+              "reason": null,
+              "score": 0.06452452301209573
+            },
+            {
+              "chunk_id": "fd9f5952-6696-559b-ab1d-3d0c2866037b",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [],
+              "reason": null,
+              "score": 0.06401249024199844
+            },
+            {
+              "chunk_id": "08ff712a-11fd-5e4a-b091-6c709ea3c9d8",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [],
+              "reason": null,
+              "score": 0.06504494976203068
+            }
+          ]
+        },
+        {
+          "stage": "graded",
+          "chunks": [
+            {
+              "chunk_id": "455394b1-936d-5303-9220-f195a1587511",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [
+                "availability"
+              ],
+              "reason": "Directly defines availability as every request receiving a response, providing one component of the conceptual comparison.",
+              "score": 0.5
+            },
+            {
+              "chunk_id": "fd9f5952-6696-559b-ab1d-3d0c2866037b",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [
+                "consistency"
+              ],
+              "reason": "Directly defines consistency as reads observing the latest completed write, providing one component of the conceptual comparison.",
+              "score": 0.5
+            },
+            {
+              "chunk_id": "08ff712a-11fd-5e4a-b091-6c709ea3c9d8",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [
+                "partition tolerance"
+              ],
+              "reason": "Directly defines partition tolerance as permitting operation despite network partitions, providing one component of the conceptual comparison.",
+              "score": 0.5
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "455394b1-936d-5303-9220-f195a1587511",
+              "relevance_score": 0.5,
+              "covered_concepts": [
+                "availability"
+              ],
+              "grading_reason": "Directly defines availability as every request receiving a response, providing one component of the conceptual comparison."
+            },
+            {
+              "chunk_id": "fd9f5952-6696-559b-ab1d-3d0c2866037b",
+              "relevance_score": 0.5,
+              "covered_concepts": [
+                "consistency"
+              ],
+              "grading_reason": "Directly defines consistency as reads observing the latest completed write, providing one component of the conceptual comparison."
+            },
+            {
+              "chunk_id": "08ff712a-11fd-5e4a-b091-6c709ea3c9d8",
+              "relevance_score": 0.5,
+              "covered_concepts": [
+                "partition tolerance"
+              ],
+              "grading_reason": "Directly defines partition tolerance as permitting operation despite network partitions, providing one component of the conceptual comparison."
+            }
+          ]
+        },
+        {
+          "stage": "context",
+          "chunks": [
+            {
+              "chunk_id": "08ff712a-11fd-5e4a-b091-6c709ea3c9d8",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [
+                "partition tolerance"
+              ],
+              "reason": "Directly defines partition tolerance as permitting operation despite network partitions, providing one component of the conceptual comparison.",
+              "score": 0.5
+            },
+            {
+              "chunk_id": "455394b1-936d-5303-9220-f195a1587511",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [
+                "availability"
+              ],
+              "reason": "Directly defines availability as every request receiving a response, providing one component of the conceptual comparison.",
+              "score": 0.5
+            },
+            {
+              "chunk_id": "fd9f5952-6696-559b-ab1d-3d0c2866037b",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [
+                "consistency"
+              ],
+              "reason": "Directly defines consistency as reads observing the latest completed write, providing one component of the conceptual comparison.",
+              "score": 0.5
+            }
+          ]
+        },
+        {
+          "stage": "retry_retrieved",
+          "chunks": []
+        },
+        {
+          "stage": "retry_graded",
+          "chunks": [
+            {
+              "chunk_id": "455394b1-936d-5303-9220-f195a1587511",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [
+                "availability"
+              ],
+              "reason": "Directly defines availability as every request receiving a response, providing one component of the conceptual comparison.",
+              "score": 0.5
+            },
+            {
+              "chunk_id": "fd9f5952-6696-559b-ab1d-3d0c2866037b",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [
+                "consistency"
+              ],
+              "reason": "Directly defines consistency as reads observing the latest completed write, providing one component of the conceptual comparison.",
+              "score": 0.5
+            },
+            {
+              "chunk_id": "08ff712a-11fd-5e4a-b091-6c709ea3c9d8",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [
+                "partition tolerance"
+              ],
+              "reason": "Directly defines partition tolerance as permitting operation despite network partitions, providing one component of the conceptual comparison.",
+              "score": 0.5
+            }
+          ],
+          "grades": [
+            {
+              "chunk_id": "455394b1-936d-5303-9220-f195a1587511",
+              "relevance_score": 0.5,
+              "covered_concepts": [
+                "availability"
+              ],
+              "grading_reason": "Directly defines availability as every request receiving a response, providing one component of the conceptual comparison."
+            },
+            {
+              "chunk_id": "fd9f5952-6696-559b-ab1d-3d0c2866037b",
+              "relevance_score": 0.5,
+              "covered_concepts": [
+                "consistency"
+              ],
+              "grading_reason": "Directly defines consistency as reads observing the latest completed write, providing one component of the conceptual comparison."
+            },
+            {
+              "chunk_id": "08ff712a-11fd-5e4a-b091-6c709ea3c9d8",
+              "relevance_score": 0.5,
+              "covered_concepts": [
+                "partition tolerance"
+              ],
+              "grading_reason": "Directly defines partition tolerance as permitting operation despite network partitions, providing one component of the conceptual comparison."
+            }
+          ]
+        },
+        {
+          "stage": "retry_context",
+          "chunks": [
+            {
+              "chunk_id": "08ff712a-11fd-5e4a-b091-6c709ea3c9d8",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [
+                "partition tolerance"
+              ],
+              "reason": "Directly defines partition tolerance as permitting operation despite network partitions, providing one component of the conceptual comparison.",
+              "score": 0.5
+            },
+            {
+              "chunk_id": "455394b1-936d-5303-9220-f195a1587511",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [
+                "availability"
+              ],
+              "reason": "Directly defines availability as every request receiving a response, providing one component of the conceptual comparison.",
+              "score": 0.5
+            },
+            {
+              "chunk_id": "fd9f5952-6696-559b-ab1d-3d0c2866037b",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [
+                "consistency"
+              ],
+              "reason": "Directly defines consistency as reads observing the latest completed write, providing one component of the conceptual comparison.",
+              "score": 0.5
+            }
+          ]
+        },
+        {
+          "stage": "cited",
+          "chunks": [
+            {
+              "chunk_id": "08ff712a-11fd-5e4a-b091-6c709ea3c9d8",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [
+                "partition tolerance"
+              ],
+              "reason": "Directly defines partition tolerance as permitting operation despite network partitions, providing one component of the conceptual comparison.",
+              "score": 0.5
+            },
+            {
+              "chunk_id": "455394b1-936d-5303-9220-f195a1587511",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [
+                "availability"
+              ],
+              "reason": "Directly defines availability as every request receiving a response, providing one component of the conceptual comparison.",
+              "score": 0.5
+            },
+            {
+              "chunk_id": "fd9f5952-6696-559b-ab1d-3d0c2866037b",
+              "file_id": "bbda1d85-f2a1-56f7-835d-e2344a482164",
+              "concepts": [
+                "consistency"
+              ],
+              "reason": "Directly defines consistency as reads observing the latest completed write, providing one component of the conceptual comparison.",
+              "score": 0.5
+            }
+          ],
+          "rejected_blocks": {},
+          "status": "partial"
+        }
+      ],
+      "latency_seconds": 37.17200000002049
+    }
+  }
+]

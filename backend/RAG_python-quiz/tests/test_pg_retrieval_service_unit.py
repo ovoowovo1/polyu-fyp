@@ -16,15 +16,6 @@ class PgRetrievalServiceTests(PgServiceBase):
     def test_to_pgvector_formats_float_sequence(self):
         self.assertEqual(pg_shared._to_pgvector([1, 2.5]), "[1.00000000,2.50000000]")
 
-    def test_get_embedding_column_uses_settings_and_rejects_invalid_values(self):
-        with patch(
-            "app.services.pg.pg_shared.get_settings",
-            return_value=make_settings(embedding_active_column="embedding_v2"),
-        ):
-            self.assertEqual(pg_shared._get_embedding_column(), "embedding_v2")
-
-        with self.assertRaises(ValueError):
-            pg_shared._get_embedding_column("invalid")
 
     def test_safe_postgres_diagnostics_excludes_connection_and_query_data(self):
         plain_error = RuntimeError("database error")
@@ -83,8 +74,8 @@ class PgRetrievalServiceTests(PgServiceBase):
             "class_id": "class-1",
         }
         chunks = [
-            {"text": "A", "metadata": {"pageNumber": 2}, "embedding": [0.1], "embedding_v2": [0.2]},
-            {"text": "B", "embedding": [0.3], "embedding_v2": None},
+            {"text": "A", "metadata": {"pageNumber": 2}, "embedding": [0.1]},
+            {"text": "B", "embedding": [0.3]},
         ]
 
         with self.patch_conn(cursor), patch(
@@ -93,7 +84,6 @@ class PgRetrievalServiceTests(PgServiceBase):
             result = pg_service.create_graph_from_document(
                 document,
                 chunks,
-                embedding_column="embedding",
                 user_id="teacher-1",
             )
 
@@ -185,10 +175,7 @@ class PgRetrievalServiceTests(PgServiceBase):
         document = {"hash": "hash-2", "name": "lesson.pdf", "size": 12, "mimetype": "application/pdf"}
         chunks = [{"text": "Only", "metadata": {}, "embedding": [0.4]}]
 
-        with self.patch_conn(cursor), patch(
-            "app.services.pg.pg_shared.get_settings",
-            return_value=make_settings(),
-        ), patch("app.services.pg.pg_retrieval_service.psycopg2.extras.execute_values") as execute_values:
+        with self.patch_conn(cursor), patch("app.services.pg.pg_retrieval_service.psycopg2.extras.execute_values") as execute_values:
             pg_service.create_graph_from_document(document, chunks)
 
         self.assertIn("INSERT INTO documents (hash, name, size_bytes, mimetype)", cursor.executed[0][0])
@@ -279,128 +266,17 @@ class PgRetrievalServiceTests(PgServiceBase):
     def test_retrieve_graph_context_uses_default_and_v2_query_shapes(self):
         rows = [{"text": "chunk", "score": 0.4, "source": "doc", "page_start": 2, "fileid": "file-1", "chunkid": "chunk-1"}]
         cursor = FakeCursor(fetchall_results=[rows])
-        with self.patch_conn(cursor), patch(
-            "app.services.pg.pg_shared.get_settings",
-            return_value=make_settings(),
-        ):
+        with self.patch_conn(cursor):
             result = pg_service.retrieve_graph_context([0.1], selected_file_ids=["file-1"])
 
         self.assertEqual(result[0]["fileId"], "file-1")
-        self.assertNotIn("IS NOT NULL", cursor.executed[0][0])
+        self.assertIn("IS NOT NULL", cursor.executed[0][0])
 
         cursor = FakeCursor(fetchall_results=[rows])
         with self.patch_conn(cursor):
-            pg_service.retrieve_graph_context([0.1], embedding_column="embedding_v2")
-        self.assertIn("embedding_v2 IS NOT NULL", cursor.executed[0][0])
+            pg_service.retrieve_graph_context([0.1], selected_file_ids=["file-1"])
+        self.assertIn("embedding IS NOT NULL", cursor.executed[0][0])
 
-    def test_get_chunks_missing_embeddings_and_update_chunk_embeddings(self):
-        cursor = FakeCursor(fetchall_results=[[{"id": "chunk-1", "text": "A"}]])
-        with self.patch_conn(cursor):
-            result = pg_service.get_chunks_missing_embeddings(limit=2)
-        self.assertEqual(result, [{"id": "chunk-1", "text": "A"}])
-
-        with patch(
-            "app.services.pg.pg_retrieval_service.redis_cache.invalidate_namespaces",
-            new_callable=AsyncMock,
-        ) as invalidate:
-            self.assertEqual(asyncio.run(pg_service.update_chunk_embeddings([])), 0)
-        invalidate.assert_not_called()
-
-        cursor = FakeCursor()
-        with self.patch_conn(cursor), patch(
-            "app.services.pg.pg_retrieval_service.psycopg2.extras.execute_values"
-        ) as execute_values, patch(
-            "app.services.pg.pg_retrieval_service.redis_cache.invalidate_namespaces",
-            new_callable=AsyncMock,
-        ) as invalidate:
-            updated = asyncio.run(
-                pg_service.update_chunk_embeddings([{"id": "chunk-1", "embedding": [0.9]}])
-            )
-        self.assertEqual(updated, 1)
-        self.assertEqual(execute_values.call_args.args[2], [("chunk-1", "[0.90000000]")])
-        invalidate.assert_called_once_with("rag:retrieval")
-
-    def test_retrieve_context_helpers_cover_empty_and_keyword_paths(self):
-        cursor = FakeCursor(
-            fetchall_results=[
-                [{"text": "chunk", "score": None, "source": "lesson.pdf", "page_start": 1, "fileid": "file-1", "chunkid": "chunk-1"}],
-                [{"text": "chunk", "score": 0.2, "source": "slides.pdf", "page_start": 2, "fileid": "file-2", "chunkid": "chunk-2"}],
-            ]
-        )
-        with self.patch_conn(cursor):
-            no_filter = pg_service.retrieve_context_by_keywords("sql")
-            filtered = pg_service.retrieve_context_by_keywords("sql", selected_file_ids=["file-2"], k=5)
-
-        self.assertIsNone(no_filter[0]["score"])
-        self.assertEqual(no_filter[0]["source"], "lesson.pdf")
-        self.assertEqual(filtered[0]["page"], 2)
-        self.assertEqual(filtered[0]["source"], "slides.pdf")
-        self.assertNotIn("ANY", cursor.executed[0][0])
-        self.assertIn("ANY", cursor.executed[1][0])
-        self.assertIn("JOIN public.documents AS d ON d.id = c.document_id", cursor.executed[0][0])
-        self.assertNotIn("NULL::text AS source", cursor.executed[0][0])
-
-    def test_pg_search_sanitizes_source_code_and_preserves_search_terms(self):
-        raw_query = 'app.get("/admin/report", async (req, res) => { SQL Injection project-level access control }'
-
-        sanitized = pg_retrieval_keywords.sanitize_query_for_bm25(raw_query)
-
-        self.assertEqual(
-            sanitized,
-            "app get admin report async req res SQL Injection project level access control",
-        )
-        self.assertNotRegex(sanitized, r'[(){}"/:>-]')
-        self.assertIn("SQL", sanitized)
-        self.assertIn("Injection", sanitized)
-        self.assertIn("project", sanitized)
-        self.assertIn("access", sanitized)
-
-        _, params = pg_retrieval_keywords.build_keyword_query("pg_search", raw_query)
-        self.assertEqual(params, [sanitized])
-
-    def test_pg_search_uses_safe_fallback_for_empty_query(self):
-        _, params = pg_retrieval_keywords.build_keyword_query("pg_search", "(){}[]:;")
-        self.assertEqual(params, ["query"])
-
-    def test_pg_search_retrieval_passes_sanitized_query_to_database(self):
-        cursor = FakeCursor(
-            fetchall_results=[
-                [{"text": "chunk", "score": 0.5, "source": "lesson.pdf", "page_start": 1, "fileid": "file-1", "chunkid": "chunk-1"}],
-            ]
-        )
-        raw_query = 'text:(app.get("/admin/report"))'
-
-        with self.patch_conn(cursor):
-            result = pg_service.retrieve_context_by_keywords(raw_query, selected_file_ids=["file-1"], k=3)
-
-        self.assertEqual(result[0]["chunkId"], "chunk-1")
-        self.assertEqual(cursor.executed[0][1], ["text app get admin report", ["file-1"], 3])
-
-    def test_evaluation_reuses_production_bm25_sanitizer(self):
-        from evaluation.retrieval_compare import sanitize_query_for_bm25
-
-        self.assertIs(sanitize_query_for_bm25, pg_retrieval_keywords.sanitize_query_for_bm25)
-
-    def test_retrieve_context_by_keywords_can_use_postgres_fulltext_backend(self):
-        cursor = FakeCursor(
-            fetchall_results=[
-                [{"text": "chunk", "score": 0.5, "source": "lesson.pdf", "page_start": 1, "fileid": "file-1", "chunkid": "chunk-1"}],
-            ]
-        )
-
-        with self.patch_conn(cursor), patch(
-            "app.services.pg.pg_retrieval_service.get_settings",
-            return_value=make_settings(fulltext_search_backend="postgres"),
-        ):
-            result = pg_service.retrieve_context_by_keywords("sql injection", selected_file_ids=["file-1"], k=3)
-
-        self.assertEqual(result[0]["score"], 0.5)
-        sql, params = cursor.executed[0]
-        self.assertIn("websearch_to_tsquery('simple', %s)", sql)
-        self.assertIn("similarity(COALESCE(c.entities_json::text, ''), query.raw_query)", sql)
-        self.assertNotIn("paradedb.score", sql)
-        self.assertNotIn("@@@", sql)
-        self.assertEqual(params, ["sql injection", "sql injection", ["file-1"], 3])
 
     def test_get_fulltext_search_backend_rejects_unknown_backend(self):
         with patch(

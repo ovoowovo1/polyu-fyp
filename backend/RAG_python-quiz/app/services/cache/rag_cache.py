@@ -22,7 +22,6 @@ async def get_or_set_query_embedding(
     model: Any,
     query_text: str,
     *,
-    mode: str,
     settings: Any,
 ) -> list[float]:
     async def load() -> dict[str, Any]:
@@ -37,7 +36,7 @@ async def get_or_set_query_embedding(
 
     payload = await redis_cache.get_or_set_json(
         "rag:query-embedding",
-        _model_cache_params(model, mode=mode, query_text=query_text),
+        _model_cache_params(model, query_text=query_text),
         load,
         ttl_seconds=settings.rag_embedding_cache_ttl_seconds,
     )
@@ -51,9 +50,7 @@ async def get_or_set_retrieval_rows(
     query_text: str,
     selected_file_ids: Sequence[str],
     k: int,
-    embedding_column: str,
     model: Any,
-    mode: str,
     settings: Any,
     loader: RowsLoader,
     rehydrate: RowsRehydrator | None = None,
@@ -88,10 +85,9 @@ async def get_or_set_retrieval_rows(
             "query_text": query_text,
             "selected_file_ids": normalize_file_ids(selected_file_ids),
             "k": k,
-            "embedding_column": embedding_column,
             "model_name": getattr(model, "model_name", ""),
             "base_url": getattr(model, "base_url", ""),
-            "mode": mode,
+            "contract": "gemini-embedding-2:3072:v1",
         },
         load_compact,
         version_namespaces=[studio_cache.rag_retrieval_namespace()],
@@ -141,12 +137,12 @@ def is_valid_compact_rows(rows: Any) -> bool:
     return True
 
 
-def _model_cache_params(model: Any, *, mode: str, query_text: str) -> dict[str, Any]:
+def _model_cache_params(model: Any, *, query_text: str) -> dict[str, Any]:
     return {
         "query_text": query_text,
         "model_name": getattr(model, "model_name", ""),
         "base_url": getattr(model, "base_url", ""),
-        "mode": mode,
+        "contract": "gemini-embedding-2:3072:v1",
     }
 
 

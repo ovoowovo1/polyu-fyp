@@ -1,15 +1,37 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import {
   buildStructuredContentFromResult,
-  buildStructuredContentFromTextCitations,
   parseSseFrame,
   readSseStream,
   splitSseFrames,
 } from './queryStreamSse.js';
 
 const encoder = new TextEncoder();
+const cases = JSON.parse(readFileSync(new URL('../../../shared-test-data/rag-display.json', import.meta.url), 'utf8'));
+
+for (const { id, result } of cases) {
+  test(`RAG display preserves every block and source: ${id}`, () => {
+    const parts = buildStructuredContentFromResult(result);
+    assert.deepEqual(parts.filter(p => p.type === 'text').map(p => p.value), result.blocks.map(b => b.markdown));
+    const order = [...new Set(result.blocks.flatMap(b => b.source_ids))];
+    for (const part of parts.filter(p => p.type === 'citation')) {
+      assert.equal(part.number, order.indexOf(part.details.chunkId) + 1);
+      assert.equal(part.details.content, result.sources.find(s => s.chunk_id === part.details.chunkId).content);
+    }
+  });
+}
+
+test('RAG display rejects missing sources and old payloads instead of losing content', () => {
+  assert.throws(() => buildStructuredContentFromResult({ answer: 'old' }));
+  const result = structuredClone(cases[0].result);
+  result.sources = [];
+  assert.throws(() => buildStructuredContentFromResult(result), /source is missing/);
+  result.blocks = [{ id: 'b', markdown: 'literal array [1, 2]', source_ids: [] }];
+  assert.equal(buildStructuredContentFromResult(result)[0].value, 'literal array [1, 2]');
+});
 
 const createStream = (chunks) => new ReadableStream({
   start(controller) {
@@ -44,7 +66,7 @@ test('readSseStream reconstructs fragmented SSE frames and notifies listeners', 
   const events = await readSseStream(createStream([
     'event: retrieval\ndata: {"type":"retrie',
     'val","message":"searching","data":2}\n\n',
-    'event: result\ndata: {"type":"result","answer":"done","answer_with_citations":[],"raw_sources":[]}\n\n',
+    'event: result\ndata: {"type":"result","status":"unavailable","blocks":[],"sources":[],"limitations":[],"trace_id":"t"}\n\n',
   ]), {
     onEvent: (event) => seen.push(event),
   });
@@ -54,245 +76,4 @@ test('readSseStream reconstructs fragmented SSE frames and notifies listeners', 
   assert.equal(events[0].message, 'searching');
   assert.equal(events[1].type, 'result');
   assert.deepEqual(seen, events);
-});
-
-test('buildStructuredContentFromResult produces text and citation parts', () => {
-  const structured = buildStructuredContentFromResult({
-    answer: 'Grounded answer.',
-    answer_with_citations: [
-      {
-        content_segments: [
-          {
-            segment_text: 'Grounded answer.',
-            source_references: [{ file_chunk_id: 'chunk-1' }],
-          },
-        ],
-      },
-    ],
-    raw_sources: [
-      {
-        fileId: 'file-1',
-        chunkId: 'chunk-1',
-        source: 'notes.pdf',
-        pageNumber: 7,
-      },
-    ],
-  });
-
-  assert.deepEqual(structured, [
-    { type: 'text', value: 'Grounded answer.' },
-    {
-      type: 'citation',
-      number: 1,
-      details: {
-        fileId: 'file-1',
-        chunkId: 'chunk-1',
-        source: 'notes.pdf',
-        page: 7,
-      },
-    },
-  ]);
-});
-
-test('buildStructuredContentFromTextCitations parses a single bracket citation', () => {
-  const structured = buildStructuredContentFromTextCitations(
-    'Known fact [1] and more text.',
-    [
-      {
-        fileId: 'file-1',
-        chunkId: 'chunk-1',
-        source: 'notes.pdf',
-        pageNumber: 2,
-      },
-    ],
-  );
-
-  assert.deepEqual(structured, [
-    { type: 'text', value: 'Known fact ' },
-    {
-      type: 'citation',
-      number: 1,
-      details: {
-        fileId: 'file-1',
-        chunkId: 'chunk-1',
-        source: 'notes.pdf',
-        page: 2,
-      },
-    },
-    { type: 'text', value: ' and more text.' },
-  ]);
-});
-
-test('buildStructuredContentFromTextCitations parses multiple citations in one bracket', () => {
-  const structured = buildStructuredContentFromTextCitations(
-    'Line one [1, 2, 2]\nLine two.',
-    [
-      {
-        fileId: 'file-1',
-        chunkId: 'chunk-1',
-        source: 'notes.pdf',
-        pageNumber: 2,
-      },
-      {
-        fileId: 'file-2',
-        chunkId: 'chunk-2',
-        source: 'slides.pdf',
-        pageNumber: 5,
-      },
-    ],
-  );
-
-  assert.deepEqual(structured, [
-    { type: 'text', value: 'Line one ' },
-    {
-      type: 'citation',
-      number: 1,
-      details: {
-        fileId: 'file-1',
-        chunkId: 'chunk-1',
-        source: 'notes.pdf',
-        page: 2,
-      },
-    },
-    {
-      type: 'citation',
-      number: 2,
-      details: {
-        fileId: 'file-2',
-        chunkId: 'chunk-2',
-        source: 'slides.pdf',
-        page: 5,
-      },
-    },
-    { type: 'text', value: '\nLine two.' },
-  ]);
-});
-
-test('buildStructuredContentFromResult keeps answer_with_citations as the priority path', () => {
-  const structured = buildStructuredContentFromResult({
-    answer: 'Plain fallback [1]',
-    answer_with_citations: [
-      {
-        content_segments: [
-          {
-            segment_text: 'Structured answer.',
-            source_references: [{ file_chunk_id: 'chunk-9' }],
-          },
-        ],
-      },
-    ],
-    raw_sources: [
-      {
-        fileId: 'file-9',
-        chunkId: 'chunk-9',
-        source: 'handbook.pdf',
-        pageNumber: 11,
-      },
-    ],
-  });
-
-  assert.deepEqual(structured, [
-    { type: 'text', value: 'Structured answer.' },
-    {
-      type: 'citation',
-      number: 1,
-      details: {
-        fileId: 'file-9',
-        chunkId: 'chunk-9',
-        source: 'handbook.pdf',
-        page: 11,
-      },
-    },
-  ]);
-});
-
-test('buildStructuredContentFromResult merges inline citations with incomplete structured references', () => {
-  const structured = buildStructuredContentFromResult({
-    answer: 'Fallback [1, 2]',
-    answer_with_citations: [
-      {
-        content_segments: [
-          {
-            segment_text: 'Task explanation.',
-            source_references: [
-              { file_chunk_id: 'chunk-1' },
-            ],
-          },
-          {
-            segment_text: 'Released later [1, 2], and additional hours will be provided.',
-            source_references: [
-              { file_chunk_id: 'chunk-2' },
-            ],
-          },
-        ],
-      },
-    ],
-    raw_sources: [
-      {
-        fileId: 'file-2',
-        chunkId: 'chunk-2',
-        source: 'slides.pdf',
-        pageNumber: 4,
-      },
-      {
-        fileId: 'file-1',
-        chunkId: 'chunk-1',
-        source: 'notes.pdf',
-        pageNumber: 3,
-      },
-    ],
-  });
-
-  assert.deepEqual(structured, [
-    { type: 'text', value: 'Task explanation.' },
-    {
-      type: 'citation',
-      number: 1,
-      details: {
-        fileId: 'file-1',
-        chunkId: 'chunk-1',
-        source: 'notes.pdf',
-        page: 3,
-      },
-    },
-    { type: 'text', value: 'Released later, and additional hours will be provided.' },
-    {
-      type: 'citation',
-      number: 1,
-      details: {
-        fileId: 'file-1',
-        chunkId: 'chunk-1',
-        source: 'notes.pdf',
-        page: 3,
-      },
-    },
-    {
-      type: 'citation',
-      number: 2,
-      details: {
-        fileId: 'file-2',
-        chunkId: 'chunk-2',
-        source: 'slides.pdf',
-        page: 4,
-      },
-    },
-  ]);
-});
-
-test('buildStructuredContentFromTextCitations leaves invalid citations as plain text', () => {
-  const structured = buildStructuredContentFromTextCitations(
-    'Example [1, 3] should stay plain text.',
-    [
-      {
-        fileId: 'file-1',
-        chunkId: 'chunk-1',
-        source: 'notes.pdf',
-        pageNumber: 2,
-      },
-    ],
-  );
-
-  assert.deepEqual(structured, [
-    { type: 'text', value: 'Example [1, 3] should stay plain text.' },
-  ]);
 });

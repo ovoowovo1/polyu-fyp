@@ -1,3 +1,16 @@
 .coverage
 .coverage.*
 backend/RAG_python-quiz/coverage-data/
+
+# Local-only working files and runtime logs
+/.local/
+*.log
+/backend/RAG_python-quiz/logs/
+
+# Local documentation and generated working materials
+/findings.md
+/progress.md
+/task_plan.md
+/test-fixtures/
+/backend/RAG_python-quiz/scripts/
+/backend/RAG_python-quiz/docs/

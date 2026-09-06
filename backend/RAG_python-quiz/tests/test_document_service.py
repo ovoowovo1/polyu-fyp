@@ -7,10 +7,10 @@ from app.utils.ingest_errors import EmbeddingProviderError
 from tests.support import make_embedding_error as make_retryable_error
 from tests.support import make_embedding_settings
 
-STANDBY_SETTINGS = make_embedding_settings(embedding_fallback_model="google/gemini-embedding-2-preview")
-PRIMARY_ONLY_SETTINGS = make_embedding_settings(embedding_fallback_model="", embedding_fallback_column="embedding")
-FALLBACK_V2_SETTINGS = make_embedding_settings(embedding_fallback_column="embedding_v2")
-FALLBACK_LEGACY_SETTINGS = make_embedding_settings(embedding_fallback_column="embedding")
+STANDBY_SETTINGS = make_embedding_settings()
+PRIMARY_ONLY_SETTINGS = make_embedding_settings()
+FALLBACK_V2_SETTINGS = make_embedding_settings()
+FALLBACK_LEGACY_SETTINGS = make_embedding_settings()
 
 
 def markdown_doc(page_content):
@@ -25,7 +25,7 @@ def pdf_pages(*texts):
 
 
 class SplittingModel:
-    model_name = "google/gemini-embedding-001"
+    model_name = "google/gemini-embedding-2"
     base_url = "https://openrouter.ai/api/v1"
 
     def __init__(self):
@@ -40,7 +40,7 @@ class SplittingModel:
 
 
 class SingleFailureModel:
-    model_name = "google/gemini-embedding-001"
+    model_name = "google/gemini-embedding-2"
     base_url = "https://openrouter.ai/api/v1"
 
     async def aembed_documents(self, texts):
@@ -79,23 +79,11 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
         rows = document_service._assemble_chunks_for_db(
             [{"pageContent": "chunk", "metadata": {"pageNumber": 1}}],
             [[1.0]],
-            [[2.0]],
         )
         self.assertEqual(rows[0]["embedding"], [1.0])
-        self.assertEqual(rows[0]["embedding_v2"], [2.0])
+
 
         self.assertEqual(await document_service.embed_texts_with_retry([]), [])
-        self.assertEqual(
-            await document_service.embedding_pipeline.embed_texts_with_retry(
-                [],
-                embeddings_model=object(),
-                create_embedding_model=lambda: object(),
-                initial_batch_size=1,
-                embed_batch=AsyncMock(),
-                logger=SimpleNamespace(),
-            ),
-            [],
-        )
         self.assertEqual(
             ingestion_steps.build_pdf_chunks(
                 "legacy.pdf",
@@ -175,15 +163,18 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
         ]
         calls = []
 
-        async def fake_embed(batch, **_kwargs):
+        async def fake_embed(batch, *_args, **_kwargs):
             calls.append(list(batch))
             return [[float(index)] for index, _ in enumerate(batch)]
 
         with patch(
-            "app.services.documents.document_service.embedding_pipeline.embed_texts_with_retry",
+            "app.services.documents.document_service._embed_batch_with_adaptive_retry",
             side_effect=fake_embed,
         ):
-            vectors = await document_service.embed_texts_with_retry(inputs)
+            vectors = await document_service.embed_texts_with_retry(
+                inputs,
+                embeddings_model=object(),
+            )
 
         self.assertEqual([len(batch) for batch in calls], [6, 1])
         self.assertEqual(len(vectors), 7)
@@ -206,37 +197,6 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(error.code, "EMBEDDING_UPSTREAM_FAILED")
         self.assertEqual(error.raw_preview, "raw bad chunk response")
 
-    async def test_embed_chunks_for_storage_keeps_primary_when_standby_fails(self):
-        chunks = [
-            {"pageContent": "chunk-1", "metadata": {"pageNumber": 1}},
-            {
-                "pageContent": "Image source: figure.png",
-                "metadata": {"pageNumber": 1},
-                "embeddingInput": {"content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,aW1n"}}]},
-            },
-        ]
-        primary_model = object()
-        fallback_model = object()
-
-        with patch(
-            "app.services.documents.document_service.get_settings",
-            return_value=STANDBY_SETTINGS,
-        ), patch(
-            "app.services.documents.document_service.create_embedding_model",
-            side_effect=[primary_model, fallback_model],
-        ) as create_model, patch(
-            "app.services.documents.document_service.embed_texts_with_retry",
-            side_effect=[
-                [[1.0], [2.0]],
-                make_retryable_error(raw_preview="fallback raw response"),
-            ],
-        ) as embed_texts:
-            primary_vectors, fallback_vectors = await document_service._embed_chunks_for_storage(chunks)
-
-        self.assertEqual(primary_vectors, [[1.0], [2.0]])
-        self.assertIsNone(fallback_vectors)
-        self.assertEqual(create_model.call_count, 2)
-        self.assertEqual(embed_texts.await_args_list[0].args[0][1], chunks[1]["embeddingInput"])
 
     async def test_embed_chunks_for_storage_raises_when_primary_fails(self):
         chunks = [{"pageContent": "chunk-1", "metadata": {"pageNumber": 1}}]
@@ -254,7 +214,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(EmbeddingProviderError) as ctx:
                 await document_service._embed_chunks_for_storage(chunks)
 
-        self.assertEqual(create_model.call_count, 1)
+        self.assertEqual(create_model.call_count, 0)
         self.assertEqual(ctx.exception.raw_preview, "primary raw response")
 
     async def test_embed_batch_and_storage_cover_remaining_edge_cases(self):
@@ -282,35 +242,6 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
                 await document_service._embed_batch_with_adaptive_retry(["text"], NonRetryableModel(), batch_label="1")
         finally:
             document_service.EMBED_RETRY_ATTEMPTS = original_attempts
-
-        chunks = [{"pageContent": "chunk-1", "metadata": {"pageNumber": 1}}]
-        with patch(
-            "app.services.documents.document_service.get_settings",
-            return_value=PRIMARY_ONLY_SETTINGS,
-        ), patch(
-            "app.services.documents.document_service.create_embedding_model",
-            return_value=object(),
-        ), patch(
-            "app.services.documents.document_service.embed_texts_with_retry",
-            return_value=[[1.0]],
-        ):
-            primary_only = await document_service._embed_chunks_for_storage(chunks)
-        self.assertEqual(primary_only, ([[1.0]], None))
-
-        primary_model = object()
-        fallback_model = object()
-        with patch(
-            "app.services.documents.document_service.get_settings",
-            return_value=STANDBY_SETTINGS,
-        ), patch(
-            "app.services.documents.document_service.create_embedding_model",
-            side_effect=[primary_model, fallback_model],
-        ), patch(
-            "app.services.documents.document_service.embed_texts_with_retry",
-            side_effect=[[[1.0]], [[2.0]]],
-        ):
-            vectors = await document_service._embed_chunks_for_storage(chunks)
-        self.assertEqual(vectors, ([[1.0]], [[2.0]]))
 
     async def test_ingest_document_covers_validation_duplicate_and_failure_paths(self):
         with self.assertRaises(document_service.DocumentIngestError):
@@ -346,7 +277,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.documents.document_service.pg_service.find_document_by_hash", return_value=None), patch(
             "app.services.documents.document_service.extract_pdf_content_by_page",
-            AsyncMock(return_value=pdf_pages("short", "   ")),
+            AsyncMock(return_value=pdf_pages("", "   ")),
         ):
             with self.assertRaises(document_service.DocumentIngestError):
                 await document_service.ingest_document(
@@ -391,7 +322,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
             AsyncMock(return_value=pdf_pages("This page contains enough text to be chunked.")),
         ), patch(
             "app.services.documents.document_service._embed_chunks_for_storage",
-            AsyncMock(return_value=([[1.0]], None)),
+            AsyncMock(return_value=[[1.0]]),
         ), patch(
             "app.services.documents.document_service.get_settings",
             return_value=FALLBACK_V2_SETTINGS,
@@ -416,7 +347,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
             AsyncMock(return_value=pdf_pages("This page contains enough text to be chunked.")),
         ), patch(
             "app.services.documents.document_service._embed_chunks_for_storage",
-            AsyncMock(return_value=([[1.0]], [[2.0]])),
+            AsyncMock(return_value=[[1.0]]),
         ), patch(
             "app.services.documents.document_service.get_settings",
             return_value=FALLBACK_V2_SETTINGS,
@@ -439,7 +370,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
             AsyncMock(side_effect=AssertionError("PDF extraction should not run for images")),
         ), patch(
             "app.services.documents.document_service._embed_chunks_for_storage",
-            AsyncMock(return_value=([[1.0]], [[2.0]])),
+            AsyncMock(return_value=[[1.0]]),
         ) as embed_chunks, patch(
             "app.services.documents.document_service.get_settings",
             return_value=FALLBACK_V2_SETTINGS,
@@ -470,7 +401,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
             }]),
         ), patch(
             "app.services.documents.document_service._embed_chunks_for_storage",
-            AsyncMock(return_value=([[1.0]], None)),
+            AsyncMock(return_value=[[1.0]]),
         ), patch(
             "app.services.documents.document_service.pg_service.create_graph_from_document",
             return_value={"fileId": "pdf-image-1"},
@@ -514,7 +445,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
             return_value=None,
         ), patch(
             "app.services.documents.document_service._embed_chunks_for_storage",
-            AsyncMock(return_value=([[1.0]], None)),
+            AsyncMock(return_value=[[1.0]]),
         ), patch(
             "app.services.documents.document_service.get_settings",
             return_value=FALLBACK_LEGACY_SETTINGS,
@@ -539,7 +470,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
             AsyncMock(return_value=pdf_pages("This page contains enough text to be chunked.")),
         ), patch(
             "app.services.documents.document_service._embed_chunks_for_storage",
-            AsyncMock(return_value=([[1.0]], [[2.0]])),
+            AsyncMock(return_value=[[1.0]]),
         ), patch(
             "app.services.documents.document_service.get_settings",
             return_value=FALLBACK_V2_SETTINGS,
@@ -566,7 +497,7 @@ class DocumentServiceEmbeddingTests(unittest.IsolatedAsyncioTestCase):
             return_value=None,
         ), patch(
             "app.services.documents.document_service._embed_chunks_for_storage",
-            AsyncMock(return_value=([[1.0]], None)),
+            AsyncMock(return_value=[[1.0]]),
         ), patch(
             "app.services.documents.document_service.get_settings",
             return_value=FALLBACK_LEGACY_SETTINGS,

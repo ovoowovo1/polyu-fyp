@@ -264,7 +264,9 @@ class GeneratorUnitTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(result, "response")
-        self.assertIs(to_thread.await_args.args[0], create_fn)
+        self.assertIs(to_thread.await_args.args[0], generator_module.chat_completion)
+        self.assertIs(to_thread.await_args.args[1], fake_client)
+        self.assertEqual(to_thread.await_args.kwargs["stage"], "generator")
 
     async def test_generate_question_section_retry_and_terminal_failure(self):
         with patch(

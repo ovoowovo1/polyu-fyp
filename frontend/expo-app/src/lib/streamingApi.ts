@@ -11,7 +11,7 @@ import {
 } from '@/lib/apiClient';
 import type { ProgressEvent, StructuredPart } from '@/lib/types';
 
-type QueryStreamEvent = 'retrieval' | 'router' | 'generation' | 'progress' | 'result';
+type QueryStreamEvent = 'retrieval' | 'grader' | 'router' | 'generation' | 'progress' | 'result';
 
 export function subscribeUploadProgress(
   clientId: string,
@@ -119,9 +119,14 @@ export async function askQuestion({
 
     const succeed = (result: Record<string, unknown>) => {
       if (settled) return;
-      settled = true;
-      cleanup();
-      resolve(buildStructuredContentFromResult(result));
+      try {
+        const parts = buildStructuredContentFromResult(result);
+        settled = true;
+        cleanup();
+        resolve(parts);
+      } catch (error) {
+        fail(error instanceof Error ? error : new Error('Invalid RAG result.'));
+      }
     };
 
     const handleProgressEvent = (event: { data?: string | null; type?: string }) => {
@@ -163,6 +168,7 @@ export async function askQuestion({
 
       eventSource.addEventListener('retrieval', handleProgressEvent);
       eventSource.addEventListener('router', handleProgressEvent);
+      eventSource.addEventListener('grader', handleProgressEvent);
       eventSource.addEventListener('generation', handleProgressEvent);
       eventSource.addEventListener('progress', handleProgressEvent);
       eventSource.addEventListener('result', handleResultEvent);
@@ -192,58 +198,42 @@ export async function askQuestion({
   });
 }
 
-function buildStructuredContentFromResult(result: Record<string, unknown>): StructuredPart[] {
-  const answerWithCitations = Array.isArray(result.answer_with_citations)
-    ? result.answer_with_citations as Record<string, unknown>[]
-    : [];
-  const rawSources = Array.isArray(result.raw_sources) ? result.raw_sources as Record<string, unknown>[] : [];
-
-  if (answerWithCitations.length === 0) {
-    return [{ type: 'text', value: String(result.answer || 'Sorry, no answer was returned.') }];
+export function buildStructuredContentFromResult(result: Record<string, unknown>): StructuredPart[] {
+  if (!['complete', 'partial', 'unavailable'].includes(String(result.status))
+    || !Array.isArray(result.blocks) || !Array.isArray(result.sources)
+    || !Array.isArray(result.limitations) || typeof result.trace_id !== 'string') {
+    throw new Error('Invalid RAG result. Please retry.');
   }
-
-  const sourceByChunkId = new Map(rawSources.map((source) => [String(source.chunkId), source]));
-  const citationRefs = new Map<string, number>();
+  const sources = new Map<string, Record<string, unknown>>();
+  for (const source of result.sources) {
+    if (!source || typeof source.chunk_id !== 'string' || !source.file_id
+      || typeof source.content !== 'string' || sources.has(source.chunk_id)) {
+      throw new Error('Invalid RAG sources.');
+    }
+    sources.set(source.chunk_id, source);
+  }
+  const numbers = new Map<string, number>();
+  const ids = new Set<string>();
   const parts: StructuredPart[] = [];
-  let citationCounter = 1;
-
-  answerWithCitations.forEach((segment) => {
-    const contentSegments = Array.isArray(segment.content_segments)
-      ? segment.content_segments as Record<string, unknown>[]
-      : [];
-
-    contentSegments.forEach((contentSegment) => {
-      const text = String(contentSegment.segment_text || '').trim();
-      if (text) {
-        parts.push({ type: 'text', value: text });
-      }
-
-      const refs = Array.isArray(contentSegment.source_references)
-        ? contentSegment.source_references as Record<string, unknown>[]
-        : contentSegment.source_reference
-          ? [contentSegment.source_reference as Record<string, unknown>]
-          : [];
-
-      refs.forEach((ref) => {
-        const chunkId = String(ref.file_chunk_id || '');
-        if (!chunkId) return;
-
-        const number = citationRefs.get(chunkId) ?? citationCounter++;
-        citationRefs.set(chunkId, number);
-        const source = sourceByChunkId.get(chunkId);
-        parts.push({
-          type: 'citation',
-          number,
-          details: {
-            chunkId,
-            fileId: source?.fileId as string | number | undefined,
-            source: source?.source as string | undefined,
-            page: source?.pageNumber as string | number | undefined,
-          },
-        });
-      });
-    });
-  });
-
-  return parts.length > 0 ? parts : [{ type: 'text', value: String(result.answer || '') }];
+  for (const block of result.blocks) {
+    if (!block || typeof block.id !== 'string' || !block.id || ids.has(block.id)
+      || typeof block.markdown !== 'string' || !Array.isArray(block.source_ids)) {
+      throw new Error('Invalid RAG block.');
+    }
+    ids.add(block.id);
+    parts.push({ type: 'text', value: block.markdown });
+    for (const id of new Set<string>(block.source_ids)) {
+      const source = sources.get(id);
+      if (!source) throw new Error('RAG citation source is missing.');
+      const number = numbers.get(id) ?? numbers.size + 1;
+      numbers.set(id, number);
+      parts.push({ type: 'citation', number, details: {
+        chunkId: id, fileId: String(source.file_id), source: String(source.name),
+        page: source.page_start as number | string | undefined,
+        pageEnd: source.page_end as number | string | undefined,
+        content: source.content as string, imageData: source.image_data as string | undefined,
+      } });
+    }
+  }
+  return parts;
 }

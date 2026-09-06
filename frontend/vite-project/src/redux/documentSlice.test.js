@@ -16,10 +16,24 @@ import reducer, {
     toggleDocumentListCollapse,
     toggleFileSelection,
     toggleSelectAll,
+    refreshReingestedDocument,
 } from './documentSlice.js';
 import { API_BASE_URL } from '../config.js';
 import { clearDedupeCache } from '../utils/requestDeduper.js';
 import { installAxiosMock } from '../testing/mockRuntime.js';
+
+test('reimport refresh replaces cached document content with new chunk IDs', async () => {
+    const store = configureStore({ reducer: { documents: reducer } });
+    store.dispatch(setCurrentClassId('reimport-class'));
+    store.dispatch(fetchDocumentContent.fulfilled({ file: { id: 'f1' }, chunks: [{ id: 'old' }] }));
+    const mock = installAxiosMock({ get: async (url) => ({ data: url.endsWith('/files/f1')
+        ? { file: { id: 'f1' }, chunks: [{ id: 'new', content: 'fresh' }] } : { files: [{ id: 'f1' }] } }) });
+    try {
+        await store.dispatch(refreshReingestedDocument('f1'));
+        assert.deepEqual(store.getState().documents.documentsById.f1.chunks, [{ id: 'new', content: 'fresh' }]);
+        assert.equal(store.getState().documents.items[0].id, 'f1');
+    } finally { mock.restore(); clearDedupeCache('docs:list:reimport-class'); }
+});
 
 function createThunkHarness(state = { documents: { currentClassId: null } }) {
     const actions = [];

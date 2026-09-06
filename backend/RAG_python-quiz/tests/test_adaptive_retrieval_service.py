@@ -87,7 +87,7 @@ class AdaptiveRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             fused,
-            [{"chunkId": "chunk-1", "text": "kept", "content": "kept", "source": "Unknown source", "page": "Unknown page", "fileId": None, "rrf_score": 0.0164}],
+            [{"chunkId": "chunk-1", "text": "kept", "content": "kept", "source": "Unknown source", "page": "Unknown page", "fileId": None, "rrf_score": 1 / 61}],
         )
 
     async def test_document_grader_uses_optional_semaphore(self):

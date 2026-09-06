@@ -1,3 +1,4 @@
+from app.utils.model_usage import chat_completion
 # -*- coding: utf-8 -*-
 """Direct illustration generation helpers for visualizer."""
 
@@ -48,7 +49,7 @@ async def transform_to_image_prompt(
     client = get_client(api_key)
     prompt = build_prompt(description)
     response = await asyncio.to_thread(
-        client.chat.completions.create,
+        chat_completion, client, stage="visualizer_image",
         model=model_name,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -72,7 +73,7 @@ async def generate_image_with_gemini(
 
     try:
         response = await asyncio.to_thread(
-            client.chat.completions.create,
+            chat_completion, client, stage="visualizer_image",
             model=model_name,
             messages=[{"role": "user", "content": optimized_prompt}],
             modalities=["image", "text"],

@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from app.utils.model_usage import model_workflow
+
 from typing import Any, Dict, List, Optional
 import asyncio
 
 from langchain_community.document_loaders import AsyncHtmlLoader
 from langchain_community.document_transformers import MarkdownifyTransformer
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from app.services.documents.chunking import DocumentSplitter
 
 from app.config import get_settings
 from app.logger import get_logger
@@ -14,6 +16,7 @@ from app.services.documents import document_sources, embedding_pipeline, ingesti
 from app.services.pg import pg_retrieval_service as pg_service
 from app.services.realtime.progress_bus import publish_progress
 from app.utils.api_key_manager import create_embedding_model
+from app.utils.model_usage import operation_scope
 from app.utils.ingest_errors import DocumentIngestError, EmbeddingProviderError
 from app.utils.pdf_utils import extract_pdf_content_by_page, extract_text_by_page
 
@@ -24,7 +27,7 @@ EMBED_RETRY_ATTEMPTS = 3
 EMBED_RETRY_DELAYS = (0.5, 1.0)
 EMBED_SPLIT_DELAY = 2.0
 
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=400)
+text_splitter = DocumentSplitter(chunk_size=1500, chunk_overlap=400)
 
 async def load_markdown(url: str):
     return await document_sources.load_markdown(
@@ -61,86 +64,49 @@ async def _embed_batch_with_adaptive_retry(
     *,
     batch_label: str,
 ) -> List[List[float]]:
-    return await embedding_pipeline.embed_batch_with_adaptive_retry(
-        texts,
-        embeddings_model,
-        batch_label=batch_label,
-        retry_attempts=EMBED_RETRY_ATTEMPTS,
-        retry_delays=EMBED_RETRY_DELAYS,
-        split_delay=EMBED_SPLIT_DELAY,
-        sleep=asyncio.sleep,
-        logger=logger,
-    )
+    with operation_scope(f"embedding.batch.{batch_label}"):
+        return await embedding_pipeline.embed_batch_with_adaptive_retry(
+            texts,
+            embeddings_model,
+            batch_label=batch_label,
+            retry_attempts=EMBED_RETRY_ATTEMPTS,
+            retry_delays=EMBED_RETRY_DELAYS,
+            split_delay=EMBED_SPLIT_DELAY,
+            sleep=asyncio.sleep,
+            logger=logger,
+        )
 
 
 async def embed_texts_with_retry(
-    texts: List[Any],
-    *,
-    embeddings_model=None,
+    texts: List[Any], *, embeddings_model=None,
 ) -> List[List[float]]:
     if not texts:
         return []
-
-    vectors: List[List[float]] = []
-    batch: List[Any] = []
-    image_count = 0
-
-    async def flush_batch() -> None:
-        nonlocal batch, image_count, vectors
-        vectors.extend(
-            await embedding_pipeline.embed_texts_with_retry(
-                batch,
-                embeddings_model=embeddings_model,
-                create_embedding_model=create_embedding_model,
-                initial_batch_size=INITIAL_EMBED_BATCH_SIZE,
-                embed_batch=_embed_batch_with_adaptive_retry,
-                logger=logger,
-            )
-        )
-        batch = []
-        image_count = 0
-
-    for input_value in texts:
-        is_image = isinstance(input_value, dict) and "content" in input_value
-        if batch and (
-            len(batch) >= INITIAL_EMBED_BATCH_SIZE
-            or (is_image and image_count >= 6)
-        ):
-            await flush_batch()
-        batch.append(input_value)
-        image_count += int(is_image)
-
-    await flush_batch()
+    model = embeddings_model or create_embedding_model()
+    vectors = [None] * len(texts)
+    # Separate homogeneous API batches while retaining each chunk's original position.
+    for is_image, limit in ((False, INITIAL_EMBED_BATCH_SIZE), (True, 6)):
+        indexed = [(i, value) for i, value in enumerate(texts) if isinstance(value, dict) == is_image]
+        for start in range(0, len(indexed), limit):
+            batch = indexed[start:start + limit]
+            result = await _embed_batch_with_adaptive_retry(
+                [value for _, value in batch], model, batch_label=f"{'image' if is_image else 'text'}-{start // limit + 1}")
+            if len(result) != len(batch):
+                raise ValueError("Embedding count does not match the requested chunk batch")
+            for (index, _), vector in zip(batch, result):
+                vectors[index] = vector
     return vectors
 
 
-async def _embed_chunks_for_storage(
-    chunks: List[Dict[str, Any]],
-) -> tuple[List[List[float]], Optional[List[List[float]]]]:
-    return await embedding_pipeline.embed_chunks_for_storage(
-        chunks,
-        create_embedding_model=create_embedding_model,
-        embed_texts=embed_texts_with_retry,
-        get_settings=get_settings,
-        logger=logger,
-    )
+async def _embed_chunks_for_storage(chunks: List[Dict[str, Any]]) -> List[List[float]]:
+    return await embedding_pipeline.embed_chunks_for_storage(chunks, embed_texts=embed_texts_with_retry)
 
 
-def _assemble_chunks_for_db(
-    chunks: List[Dict[str, Any]],
-    primary_vectors: List[List[float]],
-    fallback_vectors: Optional[List[List[float]]] = None,
-    *,
-    fallback_column: str = "embedding_v2",
-) -> List[Dict[str, Any]]:
-    return ingestion_payloads.assemble_chunks_for_db(
-        chunks,
-        primary_vectors,
-        fallback_vectors,
-        fallback_column=fallback_column,
-    )
+def _assemble_chunks_for_db(chunks: List[Dict[str, Any]], vectors: List[List[float]]) -> List[Dict[str, Any]]:
+    return ingestion_payloads.assemble_chunks_for_db(chunks, vectors)
 
 
+@model_workflow("IngestUsage")
 async def ingest_document(
     *,
     filename: str,
@@ -172,6 +138,7 @@ async def ingest_document(
     )
 
 
+@model_workflow("IngestUsage")
 async def ingest_website(
     *,
     url: str,

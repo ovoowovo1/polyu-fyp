@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.utils.model_usage import chat_completion
+
 import asyncio
 from typing import Any, Optional, Sequence
 
@@ -37,7 +39,7 @@ async def generate_text_completion(
 
         try:
             response = await asyncio.to_thread(
-                client.chat.completions.create,
+                chat_completion, client, stage=operation_name,
                 model=model_name,
                 messages=messages,
                 temperature=temperature,
@@ -46,7 +48,7 @@ async def generate_text_completion(
             if image_inputs:
                 logger.warning("[%s] Vision input failed; retrying text-only: %s", operation_name, error)
                 response = await asyncio.to_thread(
-                    client.chat.completions.create,
+                    chat_completion, client, stage=operation_name,
                     model=model_name,
                     messages=[
                         *messages[:-1],

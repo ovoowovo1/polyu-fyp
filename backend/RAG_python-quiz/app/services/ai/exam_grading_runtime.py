@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.utils.model_usage import chat_completion
+
 import json
 import re
 from typing import Any, Callable, Dict
@@ -17,8 +19,8 @@ def extract_grade_json(text: str, *, logger) -> Dict[str, Any]:
         if raw_match:
             return json.loads(raw_match.group(0))
 
-        logger.error("[AI Grading] Could not parse JSON from response: %s", text)
-        raise RuntimeError(f"Could not parse JSON from response: {text[:200]}")
+        logger.error("[AI Grading] Could not parse JSON; response_length=%s", len(text))
+        raise RuntimeError("Could not parse JSON from response")
 
 
 def clamp_marks(result: Dict[str, Any], max_marks: int) -> Dict[str, Any]:
@@ -60,7 +62,7 @@ async def grade_answer_request(
     )
     logger.info("[AI Grading] Calling model via OpenAI-compatible API: %s", model_name)
     response = await to_thread(
-        lambda: client.chat.completions.create(
+        lambda: chat_completion(client, stage=operation_name,
             model=model_name,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -81,13 +83,13 @@ async def grade_answer_request(
         logger.warning("[AI Grading] No choices in response")
 
     text = extract_chat_completion_text(response, operation_name)
-    logger.info("[AI Grading] Response text preview: %s", text[:500] if text else "EMPTY/None")
+    logger.info("[AI Grading] response_length=%s", len(text) if text else 0)
     if not text:
-        logger.error("[AI Grading] Full response object: %s", response)
+        logger.error("[AI Grading] Empty response text")
         raise RuntimeError("Empty response from grading model")
 
     result = extract_grade_json_func(text)
-    logger.info("[AI Grading] Parsed result: %s", result)
+    logger.info("[AI Grading] Response parsed successfully")
     return clamp_marks(result, max_marks)
 
 
@@ -104,7 +106,7 @@ async def overall_comment_request(
     client = get_llm_client(api_key)
     model_name = get_default_llm_model_name()
     response = await to_thread(
-        lambda: client.chat.completions.create(
+        lambda: chat_completion(client, stage=operation_name,
             model=model_name,
             messages=[
                 {"role": "system", "content": "You are an encouraging teacher providing feedback on exam performance."},

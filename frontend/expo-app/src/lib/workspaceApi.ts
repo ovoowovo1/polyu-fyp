@@ -31,6 +31,14 @@ export function getDocumentContent(fileId: string) {
   return requestJson<DocumentDetails>(`/files/${fileId}`);
 }
 
+export function reingestPdf(fileId: string, file: { uri: string; name: string; mimeType?: string }, clientId: string) {
+  const formData = new FormData();
+  formData.append('file', { uri: file.uri, name: file.name, type: file.mimeType || 'application/pdf' } as unknown as Blob);
+  const params = new URLSearchParams({ clientId });
+  return requestFormData<{ fileId: string; chunksCount: number; status: 'success' }>(
+    `/api/files/${encodeURIComponent(fileId)}/reingest?${params}`, formData);
+}
+
 export function listQuizzes(classId: string) {
   const params = new URLSearchParams({ class_id: classId });
   return requestJson<{ quizzes: QuizSummary[]; total: number }>(`/quiz/list?${params.toString()}`);

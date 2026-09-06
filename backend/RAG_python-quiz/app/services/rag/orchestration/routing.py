@@ -3,34 +3,9 @@ from __future__ import annotations
 from typing import Any, Awaitable, Callable, Dict
 
 from app.services.rag.retrieval import intent as retrieval_intent
+from app.services.rag.language import DEFAULT_NOTICES
 
 GenerateStructuredJson = Callable[..., Awaitable[Dict[str, Any]]]
-
-
-def build_route_schema() -> Dict[str, Any]:
-    return {
-        "type": "object",
-        "properties": {
-            "decision": {"type": "string", "enum": ["retrieve", "reject"]},
-            "reason": {"type": "string"},
-        },
-        "required": ["decision", "reason"],
-    }
-
-
-def build_route_prompt(question: str) -> str:
-    return f"""
-Decide whether the following user question is suitable for a document-grounded RAG answer.
-
-Context:
-- The system is only allowed to answer from the user's selected documents.
-- It must not give an open-ended general-knowledge answer.
-- Reject only when the question clearly requires external/current/personal information or is not plausibly answerable from study materials.
-- If the question could reasonably be answered from course notes, lecture slides, reports, or selected files, choose retrieve.
-
-Question:
-{question}
-    """
 
 
 def build_combined_planner_schema() -> Dict[str, Any]:
@@ -38,10 +13,12 @@ def build_combined_planner_schema() -> Dict[str, Any]:
         "type": "object",
         "properties": {
             "decision": {"type": "string", "enum": ["retrieve", "reject"]},
+            "answer_language": {"type": "string", "minLength": 1},
+            "messages": {"type": "object", "properties": {name: {"type": "string", "minLength": 1} for name in DEFAULT_NOTICES}, "required": list(DEFAULT_NOTICES), "additionalProperties": False},
             "reason": {"type": "string"},
             "query_intent": retrieval_intent.build_query_intent_schema(),
         },
-        "required": ["decision", "reason", "query_intent"],
+        "required": ["decision", "reason", "query_intent", "answer_language", "messages"],
         "additionalProperties": False,
     }
 
@@ -60,7 +37,16 @@ Cantonese-style wording, English, and mixed Chinese-English technical questions.
 Use open semantic labels for intent_type and query_kind. Identify required concepts and
 produce all useful search_queries. Preserve scenario facts, constraints, numbers, units,
 time ranges, data references, formulas, comparison context, and important technical terms.
-Do not answer the question. Return only JSON matching the supplied schema.
+Every subqueries/search_queries concept must be null or an EXACT entry in required_concepts.
+Use null for combined or contextual queries; never invent a combined concept label.
+Create a separate query for each required concept, preserving the exact concept label.
+Keep the plan focused on what is actually asked. A broad question does not require an
+exhaustive survey of every possible subtopic; do not invent additional required facets.
+Describe answer_language as a non-empty language name, following explicit user requests first,
+otherwise the question's language. Support any language; use Traditional Chinese for Chinese.
+Never infer answer language from source documents or UI. Supply short messages in that language:
+insufficient_evidence (selected documents lack evidence), verification_unavailable (verification
+service could not complete; retry later), omitted_content (unsupported content was omitted). Do not answer the question. Return only JSON matching the supplied schema.
 
 Question:
 {question}
@@ -71,6 +57,8 @@ def _fallback_planner_result(question: str) -> Dict[str, Any]:
     return {
         "decision": "retrieve",
         "reason": "planner fallback",
+        "answer_language": None,
+        "messages": {},
         "query_intent": retrieval_intent._build_single_query_intent(question),
     }
 
@@ -97,66 +85,19 @@ async def plan_question(
             raise ValueError(f"invalid route decision: {decision!r}")
         if not isinstance(reason, str) or not reason.strip():
             raise ValueError("planner reason must be a non-empty string")
+        language = result.get("answer_language")
+        if not isinstance(language, str) or not language.strip():
+            raise ValueError("planner answer_language must be a non-empty string")
+        messages = result.get("messages", {})
+        if not isinstance(messages, dict) or any(not isinstance(v, str) or not v.strip() for v in messages.values()):
+            raise ValueError("planner messages must contain non-empty strings")
         return {
             "decision": decision,
             "reason": reason.strip(),
+            "answer_language": language.strip(),
+            "messages": {name: messages[name].strip() for name in DEFAULT_NOTICES if name in messages},
             "query_intent": query_intent,
         }
     except Exception as err:
         logger.warning("[AdaptiveRAG] route and query planner fallback to retrieve: %s", err)
         return _fallback_planner_result(question)
-
-
-async def route_question_node(
-    state: Dict[str, Any],
-    emit,
-    *,
-    generate_structured_json: GenerateStructuredJson,
-    safe_emit,
-    logger,
-) -> Dict[str, Any]:
-    logger.info(
-        "[AdaptiveRAG] route_question start question=%r selected_files=%s",
-        state["question"][:160],
-        len(state.get("selected_file_ids", [])),
-    )
-    await safe_emit(
-        emit,
-        "[router] assessing whether the question should be answered only from the selected documents.",
-        event_type="router",
-    )
-    planner_result = state.get("planner_result")
-    if not isinstance(planner_result, dict) or not planner_result:
-        planner_result = await plan_question(
-            state["question"],
-            generate_structured_json=generate_structured_json,
-            logger=logger,
-        )
-    try:
-        decision = planner_result["decision"]
-        reason = planner_result["reason"]
-        query_intent = retrieval_intent._normalize_query_intent(planner_result["query_intent"])
-        if decision not in {"retrieve", "reject"}:
-            raise ValueError(f"invalid route decision: {decision!r}")
-        if not isinstance(reason, str) or not reason.strip():
-            raise ValueError("planner reason must be a non-empty string")
-    except Exception as err:
-        logger.warning("[AdaptiveRAG] malformed planner state; using fallback: %s", err)
-        planner_result = _fallback_planner_result(state["question"])
-        decision = planner_result["decision"]
-        reason = planner_result["reason"]
-        query_intent = planner_result["query_intent"]
-
-    state["route_decision"] = decision
-    state["route_reason"] = reason
-    state["query_intent"] = query_intent
-    state["planner_result"] = planner_result
-    state["classified_query"] = state.get("current_query", state["question"])
-    logger.info(
-        "[AdaptiveRAG] route_question decision=%s reason=%r intent_type=%s required_concepts=%s",
-        decision,
-        reason,
-        query_intent["intent_type"],
-        query_intent["required_concepts"],
-    )
-    return state

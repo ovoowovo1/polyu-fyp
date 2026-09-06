@@ -15,6 +15,7 @@ class AdaptiveRetrievalState(TypedDict, total=False):
     route_reason: str
     rewrite_count: int
     missing_concept_retry_count: int
+    grading_cache: Dict[str, Dict[str, Any]]
     grading_failed: bool
     candidate_documents: List[Dict[str, Any]]
     filtered_documents: List[Dict[str, Any]]

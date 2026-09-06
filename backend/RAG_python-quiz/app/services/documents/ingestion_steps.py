@@ -83,7 +83,7 @@ def build_pdf_chunks(filename: str, pages_text, text_splitter):
             raise
         text_chunks = []
 
-    return text_chunks + image_chunks
+    return sorted(text_chunks + image_chunks, key=lambda c: c["metadata"]["pageNumber"])
 
 
 def build_image_chunks(filename: str, content: bytes, mimetype: str):
@@ -103,13 +103,8 @@ async def embed_document_chunks(chunks, embed_chunks_for_storage):
         ) from err
 
 
-def build_chunks_for_db(chunks, primary_vectors, fallback_vectors, *, assemble_chunks_for_db, get_settings):
-    return assemble_chunks_for_db(
-        chunks,
-        primary_vectors,
-        fallback_vectors,
-        fallback_column=get_settings().embedding_fallback_column,
-    )
+def build_chunks_for_db(chunks, vectors, *, assemble_chunks_for_db):
+    return assemble_chunks_for_db(chunks, vectors)
 
 
 def build_and_store_document(

@@ -4,11 +4,9 @@ from typing import Any, Mapping, Optional, Sequence
 
 import psycopg2.extras
 
-from app.config import EmbeddingColumn, get_settings
 from app.utils.datetime_utils import iso
 
 
-VALID_EMBEDDING_COLUMNS = {"embedding", "embedding_v2"}
 
 
 class SqlUpdateBuilder:
@@ -31,13 +29,6 @@ class SqlUpdateBuilder:
 def _to_pgvector(vec: Sequence[float]) -> str:
     # Convert to a pgvector text literal, e.g. "[0.1,0.2,...]"
     return "[" + ",".join(f"{float(x):.8f}" for x in vec) + "]"
-
-
-def _get_embedding_column(column: Optional[str] = None) -> EmbeddingColumn:
-    resolved = column or get_settings().embedding_active_column
-    if resolved not in VALID_EMBEDDING_COLUMNS:
-        raise ValueError(f"Unsupported embedding column: {resolved}")
-    return resolved
 
 
 def maybe_json_load(value: Any, default: Any = None, *, swallow_errors: bool = False) -> Any:

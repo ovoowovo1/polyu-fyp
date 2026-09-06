@@ -1,85 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Popover, Spin } from 'antd';
-import { useDispatch, useSelector } from 'react-redux';
-import { fetchDocumentContent } from '../redux/documentSlice';
+import React from 'react';
+import { Popover } from 'antd';
 
-export default function Citation({ part, index }) {
-    const dispatch = useDispatch();
-    const { fileId: selectedShowDocumentContentID, chunkId: citationId } = part.details;
-
-    // 從 Redux store 中，根據 ID 選擇特定的文件資料和其載入狀態
-    const { documentData, isLoading } = useSelector((state) => ({
-        documentData: state.documents?.documentsById[selectedShowDocumentContentID],
-        isLoading: state.documents?.contentLoading,
-    }));
-
-    const markedChunkRef = useRef(null);
-    const [popoverVisible, setPopoverVisible] = useState(false);
-
-    useEffect(() => {
-        if (popoverVisible && !documentData && !isLoading) {
- 
-            if (selectedShowDocumentContentID) {
-                dispatch(fetchDocumentContent(selectedShowDocumentContentID));
-            }
-        }
-    }, [popoverVisible, documentData, isLoading, dispatch, selectedShowDocumentContentID]);
-
-    useEffect(() => {
-
-        if (popoverVisible && documentData && markedChunkRef.current) {
-            setTimeout(() => {
-                markedChunkRef.current.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'center',
-                });
-            }, 50); 
-        }
-    }, [popoverVisible, documentData]);
-
-    const popoverContent = (
-        <div className="max-w-xs max-h-96 overflow-y-auto">
-            <p><strong>Source:</strong> {part.details.source}</p>
-            <p><strong>Page:</strong> {part.details.page}</p>
-            <hr className="my-2" />
-            {isLoading ? (
-                <div className="flex justify-center items-center p-4">
-                    <Spin />
-                </div>
-            ) : documentData ? (
-                documentData.chunks.map((chunk) => (
-                    <span
-                        datatype={chunk.id}
-                        key={chunk.id}
-                        ref={String(chunk.id) === String(citationId) ? markedChunkRef : null}
-                    >
-                        {
-                            String(chunk.id) === String(citationId) ? (
-                                <pre className='whitespace-pre-wrap break-words'><mark>{chunk.content}</mark></pre>
-                            ) : (
-                                <pre className='whitespace-pre-wrap break-words'>{chunk.content}</pre>
-                            )
-                        }
-                    </span>
-                ))
-            ) : (
-                <p><Spin /></p>
-            )}
-        </div>
-    );
-
-    return (
-        <Popover
-            content={popoverContent}
-            title="Citation Source"
-            trigger="click"
-            key={index}
-            open={popoverVisible} 
-            onOpenChange={(visible) => setPopoverVisible(visible)}
-        >
-            <sup className="text-blue-500 font-bold cursor-pointer mx-0.5 py-px px-1.5 bg-blue-50 rounded">
-                [{part.number}]
-            </sup>
-        </Popover>
-    );
+export default function Citation({ part }) {
+    const source = part.details;
+    const content = <div className="max-w-md max-h-96 overflow-y-auto">
+        <p><strong>{source.source}</strong></p>
+        <p>Page {source.page}{source.pageEnd && source.pageEnd !== source.page ? `–${source.pageEnd}` : ''}</p>
+        <pre className="whitespace-pre-wrap break-words">{source.content}</pre>
+        {source.imageData && <img src={source.imageData} alt={source.source} />}
+    </div>;
+    return <Popover content={content} title="Citation source" trigger="click">
+        <button type="button" aria-label={`Citation ${part.number}`} className="text-blue-600 font-bold mx-0.5 px-1.5 bg-blue-50 rounded">
+            [{part.number}]
+        </button>
+    </Popover>;
 }

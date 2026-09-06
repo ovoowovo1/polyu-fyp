@@ -1,3 +1,4 @@
+from app.utils.model_usage import chat_completion
 # -*- coding: utf-8 -*-
 """Matplotlib generation helpers for visualizer."""
 
@@ -45,7 +46,7 @@ async def generate_chart_code(
     client = get_client(api_key)
     prompt = build_prompt(description, output_path)
     response = await asyncio.to_thread(
-        client.chat.completions.create,
+        chat_completion, client, stage="visualizer_chart",
         model=model_name,
         messages=[{"role": "user", "content": prompt}],
     )

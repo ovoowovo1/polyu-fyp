@@ -51,7 +51,7 @@ class RagCacheTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(rag_cache.is_valid_compact_rows([]))
 
     async def test_query_embedding_cache_hit_skips_embedding_api(self):
-        model = SuccessfulQueryModel("google/gemini-embedding-001", [0.1, 0.2])
+        model = SuccessfulQueryModel("google/gemini-embedding-2", [0.1, 0.2])
         settings = self.enabled_settings()
 
         with patch("app.services.cache.rag_cache.redis_cache.is_enabled", return_value=True), patch(
@@ -59,16 +59,16 @@ class RagCacheTests(unittest.IsolatedAsyncioTestCase):
             new_callable=AsyncMock,
             return_value={"vector": [0.9, 0.8]},
         ) as get_or_set:
-            vector = await rag_cache.get_or_set_query_embedding(model, "hello", mode="primary", settings=settings)
+            vector = await rag_cache.get_or_set_query_embedding(model, "hello", settings=settings)
 
         self.assertEqual(vector, [0.9, 0.8])
         self.assertEqual(model.calls, [])
         self.assertEqual(get_or_set.call_args.args[0], "rag:query-embedding")
-        self.assertEqual(get_or_set.call_args.args[1]["mode"], "primary")
+        self.assertEqual(get_or_set.call_args.args[1]["contract"], "gemini-embedding-2:3072:v1")
         self.assertEqual(get_or_set.call_args.kwargs["ttl_seconds"], 3600)
 
     async def test_query_embedding_cache_miss_loads_embedding(self):
-        model = SuccessfulQueryModel("google/gemini-embedding-001", [0.1, 0.2])
+        model = SuccessfulQueryModel("google/gemini-embedding-2", [0.1, 0.2])
         settings = self.enabled_settings()
 
         async def load_through(_scope, _params, loader, **_kwargs):
@@ -79,26 +79,26 @@ class RagCacheTests(unittest.IsolatedAsyncioTestCase):
             new_callable=AsyncMock,
             side_effect=load_through,
         ) as get_or_set:
-            vector = await rag_cache.get_or_set_query_embedding(model, "hello", mode="primary", settings=settings)
+            vector = await rag_cache.get_or_set_query_embedding(model, "hello", settings=settings)
 
         self.assertEqual(vector, [0.1, 0.2])
         self.assertEqual(model.calls, ["hello"])
         self.assertEqual(get_or_set.call_args.kwargs["ttl_seconds"], 3600)
 
     async def test_query_embedding_bad_payload_falls_back_to_embedding_api(self):
-        model = SuccessfulQueryModel("google/gemini-embedding-001", [0.1, 0.2])
+        model = SuccessfulQueryModel("google/gemini-embedding-2", [0.1, 0.2])
         with patch("app.services.cache.rag_cache.redis_cache.is_enabled", return_value=True), patch(
             "app.services.cache.rag_cache.redis_cache.get_or_set_json",
             new_callable=AsyncMock,
             return_value={"vector": "bad"},
         ):
-            vector = await rag_cache.get_or_set_query_embedding(model, "hello", mode="primary", settings=self.enabled_settings())
+            vector = await rag_cache.get_or_set_query_embedding(model, "hello", settings=self.enabled_settings())
 
         self.assertEqual(vector, [0.1, 0.2])
         self.assertEqual(model.calls, ["hello"])
 
     async def test_query_embedding_cache_disabled_logs_bypass_and_loads_embedding(self):
-        model = SuccessfulQueryModel("google/gemini-embedding-001", [0.1, 0.2])
+        model = SuccessfulQueryModel("google/gemini-embedding-2", [0.1, 0.2])
         settings = self.enabled_settings(rag_embedding_cache_enabled=False)
 
         async def load_without_cache(scope, loader, *, reason):
@@ -109,7 +109,7 @@ class RagCacheTests(unittest.IsolatedAsyncioTestCase):
             new_callable=AsyncMock,
             side_effect=load_without_cache,
         ) as bypass:
-            vector = await rag_cache.get_or_set_query_embedding(model, "hello", mode="primary", settings=settings)
+            vector = await rag_cache.get_or_set_query_embedding(model, "hello", settings=settings)
 
         self.assertEqual(vector, [0.1, 0.2])
         self.assertEqual(model.calls, ["hello"])
@@ -117,7 +117,7 @@ class RagCacheTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bypass.call_args.kwargs["reason"], "disabled")
 
     async def test_retrieval_cache_hit_rehydrates_only_compact_rows(self):
-        model = SuccessfulQueryModel("google/gemini-embedding-001", [0.1, 0.2])
+        model = SuccessfulQueryModel("google/gemini-embedding-2", [0.1, 0.2])
         loader = AsyncMock(return_value=[{"chunkId": "chunk-db"}])
         rehydrate = AsyncMock(
             return_value=[{"chunkId": "chunk-cache", "score": 0.2, "text": "full text", "image_data": "base64"}]
@@ -136,8 +136,7 @@ class RagCacheTests(unittest.IsolatedAsyncioTestCase):
             return_value=result,
         ) as get_or_set:
             rows = await rag_cache.get_or_set_retrieval_rows(
-                [0.1, 0.2], query_text="hello", selected_file_ids=["file-1"], k=20,
-                embedding_column="embedding", model=model, mode="primary", settings=self.enabled_settings(),
+                [0.1, 0.2], query_text="hello", selected_file_ids=["file-1"], k=20, model=model, settings=self.enabled_settings(),
                 loader=loader, rehydrate=rehydrate,
             )
 
@@ -147,7 +146,7 @@ class RagCacheTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(get_or_set.call_args.kwargs["version_namespaces"], ["rag:retrieval"])
 
     async def test_retrieval_cache_miss_stores_only_chunk_id_and_score(self):
-        model = SuccessfulQueryModel("google/gemini-embedding-001", [0.1, 0.2])
+        model = SuccessfulQueryModel("google/gemini-embedding-2", [0.1, 0.2])
         loader = AsyncMock(return_value=[
             {"chunkId": "chunk-db", "score": 0.12, "text": "secret", "image_data": "base64"},
         ])
@@ -164,8 +163,7 @@ class RagCacheTests(unittest.IsolatedAsyncioTestCase):
             side_effect=load_through,
         ) as get_or_set:
             rows = await rag_cache.get_or_set_retrieval_rows(
-                [0.1, 0.2], query_text="hello", selected_file_ids=["file-b", "file-a", "file-a"], k=9,
-                embedding_column="embedding", model=model, mode="primary", settings=self.enabled_settings(),
+                [0.1, 0.2], query_text="hello", selected_file_ids=["file-b", "file-a", "file-a"], k=9, model=model, settings=self.enabled_settings(),
                 loader=loader, rehydrate=AsyncMock(),
             )
 
@@ -180,7 +178,7 @@ class RagCacheTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(params["user_id"], "user-1")
 
     async def test_retrieval_cache_key_includes_user_id(self):
-        model = SuccessfulQueryModel("google/gemini-embedding-001", [0.1])
+        model = SuccessfulQueryModel("google/gemini-embedding-2", [0.1])
         result = rag_cache.redis_cache.CacheResult({"rows": []}, rag_cache.redis_cache.CACHE_HIT, "rag:retrieval")
 
         with patch("app.services.cache.rag_cache.get_current_rls_user", side_effect=["user-1", "user-2"]), patch(
@@ -192,27 +190,13 @@ class RagCacheTests(unittest.IsolatedAsyncioTestCase):
         ) as get_or_set:
             for _ in range(2):
                 await rag_cache.get_or_set_retrieval_rows(
-                    [0.1], query_text="hello", selected_file_ids=["file-1"], k=1,
-                    embedding_column="embedding", model=model, mode="primary", settings=self.enabled_settings(),
+                    [0.1], query_text="hello", selected_file_ids=["file-1"], k=1, model=model, settings=self.enabled_settings(),
                     loader=AsyncMock(return_value=[]), rehydrate=AsyncMock(return_value=[]),
                 )
 
         self.assertEqual(get_or_set.await_args_list[0].args[1]["user_id"], "user-1")
         self.assertEqual(get_or_set.await_args_list[1].args[1]["user_id"], "user-2")
 
-    async def test_primary_and_fallback_modes_are_separate(self):
-        primary = SuccessfulQueryModel("google/gemini-embedding-001", [0.1])
-        fallback = SuccessfulQueryModel("google/gemini-embedding-2-preview", [0.2])
-        with patch("app.services.cache.rag_cache.redis_cache.is_enabled", return_value=True), patch(
-            "app.services.cache.rag_cache.redis_cache.get_or_set_json",
-            new_callable=AsyncMock,
-            return_value={"vector": [0.9]},
-        ) as get_or_set:
-            await rag_cache.get_or_set_query_embedding(primary, "hello", mode="primary", settings=self.enabled_settings())
-            await rag_cache.get_or_set_query_embedding(fallback, "hello", mode="fallback", settings=self.enabled_settings())
-
-        self.assertEqual(get_or_set.await_args_list[0].args[1]["mode"], "primary")
-        self.assertEqual(get_or_set.await_args_list[1].args[1]["mode"], "fallback")
 
     async def test_retrieval_bad_payload_falls_back_to_loader(self):
         loader = AsyncMock(return_value=[{"chunkId": "chunk-db"}])
@@ -225,8 +209,7 @@ class RagCacheTests(unittest.IsolatedAsyncioTestCase):
             return_value=result,
         ):
             rows = await rag_cache.get_or_set_retrieval_rows(
-                [0.1], query_text="hello", selected_file_ids=["file-1"], k=20,
-                embedding_column="embedding", model=SuccessfulQueryModel("m", [0.1]), mode="primary",
+                [0.1], query_text="hello", selected_file_ids=["file-1"], k=20, model=SuccessfulQueryModel("m", [0.1]),
                 settings=self.enabled_settings(), loader=loader, rehydrate=AsyncMock(),
             )
 
@@ -249,8 +232,7 @@ class RagCacheTests(unittest.IsolatedAsyncioTestCase):
                 return_value=result,
             ):
                 rows = await rag_cache.get_or_set_retrieval_rows(
-                    [0.1], query_text="hello", selected_file_ids=["file-1"], k=1,
-                    embedding_column="embedding", model=SuccessfulQueryModel("m", [0.1]), mode="primary",
+                    [0.1], query_text="hello", selected_file_ids=["file-1"], k=1, model=SuccessfulQueryModel("m", [0.1]),
                     settings=self.enabled_settings(), loader=loader, rehydrate=rehydrate,
                 )
             self.assertEqual(rows, [{"chunkId": "fresh"}])
@@ -270,8 +252,7 @@ class RagCacheTests(unittest.IsolatedAsyncioTestCase):
             side_effect=load_without_cache,
         ) as bypass:
             rows = await rag_cache.get_or_set_retrieval_rows(
-                [0.1], query_text="hello", selected_file_ids=["file-1"], k=20,
-                embedding_column="embedding", model=SuccessfulQueryModel("m", [0.1]), mode="primary",
+                [0.1], query_text="hello", selected_file_ids=["file-1"], k=20, model=SuccessfulQueryModel("m", [0.1]),
                 settings=self.enabled_settings(), loader=loader,
             )
 

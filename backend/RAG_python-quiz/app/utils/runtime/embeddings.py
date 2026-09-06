@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.utils.model_usage import observed_call
+
 import asyncio
 import base64
 from typing import Any, List, Optional
@@ -8,7 +10,7 @@ from urllib.parse import urlparse
 import requests
 
 from app.utils.ingest_errors import EmbeddingProviderError
-from app.utils.runtime import embedding_provider_response
+import app.utils.runtime.embedding_provider_response as embedding_provider_response
 from app.utils.runtime.llm_client import OPENROUTER_BASE_URL
 from app.utils.runtime.llm_keys import first_csv_key
 
@@ -84,7 +86,9 @@ class OpenAIEmbeddings:
     ):
         effective_api_key, api_key_source = resolve_embedding_api_key(api_key, settings=settings)
         self.base_url = (base_url or settings.embedding_base_url or OPENROUTER_BASE_URL).rstrip("/")
-        self.model_name = model_name or settings.embedding_model or "google/gemini-embedding-2-preview"
+        self.model_name = model_name or settings.embedding_model or "google/gemini-embedding-2"
+        if self.model_name != "google/gemini-embedding-2":
+            raise ValueError("Only google/gemini-embedding-2 is supported")
         self.provider_name = provider_name_from_base_url(self.base_url)
         self._post_func = post_func
 
@@ -139,7 +143,7 @@ class OpenAIEmbeddings:
             input_value,
         )
         response = embedding_provider_response.post_embedding_request(
-            post_func=self._post_func,
+            post_func=lambda endpoint, **kwargs: observed_call(lambda **kw: self._post_func(endpoint, **kw), stage="embedding.image" if isinstance(input_value, list) and input_value and isinstance(input_value[0], dict) else "embedding.text", requested_model=self.model_name, kind="embedding", **kwargs),
             endpoint=self._embedding_endpoint(),
             payload=payload,
             headers=headers,
@@ -180,10 +184,10 @@ class OpenAIEmbeddings:
     async def aembed_query(self, text: str) -> List[float]:
         return await asyncio.to_thread(self.embed_query, text)
 
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+    def embed_documents(self, texts: List[Any]) -> List[List[float]]:
         return self._post_embeddings(texts, expected_count=len(texts))
 
-    async def aembed_documents(self, texts: List[str]) -> List[List[float]]:
+    async def aembed_documents(self, texts: List[Any]) -> List[List[float]]:
         return await asyncio.to_thread(self.embed_documents, texts)
 
     def embed_images(self, images: List[dict[str, Any]]) -> List[List[float]]:

@@ -207,10 +207,7 @@ def make_settings(**overrides):
         "embedding_api_key": "",
         "embedding_base_url": "",
         "embedding_model": "",
-        "embedding_fallback_model": "",
-        "embedding_fallback_column": "embedding_v2",
-        "embedding_active_column": "embedding",
-        "fulltext_search_backend": "pg_search",
+        "fulltext_search_backend": "lakebase_text",
         "llm_model": "",
         "llm_api_key": "",
         "llm_api_keys": "",
@@ -220,7 +217,6 @@ def make_settings(**overrides):
         "eval_llm_model": "",
         "eval_embedding_api_key": "",
         "eval_embedding_base_url": "",
-        "eval_embedding_model": "",
         "jwt_secret_key": "test-secret",
         "auth_cookie_secure": False,
         "auth_cookie_samesite": "lax",
@@ -246,8 +242,7 @@ def make_embedding_settings(**overrides):
     settings = {
         "embedding_api_key": "test-key",
         "embedding_base_url": "https://openrouter.ai/api/v1",
-        "embedding_model": "google/gemini-embedding-001",
-        "embedding_active_column": "embedding_v2",
+        "embedding_model": "google/gemini-embedding-2",
         "llm_model": "gemini-2.5-flash",
     }
     settings.update(overrides)
@@ -267,7 +262,7 @@ def make_embedding_error(
         message=f"Embedding upstream failed: {upstream_message}",
         retryable=retryable,
         provider="openrouter",
-        model="google/gemini-embedding-001",
+        model="google/gemini-embedding-2",
         base_url="https://openrouter.ai/api/v1",
         http_status=200,
         upstream_code=404,

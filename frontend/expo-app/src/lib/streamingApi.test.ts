@@ -1,7 +1,8 @@
 import EventSource from 'react-native-sse';
+import cases from '../../../shared-test-data/rag-display.json';
 
 import { setApiTokens } from '@/lib/apiClient';
-import { askQuestion, subscribeUploadProgress } from '@/lib/streamingApi';
+import { askQuestion, subscribeUploadProgress, buildStructuredContentFromResult } from '@/lib/streamingApi';
 
 type MockEventSource = {
   url: string;
@@ -43,6 +44,21 @@ async function waitForEventSourceCount(count: number) {
 }
 
 describe('streamingApi', () => {
+  it.each(cases)('preserves all blocks, complete source previews and stable numbering: $id', ({ result }) => {
+    const parts = buildStructuredContentFromResult(result);
+    expect(parts.filter(p => p.type === 'text').map(p => p.value)).toEqual(result.blocks.map(b => b.markdown));
+    const order = [...new Set(result.blocks.flatMap(b => b.source_ids))];
+    for (const part of parts) {
+      if (part.type !== 'citation') continue;
+      expect(part.number).toBe(order.indexOf(String(part.details?.chunkId)) + 1);
+      expect(part.details?.content).toBe(result.sources.find(s => s.chunk_id === part.details?.chunkId)?.content);
+    }
+  });
+
+  it('rejects missing sources and old payloads without silently dropping content', () => {
+    expect(() => buildStructuredContentFromResult({ answer: 'old' })).toThrow();
+    expect(() => buildStructuredContentFromResult({ ...cases[0].result, sources: [] })).toThrow(/source is missing/);
+  });
   beforeEach(() => {
     setApiTokens(null, null);
     (EventSource as unknown as { reset: () => void }).reset();
@@ -120,8 +136,8 @@ describe('streamingApi', () => {
     expect(eventSources()[1].options.headers?.Authorization).toBe('Bearer new-access');
     eventSources()[1].emit('result', {
       data: JSON.stringify({
-        answer: 'RAG combines retrieval and generation.',
-        answer_with_citations: [],
+        status: 'complete', trace_id: 't', limitations: [], sources: [],
+        blocks: [{ id: 'b1', markdown: 'RAG combines retrieval and generation.', source_ids: [] }],
       }),
     });
 
@@ -157,14 +173,9 @@ describe('streamingApi', () => {
     });
     eventSources()[0].emit('result', {
       data: JSON.stringify({
-        answer: 'unused fallback',
-        raw_sources: [{ chunkId: 'chunk-1', fileId: 'file-1', source: 'Doc.pdf', pageNumber: 2 }],
-        answer_with_citations: [{
-          content_segments: [{
-            segment_text: 'Vectors store semantic meaning.',
-            source_references: [{ file_chunk_id: 'chunk-1' }],
-          }],
-        }],
+        status: 'complete', trace_id: 't', limitations: [],
+        sources: [{ chunk_id: 'chunk-1', file_id: 'file-1', name: 'Doc.pdf', page_start: 2, page_end: 2, content: 'original evidence' }],
+        blocks: [{ id: 'b1', markdown: 'Vectors store semantic meaning.', source_ids: ['chunk-1'] }],
       }),
     });
 
@@ -178,6 +189,8 @@ describe('streamingApi', () => {
           fileId: 'file-1',
           source: 'Doc.pdf',
           page: 2,
+          pageEnd: 2,
+          content: 'original evidence',
         },
       },
     ]);

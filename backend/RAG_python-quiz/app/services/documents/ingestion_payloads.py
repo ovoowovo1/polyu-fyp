@@ -5,23 +5,18 @@ from typing import Any, Dict, List, Optional
 
 def assemble_chunks_for_db(
     chunks: List[Dict[str, Any]],
-    primary_vectors: List[List[float]],
-    fallback_vectors: Optional[List[List[float]]] = None,
-    *,
-    fallback_column: str = "embedding_v2",
+    vectors: List[List[float]],
 ) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     for index, chunk in enumerate(chunks):
         payload = {
             "text": chunk["pageContent"],
             "metadata": chunk["metadata"],
-            "embedding": primary_vectors[index],
+            "embedding": vectors[index],
         }
         if chunk.get("imageData") is not None:
             payload["image_data"] = chunk["imageData"]
             payload["image_mimetype"] = chunk.get("imageMimetype") or "image/png"
-        if fallback_column != "embedding":
-            payload[fallback_column] = fallback_vectors[index] if fallback_vectors is not None else None
         rows.append(payload)
     return rows
 

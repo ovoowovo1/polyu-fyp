@@ -77,7 +77,11 @@
     },
     "chooseSourceType": "請選擇您想要新增的來源類型：",
     "uploadPDF": "上傳 PDF",
-    "addLink": "新增連結"
+    "addLink": "新增連結",
+    "reingest": "重新匯入 PDF",
+    "reingestHint": "請選取原始 PDF，系統會重新建立文件內容。",
+    "chooseOriginalPdf": "選擇原始 PDF",
+    "reingestComplete": "重新匯入成功，共 {{count}} 個文字區塊。"
   },
   "classes": {
     "title": "班級列表",

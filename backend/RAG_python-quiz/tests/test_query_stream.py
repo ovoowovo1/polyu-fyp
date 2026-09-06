@@ -37,19 +37,25 @@ class QueryStreamRouteTests(unittest.TestCase):
         async def fake_stream(question, selected_file_ids):
             self.assertEqual(get_current_rls_user(), "user-1")
             yield {"type": "retrieval", "message": "Starting retrieval...", "timestamp": "2026-01-01T00:00:00Z"}
-            yield {"type": "result", "question": question, "answer": "ok", "timestamp": "2026-01-01T00:00:01Z"}
+            yield {"type": "result", "status": "complete", "blocks": [{"id": "b1", "markdown": "ok", "source_ids": ["c1"]}],
+                   "sources": [{"chunk_id": "c1", "file_id": "file-1", "content": "ok"}], "limitations": [], "trace_id": "t"}
 
         with patch(
             "app.routers.query_stream.run_adaptive_rag_stream",
             fake_stream,
-        ):
+        ), patch.object(query_stream, "can_access_document", return_value=True):
             response = self.post_query_stream({"question": "hello", "selectedFileIds": ["file-1"]})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["content-type"], "text/event-stream; charset=utf-8")
         self.assertIn("event: retrieval", response.text)
         self.assertIn("event: result", response.text)
-        self.assertIn('"answer": "ok"', response.text)
+        self.assertIn('"markdown": "ok"', response.text)
+
+    def test_query_stream_rejects_inaccessible_selected_documents(self):
+        with patch.object(query_stream, "can_access_document", return_value=False):
+            response = self.post_query_stream({"question": "q", "selectedFileIds": ["foreign"]})
+        self.assertEqual(response.status_code, 403)
 
     def test_encode_sse_event_formats_event_and_data_lines(self):
         payload = {"type": "grader", "message": "checking", "timestamp": "2026-01-01T00:00:00Z"}

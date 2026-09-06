@@ -1,10 +1,10 @@
 from pathlib import Path
-import unittest
 
 
-class EmbeddingMigrationSqlTests(unittest.TestCase):
-    def test_add_chunks_embedding_v2_migration_adds_expected_column(self):
-        migration_path = Path(__file__).resolve().parents[1] / "migrations" / "add_chunks_embedding_v2.sql"
-        sql = migration_path.read_text(encoding="utf-8")
-
-        self.assertIn("ADD COLUMN IF NOT EXISTS embedding_v2 vector(3072)", sql)
+def test_single_embedding_migration_guards_against_data_loss():
+    sql = (Path(__file__).resolve().parents[1] / "migrations/use_single_embedding.sql").read_text()
+    assert "ACCESS EXCLUSIVE" in sql
+    assert "RAISE EXCEPTION" in sql
+    assert "DROP COLUMN IF EXISTS embedding_v2" in sql
+    assert "vector(3072)" in sql
+    assert "DELETE FROM" not in sql

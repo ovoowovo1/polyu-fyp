@@ -1,86 +1,4 @@
 const NEWLINE = /\r\n/g;
-const BRACKETED_CITATION = /\[([\d,\s]+)\]/g;
-
-const pushTextPart = (parts, value) => {
-  if (!value) {
-    return;
-  }
-
-  const lastPart = parts[parts.length - 1];
-  if (lastPart?.type === 'text') {
-    lastPart.value += value;
-    return;
-  }
-
-  parts.push({ type: 'text', value });
-};
-
-const buildCitationPartFromSource = (number, source) => ({
-  type: 'citation',
-  number,
-  details: {
-    fileId: source?.fileId,
-    chunkId: source?.chunkId,
-    source: source?.source,
-    page: source?.pageNumber,
-  },
-});
-
-const stripBracketedTextCitations = (value) => value
-  .replace(BRACKETED_CITATION, '')
-  .replace(/\s+([.,;:!?])/g, '$1');
-
-const resolveInlineCitationSources = (value, rawSources) => {
-  const resolvedSources = [];
-  const seenChunkIds = new Set();
-
-  for (const match of value.matchAll(BRACKETED_CITATION)) {
-    const parsedNumbers = match[1]
-      .split(',')
-      .map((item) => item.trim())
-      .filter((item) => /^\d+$/.test(item));
-
-    parsedNumbers.forEach((item) => {
-      const source = rawSources[Number(item) - 1];
-      const chunkId = String(source?.chunkId ?? '');
-      if (!chunkId || seenChunkIds.has(chunkId)) {
-        return;
-      }
-
-      seenChunkIds.add(chunkId);
-      resolvedSources.push(source);
-    });
-  }
-
-  return resolvedSources;
-};
-
-const resolveStructuredSegment = (segment, rawSources, sourceByChunkId) => {
-  const resolvedSources = [];
-  const seenChunkIds = new Set();
-  const sourceRefs = segment?.source_references
-    || (segment?.source_reference ? [segment.source_reference] : []);
-
-  const pushSource = (source) => {
-    const chunkId = String(source?.chunkId ?? '');
-    if (!chunkId || seenChunkIds.has(chunkId)) {
-      return;
-    }
-
-    seenChunkIds.add(chunkId);
-    resolvedSources.push(source);
-  };
-
-  resolveInlineCitationSources(segment?.segment_text || '', rawSources).forEach(pushSource);
-  sourceRefs.forEach((sourceRef) => {
-    pushSource(sourceByChunkId.get(String(sourceRef.file_chunk_id)));
-  });
-
-  return {
-    text: stripBracketedTextCitations(segment?.segment_text || ''),
-    sources: resolvedSources,
-  };
-};
 
 export const splitSseFrames = (buffer) => {
   const normalized = buffer.replace(NEWLINE, '\n');
@@ -187,132 +105,36 @@ export const readSseStream = async (stream, { onEvent } = {}) => {
   return events;
 };
 
-export const buildStructuredContentFromTextCitations = (answer, rawSources = []) => {
-  const fallbackAnswer = answer || 'Sorry, no answer was returned.';
-  const structuredContent = [];
-  let cursor = 0;
-  let foundValidCitation = false;
-
-  for (const match of fallbackAnswer.matchAll(BRACKETED_CITATION)) {
-    const fullMatch = match[0];
-    const rawNumbers = match[1];
-    const start = match.index ?? -1;
-
-    if (start < 0) {
-      continue;
-    }
-
-    const parsedNumbers = rawNumbers
-      .split(',')
-      .map((value) => value.trim());
-
-    const seenNumbers = new Set();
-    const uniqueNumbers = [];
-    let isValidCitation = parsedNumbers.length > 0;
-
-    for (const value of parsedNumbers) {
-      if (!/^\d+$/.test(value)) {
-        isValidCitation = false;
-        break;
-      }
-
-      const citationNumber = Number(value);
-      const source = rawSources[citationNumber - 1];
-      if (!source) {
-        isValidCitation = false;
-        break;
-      }
-
-      if (!seenNumbers.has(citationNumber)) {
-        seenNumbers.add(citationNumber);
-        uniqueNumbers.push(citationNumber);
-      }
-    }
-
-    if (!isValidCitation) {
-      continue;
-    }
-
-    pushTextPart(structuredContent, fallbackAnswer.slice(cursor, start));
-    uniqueNumbers.forEach((citationNumber) => {
-      structuredContent.push(
-        buildCitationPartFromSource(citationNumber, rawSources[citationNumber - 1]),
-      );
-    });
-    cursor = start + fullMatch.length;
-    foundValidCitation = true;
+export const buildStructuredContentFromResult = (result) => {
+  if (!['complete', 'partial', 'unavailable'].includes(result?.status)
+    || !Array.isArray(result.blocks) || !Array.isArray(result.sources)
+    || !Array.isArray(result.limitations) || typeof result.trace_id !== 'string') {
+    throw new Error('Invalid RAG result. Please retry.');
   }
-
-  if (!foundValidCitation) {
-    return [{ type: 'text', value: fallbackAnswer }];
+  const sources = new Map();
+  for (const source of result.sources) {
+    if (!source.chunk_id || !source.file_id || typeof source.content !== 'string'
+      || sources.has(source.chunk_id)) throw new Error('Invalid RAG sources.');
+    sources.set(source.chunk_id, source);
   }
-
-  pushTextPart(structuredContent, fallbackAnswer.slice(cursor));
-  return structuredContent.length > 0
-    ? structuredContent
-    : [{ type: 'text', value: fallbackAnswer }];
-};
-
-const buildStructuredContentFromAnswerWithCitations = (answerWithCitations, rawSources) => {
-  const structuredContent = [];
-  const sourceByChunkId = new Map(rawSources.map((source) => [String(source.chunkId), source]));
-  const citationRefs = new Map();
-  let citationCounter = 1;
-
-  for (const segment of answerWithCitations) {
-    const contentSegments = segment?.content_segments || [];
-    let accumulatedText = '';
-
-    for (let index = 0; index < contentSegments.length; index += 1) {
-      const current = contentSegments[index];
-      const next = contentSegments[index + 1];
-      const currentResolved = resolveStructuredSegment(current, rawSources, sourceByChunkId);
-      const nextResolved = next ? resolveStructuredSegment(next, rawSources, sourceByChunkId) : null;
-
-      accumulatedText += `${currentResolved.text}\n`;
-
-      const currentIds = currentResolved.sources.map((source) => String(source.chunkId)).sort();
-      const nextIds = nextResolved
-        ? nextResolved.sources.map((source) => String(source.chunkId)).sort()
-        : [];
-      const sourcesChanged = !next || JSON.stringify(currentIds) !== JSON.stringify(nextIds);
-
-      if (!sourcesChanged) {
-        continue;
-      }
-
-      pushTextPart(structuredContent, accumulatedText.trim());
-      accumulatedText = '';
-
-      const citationParts = currentResolved.sources.map((sourceEntry) => {
-        const citationId = String(sourceEntry.chunkId);
-        let citationNumber = citationRefs.get(citationId);
-
-        if (!citationNumber) {
-          citationNumber = citationCounter;
-          citationRefs.set(citationId, citationNumber);
-          citationCounter += 1;
-        }
-
-        return buildCitationPartFromSource(citationNumber, sourceEntry);
-      });
-
-      citationParts
-        .sort((left, right) => left.number - right.number)
-        .forEach((part) => structuredContent.push(part));
+  const numbers = new Map();
+  const ids = new Set();
+  const parts = [];
+  for (const block of result.blocks) {
+    if (!block.id || ids.has(block.id) || typeof block.markdown !== 'string'
+      || !Array.isArray(block.source_ids)) throw new Error('Invalid RAG block.');
+    ids.add(block.id);
+    parts.push({ type: 'text', value: block.markdown });
+    for (const id of new Set(block.source_ids)) {
+      const source = sources.get(id);
+      if (!source) throw new Error('RAG citation source is missing.');
+      if (!numbers.has(id)) numbers.set(id, numbers.size + 1);
+      parts.push({ type: 'citation', number: numbers.get(id), details: {
+        chunkId: id, fileId: source.file_id, source: source.name,
+        page: source.page_start, pageEnd: source.page_end, content: source.content,
+        imageData: source.image_data,
+      } });
     }
   }
-
-  return structuredContent;
-};
-
-export const buildStructuredContentFromResult = (finalResult) => {
-  const answerWithCitations = finalResult?.answer_with_citations;
-  const rawSources = Array.isArray(finalResult?.raw_sources) ? finalResult.raw_sources : [];
-
-  if (answerWithCitations && answerWithCitations.length > 0) {
-    return buildStructuredContentFromAnswerWithCitations(answerWithCitations, rawSources);
-  }
-
-  return buildStructuredContentFromTextCitations(finalResult?.answer, rawSources);
+  return parts;
 };

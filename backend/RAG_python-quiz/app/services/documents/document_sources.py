@@ -43,7 +43,7 @@ def build_pdf_page_docs(filename: str, pages_text: List[str]) -> List[Dict[str, 
         else:
             text = page or ""
             effective_page_number = page_number
-        if text.strip() and len(text.strip()) > 10:
+        if text.strip():
             docs.append(
                 {
                     "pageContent": text,
@@ -101,7 +101,7 @@ def split_docs_to_chunks(docs: List[Dict[str, Any]], *, text_splitter) -> List[D
     chunks: List[Dict[str, Any]] = []
     for doc in docs:
         for chunk in text_splitter.split_text(doc["pageContent"]):
-            chunks.append({"pageContent": chunk, "metadata": doc["metadata"]})
+            chunks.append({"pageContent": chunk, "metadata": dict(doc["metadata"])})
     return chunks
 
 

@@ -10,7 +10,7 @@ import os
 import sys
 from typing import List
 
-from openai import OpenAI
+
 from langchain_core.embeddings import Embeddings
 from langchain_openai import ChatOpenAI
 from ragas.embeddings import LangchainEmbeddingsWrapper
@@ -20,25 +20,23 @@ from ragas.llms import LangchainLLMWrapper
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.utils.dev_credentials import get_eval_embedding_credentials, get_eval_llm_credentials
+from app.utils.api_key_manager import create_embedding_model
 
 
 class DirectOpenAIEmbeddings(Embeddings):
     """OpenAI-compatible embeddings wrapper without LangChain tokenization."""
 
     def __init__(self, api_key: str, base_url: str, model: str):
-        self.client = OpenAI(api_key=api_key, base_url=base_url)
+        self.client = create_embedding_model(api_key=api_key, base_url=base_url, model_name=model)
         self.model = model
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         valid_texts = [text if text and text.strip() else "empty" for text in texts]
-        response = self.client.embeddings.create(model=self.model, input=valid_texts)
-        sorted_data = sorted(response.data, key=lambda item: item.index)
-        return [item.embedding for item in sorted_data]
+        return [vector for start in range(0, len(valid_texts), 30) for vector in self.client.embed_documents(valid_texts[start:start + 30])]
 
     def embed_query(self, text: str) -> List[float]:
         query = text if text and text.strip() else "empty"
-        response = self.client.embeddings.create(model=self.model, input=query)
-        return response.data[0].embedding
+        return self.client.embed_query(query)
 
 
 def get_ragas_llm():
