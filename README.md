@@ -1,5 +1,7 @@
 # PolyU FYP Learning Platform
 
+[繁體中文](README.zh-TW.md)
+
 This repository contains an educational assessment platform built for the PolyU FYP project. It combines Retrieval-Augmented Generation (RAG), a multi-agent exam-generation workflow, and both web and mobile teaching interfaces to help teachers manage materials, generate assessments, and support student learning with grounded AI outputs.
 
 ## Project Overview
